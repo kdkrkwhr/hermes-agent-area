@@ -38,6 +38,36 @@ function findCoffeeTile(scene) {
   return br ? tileCenter(scene, br.x, br.y) : tileCenter(scene, 35, 5);
 }
 
+/** live idle / mock break — skip running·blocked·chatting. */
+function isStandupGatherable(agent) {
+  const s = agent?.serverStatus;
+  if (s === "running" || s === "blocked" || s === "chatting" || s === "offline") {
+    return false;
+  }
+  if (agent.live) return s === "idle";
+  return agent.getEffectKind?.() === "idle";
+}
+
+function shuffleInPlace(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+/** meeting ±1 tile ring, center first then neighbors. */
+function meetingOffsets(meet) {
+  const spots = [{ x: meet.x, y: meet.y }];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      if (dx === 0 && dy === 0) continue;
+      spots.push({ x: meet.x + dx, y: meet.y + dy });
+    }
+  }
+  return spots;
+}
+
 export class OfficeEvents {
   constructor(scene) {
     this.scene = scene;
@@ -51,6 +81,7 @@ export class OfficeEvents {
     this._active = [];
     this._toastTimer = null;
     this._shipCooldownUntil = 0;
+    this.standupGathered = 0;
   }
 
   start() {
@@ -154,6 +185,65 @@ export class OfficeEvents {
       tween.stop();
       glow.destroy();
     });
+    void this.gatherIdleToMeeting(meet);
+  }
+
+  /** Idle/break ≤3 → meeting ±1; 2.5–4s 후 lounge wander 복귀. */
+  async gatherIdleToMeeting(meet) {
+    const agents = this.scene.agents || [];
+    const candidates = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    ).slice(0, 3);
+    const spots = meetingOffsets(meet);
+    const holdMs = 2500 + Math.floor(Math.random() * 1501);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      if (!isStandupGatherable(agent)) continue;
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          // try other ±1 slots before giving up
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + holdMs + 400;
+    }
+
+    this.standupGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(holdMs, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
   }
 
   runCoffeeRush() {
@@ -290,6 +380,7 @@ export class OfficeEvents {
       eventCount: this.eventCount,
       lastEvent: this.lastEvent,
       lastAt: this.lastAt,
+      standupGathered: this.standupGathered,
     };
   }
 
