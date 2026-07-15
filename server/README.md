@@ -19,4 +19,8 @@ npm run dev
 | `GET /api/snapshot` | full WS payload |
 | `WS /ws` | 20Hz snapshot broadcast (Hermes poll every 5s) |
 
-Kanban DB (RO): `%HERMES_KANBAN_DB%` or `D:\develop\e2e\hermes\kanban.db`
+Kanban DB (RO): `%HERMES_KANBAN_DB%` or `$HERMES_HOME/kanban.db`
+
+Agents: `hermes profile list` (+ filesystem fallback)로 로스터 구성.
+표시 이름: `area.json` → Discord `Connected as` → `SOUL.md` → 프로필명.
+Optional override 파일: `$HERMES_HOME/area.json` 또는 `$HERMES_HOME/profiles/<name>/area.json`

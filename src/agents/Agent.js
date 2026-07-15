@@ -189,8 +189,23 @@ export class Agent {
     this.busy = false;
   }
 
+  setDisplayName(name) {
+    const next = String(name || "").trim();
+    if (!next || next === this.def.displayName) return;
+    this.def.displayName = next;
+    this.nameLabel.setText(next);
+  }
+
+  destroy() {
+    this.sprite?.destroy();
+    this.nameLabel?.destroy();
+    this.bubbleBg?.destroy();
+    this.bubbleText?.destroy();
+  }
+
   async applyServer(agentMsg) {
     if (!agentMsg) return;
+    if (agentMsg.displayName) this.setDisplayName(agentMsg.displayName);
     this.serverData = { ...agentMsg, displayName: this.def.displayName };
     this.serverStatus = agentMsg.status;
     if (agentMsg.bubble) this.setStatus(agentMsg.bubble);

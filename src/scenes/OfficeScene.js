@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import {
-  AGENTS,
+  defFromServerAgent,
   resolveWsUrl,
   buildMockAgents,
   buildMockSnapshot,
@@ -20,6 +20,7 @@ import {
   resolveTimeOfDay,
   TOD_PRESETS,
 } from "../effects/officeEffects.js";
+import { OfficeAudio } from "../audio/officeAudio.js";
 
 export class OfficeScene extends Phaser.Scene {
   constructor() {
@@ -45,6 +46,8 @@ export class OfficeScene extends Phaser.Scene {
       frameWidth: 16,
       frameHeight: 24,
     });
+    this.officeAudio = new OfficeAudio(this);
+    this.officeAudio.preload();
   }
 
   create() {
@@ -63,21 +66,23 @@ export class OfficeScene extends Phaser.Scene {
     this.waypoints = prop
       ? JSON.parse(prop.value)
       : {
+          // fallback = office-map.json properties.waypoints
           desks: [
-            { x: 4, y: 14 },
-            { x: 11, y: 14 },
-            { x: 18, y: 14 },
+            { x: 3, y: 6 },
+            { x: 7, y: 6 },
+            { x: 9, y: 20 },
           ],
-          meeting: { x: 4, y: 6 },
-          break: { x: 19, y: 5 },
+          meeting: { x: 17, y: 10 },
+          break: { x: 32, y: 6 },
+          sleep: { x: 32, y: 21 },
+          entrance: { x: 20, y: 27 },
         };
 
-    this.agents = AGENTS.map((def, i) => {
-      const start = this.waypoints.desks[def.homeDesk] || this.waypoints.desks[i];
-      return new Agent(this, def, start, this.waypoints);
-    });
-    this.agentsById = Object.fromEntries(this.agents.map((a) => [a.def.id, a]));
-    this.agentsByProfile = Object.fromEntries(this.agents.map((a) => [a.def.profile, a]));
+    // start empty; first WS/mock snapshot fills from local Hermes profiles (or mock)
+    this.agents = [];
+    this.agentsById = {};
+    this.agentsByProfile = {};
+    this.rebuildAgentIndex();
 
     // spawn 대장님 near corridor center (walkable)
     this.boss = new Boss(this, { x: 19, y: 13 }); // corridor near meeting
@@ -103,6 +108,17 @@ export class OfficeScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(50);
 
+    this.muteLabel = this.add
+      .text(8, 20, "♪", {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "10px",
+        color: "#8aa0b8",
+        stroke: "#0b1016",
+        strokeThickness: 3,
+      })
+      .setScrollFactor(0)
+      .setDepth(50);
+
     this.hintLabel = null;
 
     this.live = false;
@@ -114,9 +130,18 @@ export class OfficeScene extends Phaser.Scene {
     });
 
     this.initVisualEffects();
+    if (!this.officeAudio) this.officeAudio = new OfficeAudio(this);
+    this.officeAudio.create(() => this.refreshMuteHud());
+    this.refreshMuteHud();
 
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
+  }
+
+  refreshMuteHud() {
+    if (!this.muteLabel || !this.officeAudio) return;
+    this.muteLabel.setText(this.officeAudio.muteGlyph());
+    this.muteLabel.setColor(this.officeAudio.muted ? "#5a6a7c" : "#5ee0c8");
   }
 
   initVisualEffects() {
@@ -153,6 +178,8 @@ export class OfficeScene extends Phaser.Scene {
     const kind = agent.getEffectKind();
     const prev = this._emitterKinds.get(agent.def.id);
     if (prev === kind) return;
+
+    this.officeAudio?.playStatusSfx(kind, prev);
 
     const old = this.agentEmitters.get(agent.def.id);
     if (old) {
@@ -304,8 +331,58 @@ export class OfficeScene extends Phaser.Scene {
     for (const a of this.agents) a.setLive(this.live);
   }
 
+  rebuildAgentIndex() {
+    this.agentsById = Object.fromEntries(this.agents.map((a) => [a.def.id, a]));
+    this.agentsByProfile = Object.fromEntries(
+      this.agents.map((a) => [a.def.profile, a]),
+    );
+  }
+
+  /** Sync Phaser agents to BE roster (ids = Hermes profile names). */
+  syncAgentsFromSnapshot(rawAgents) {
+    if (!Array.isArray(rawAgents)) return;
+    const wanted = new Set(
+      rawAgents.map((r) => r.id || r.profile).filter(Boolean),
+    );
+
+    const kept = [];
+    for (const agent of this.agents) {
+      const key = agent.def.id;
+      const profile = agent.def.profile;
+      if (wanted.has(key) || wanted.has(profile)) {
+        kept.push(agent);
+      } else {
+        this.agentEmitters?.get(agent.def.id)?.destroy();
+        this.agentEmitters?.delete(agent.def.id);
+        this._emitterKinds?.delete(agent.def.id);
+        agent.destroy();
+      }
+    }
+    this.agents = kept;
+    this.rebuildAgentIndex();
+
+    for (let i = 0; i < rawAgents.length; i++) {
+      const raw = rawAgents[i];
+      const id = raw.id || raw.profile;
+      if (!id) continue;
+      if (this.agentsById[id] || this.agentsByProfile[raw.profile]) continue;
+      const deskIdx = i % (this.waypoints.desks?.length || 1);
+      const start =
+        this.waypoints.desks[deskIdx] ||
+        this.waypoints.desks[0] ||
+        { x: 4, y: 6 };
+      const def = defFromServerAgent(raw, deskIdx);
+      def.homeDesk = deskIdx;
+      const agent = new Agent(this, def, start, this.waypoints);
+      agent.setLive(this.live);
+      this.agents.push(agent);
+    }
+    this.rebuildAgentIndex();
+  }
+
   applySnapshot(msg) {
     if (!msg?.agents) return;
+    this.syncAgentsFromSnapshot(msg.agents);
     for (const raw of msg.agents) {
       const agent =
         this.agentsById[raw.id] || this.agentsByProfile[raw.profile];
@@ -338,6 +415,7 @@ export class OfficeScene extends Phaser.Scene {
       effectKinds: Object.fromEntries(
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
       ),
+      audio: this.officeAudio?.snapshot?.() ?? null,
     };
   }
 

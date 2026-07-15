@@ -10,7 +10,7 @@ import re
 import sqlite3
 import subprocess
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -30,37 +30,20 @@ TICK_SECONDS = 0.05  # 20 Hz position interpolate
 SPEED_PX = 100.0  # px/s
 TILE = 16
 
-# Pixel centers of zones (match Phase 1 tilemap waypoints)
+# Pixel centers — public/assets/office-map.json properties.waypoints (tile → px)
 WAYPOINTS = {
     "desks": [
-        {"x": 4 * TILE + TILE // 2, "y": 14 * TILE + TILE // 2},
-        {"x": 11 * TILE + TILE // 2, "y": 14 * TILE + TILE // 2},
-        {"x": 18 * TILE + TILE // 2, "y": 14 * TILE + TILE // 2},
+        {"x": 3 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
+        {"x": 7 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
+        {"x": 9 * TILE + TILE // 2, "y": 20 * TILE + TILE // 2},
     ],
-    "meeting": {"x": 4 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
-    "break": {"x": 19 * TILE + TILE // 2, "y": 5 * TILE + TILE // 2},
+    "meeting": {"x": 17 * TILE + TILE // 2, "y": 10 * TILE + TILE // 2},
+    "break": {"x": 32 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
+    "sleep": {"x": 32 * TILE + TILE // 2, "y": 21 * TILE + TILE // 2},
 }
 
-AGENT_DEFS = [
-    {
-        "id": "mushroom",
-        "displayName": "버섯쿵야",
-        "profile": "nous-work",
-        "homeDesk": 0,
-    },
-    {
-        "id": "onion",
-        "displayName": "양파쿵야",
-        "profile": "default",
-        "homeDesk": 1,
-    },
-    {
-        "id": "claude",
-        "displayName": "클로드",
-        "profile": "claude",
-        "homeDesk": 2,
-    },
-]
+# Sprite sheets shipped with FE (cycle when profiles > 3)
+SHEETS = ["char-mushroom", "char-onion", "char-claude"]
 
 BUBBLES = {
     "running": "코드 작업 중...",
@@ -72,13 +55,16 @@ BUBBLES = {
 
 
 def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
+    desks = WAYPOINTS["desks"]
+    desk = desks[home_desk % len(desks)]
     if status in ("running", "chatting"):
-        return "desk", WAYPOINTS["desks"][home_desk]
+        return "desk", desk
     if status == "blocked":
         return "meeting", WAYPOINTS["meeting"]
     if status == "offline":
-        # 자리 비움 — 책상 옆 살짝 비워 둔 자리(책상에 앉아있지 않음 = break와 구분)
-        return "away", WAYPOINTS["desks"][home_desk]
+        return "away", desk
+    if status == "idle":
+        return "sleep", WAYPOINTS["sleep"]
     return "break", WAYPOINTS["break"]
 
 
@@ -94,6 +80,83 @@ def _gateway_log_path(profile: str) -> Path | None:
         if p.exists():
             return p
     return None
+
+
+def _read_area_json(profile: str) -> dict[str, Any]:
+    """Optional per-profile override: HERMES_HOME[/profiles/X]/area.json"""
+    root = _profile_root(profile)
+    for name in ("area.json", "office.json"):
+        path = root / name
+        if not path.exists():
+            continue
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            continue
+    return {}
+
+
+def _discord_connected_name(profile: str) -> str | None:
+    """Last `[Discord] Connected as NAME#tag` from that profile's gateway log."""
+    path = _gateway_log_path(profile)
+    if not path:
+        return None
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except Exception:
+        return None
+    found: str | None = None
+    for line in lines:
+        m = re.search(r"Connected as\s+(.+?)(?:#\d+)?\s*$", line)
+        if m:
+            found = m.group(1).strip()
+    return found or None
+
+
+def _soul_display_name(profile: str) -> str | None:
+    """Parse SOUL.md first heading — prefer `(paren)`, else after em/en dash."""
+    soul = _profile_root(profile) / "SOUL.md"
+    if not soul.exists():
+        return None
+    try:
+        text = soul.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return None
+    for line in text.splitlines():
+        line = line.strip()
+        if not line.startswith("#"):
+            continue
+        title = re.sub(r"^#+\s*", "", line).strip()
+        if not title:
+            continue
+        paren = re.search(r"\(([^)]+)\)\s*$", title)
+        if paren:
+            return paren.group(1).strip()
+        for sep in ("—", "–", "-"):
+            if sep in title:
+                tail = title.split(sep)[-1].strip()
+                if tail:
+                    return tail
+        return title
+    return None
+
+
+def resolve_display_name(profile: str, alias: str = "") -> str:
+    """Local PC Hermes profile → display label (no hardcoded nicknames)."""
+    area = _read_area_json(profile)
+    raw = area.get("displayName") or area.get("display_name") or area.get("name")
+    if isinstance(raw, str) and raw.strip():
+        return raw.strip()
+    disc = _discord_connected_name(profile)
+    if disc:
+        return disc
+    soul = _soul_display_name(profile)
+    if soul:
+        return soul
+    if alias and alias not in {"—", "-", "—"}:
+        return alias
+    return profile
 
 
 def gateway_turn_active(profile: str, lines: list[str] | None = None) -> bool:
@@ -159,6 +222,52 @@ def parse_profile_list(text: str) -> dict[str, dict[str, str]]:
             "alias": "" if alias in {"—", "-"} else alias,
         }
     return out
+
+
+def _profiles_from_fs() -> dict[str, dict[str, str]]:
+    """Fallback when `hermes profile list` fails — scan HERMES_HOME."""
+    out: dict[str, dict[str, str]] = {}
+    if (HERMES_HOME / "config.yaml").exists() or (HERMES_HOME / "SOUL.md").exists():
+        out["default"] = {"model": "?", "gateway": "unknown", "alias": ""}
+    pdir = HERMES_HOME / "profiles"
+    if pdir.is_dir():
+        for child in sorted(pdir.iterdir()):
+            if child.is_dir() and (
+                (child / "config.yaml").exists() or (child / "SOUL.md").exists()
+            ):
+                out[child.name] = {"model": "?", "gateway": "unknown", "alias": ""}
+    return out
+
+
+def discover_agent_defs(
+    profiles: dict[str, dict[str, str]] | None = None,
+) -> list[dict[str, Any]]:
+    """Build agent roster from local Hermes profiles (not hardcoded nicknames)."""
+    if not profiles:
+        profiles = _profiles_from_fs()
+
+    names = sorted(profiles.keys(), key=lambda n: (0 if n == "default" else 1, n))
+    max_desks = len(WAYPOINTS["desks"])
+    if len(names) > max_desks:
+        running = [n for n in names if profiles.get(n, {}).get("gateway") == "running"]
+        rest = [n for n in names if n not in running]
+        names = (running + rest)[:max_desks]
+
+    defs: list[dict[str, Any]] = []
+    for i, name in enumerate(names):
+        pdata = profiles.get(name, {})
+        area = _read_area_json(name)
+        sheet = area.get("sheet") if isinstance(area.get("sheet"), str) else None
+        defs.append(
+            {
+                "id": name,
+                "displayName": resolve_display_name(name, pdata.get("alias", "")),
+                "profile": name,
+                "homeDesk": i % max_desks,
+                "sheet": sheet or SHEETS[i % len(SHEETS)],
+            }
+        )
+    return defs
 
 
 def read_kanban_active() -> dict[str, dict[str, Any]]:
@@ -241,6 +350,7 @@ class AgentState:
     display_name: str
     profile: str
     home_desk: int
+    sheet: str
     x: float
     y: float
     dest_x: float
@@ -257,6 +367,7 @@ class AgentState:
             "id": self.id,
             "displayName": self.display_name,
             "profile": self.profile,
+            "sheet": self.sheet,
             "status": self.status,
             "zone": self.zone,
             "bubble": self.bubble,
@@ -273,23 +384,6 @@ class AgentState:
 class OfficeSim:
     def __init__(self) -> None:
         self.agents: list[AgentState] = []
-        for d in AGENT_DEFS:
-            desk = WAYPOINTS["desks"][d["homeDesk"]]
-            self.agents.append(
-                AgentState(
-                    id=d["id"],
-                    display_name=d["displayName"],
-                    profile=d["profile"],
-                    home_desk=d["homeDesk"],
-                    x=float(desk["x"]),
-                    y=float(desk["y"]),
-                    dest_x=float(desk["x"]),
-                    dest_y=float(desk["y"]),
-                    zone="desk",
-                    status="idle",
-                    bubble=BUBBLES["idle"],
-                )
-            )
         self.profiles: dict[str, dict[str, str]] = {}
         self.stats: dict[str, Any] = {}
         self.logs: list[str] = []
@@ -297,6 +391,39 @@ class OfficeSim:
         self.poll_error: str | None = None
         self._clients: set[WebSocket] = set()
         self._lock = asyncio.Lock()
+        # cold start from filesystem so first WS snapshot isn't empty
+        self.sync_agents_from_defs(discover_agent_defs(_profiles_from_fs()))
+
+    def sync_agents_from_defs(self, defs: list[dict[str, Any]]) -> None:
+        by_profile = {a.profile: a for a in self.agents}
+        next_agents: list[AgentState] = []
+        for d in defs:
+            desk = WAYPOINTS["desks"][d["homeDesk"] % len(WAYPOINTS["desks"])]
+            existing = by_profile.get(d["profile"])
+            if existing:
+                existing.id = d["id"]
+                existing.display_name = d["displayName"]
+                existing.home_desk = d["homeDesk"]
+                existing.sheet = d.get("sheet") or existing.sheet
+                next_agents.append(existing)
+            else:
+                next_agents.append(
+                    AgentState(
+                        id=d["id"],
+                        display_name=d["displayName"],
+                        profile=d["profile"],
+                        home_desk=d["homeDesk"],
+                        sheet=d.get("sheet") or SHEETS[0],
+                        x=float(desk["x"]),
+                        y=float(desk["y"]),
+                        dest_x=float(desk["x"]),
+                        dest_y=float(desk["y"]),
+                        zone="desk",
+                        status="idle",
+                        bubble=BUBBLES["idle"],
+                    )
+                )
+        self.agents = next_agents
 
     def snapshot(self) -> dict[str, Any]:
         return {
@@ -309,6 +436,7 @@ class OfficeSim:
             "poll_error": self.poll_error,
             "last_poll_at": self.last_poll_at,
             "kanban_db": str(KANBAN_DB),
+            "hermes_home": str(HERMES_HOME),
         }
 
     def apply_hermes(self, profiles: dict[str, dict[str, str]], tasks: dict[str, dict[str, Any]]) -> None:
@@ -439,9 +567,8 @@ async def poll_loop() -> None:
         try:
             raw_profiles = await asyncio.to_thread(_run_cmd, ["hermes", "profile", "list"])
             profiles = parse_profile_list(raw_profiles)
-            if not profiles and "__ERR__" not in raw_profiles:
-                # fallback: assume known agents + probe gateway via status
-                profiles = {d["profile"]: {"gateway": "unknown", "model": "?"} for d in AGENT_DEFS}
+            if not profiles:
+                profiles = _profiles_from_fs()
 
             tasks = await asyncio.to_thread(read_kanban_active)
             err = None
@@ -450,6 +577,7 @@ async def poll_loop() -> None:
 
             stats_raw = await asyncio.to_thread(_run_cmd, ["hermes", "kanban", "stats"])
             logs = await asyncio.to_thread(tail_gateway_log, 30)
+            defs = discover_agent_defs(profiles)
 
             async with office._lock:
                 office.profiles = profiles
@@ -457,6 +585,7 @@ async def poll_loop() -> None:
                 office.logs = logs
                 office.poll_error = err
                 office.last_poll_at = time.time()
+                office.sync_agents_from_defs(defs)
                 office.apply_hermes(profiles, tasks)
         except Exception as e:
             office.poll_error = str(e)

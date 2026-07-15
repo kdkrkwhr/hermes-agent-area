@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import json
+import math
 import struct
+import wave
 import zlib
 from pathlib import Path
 
@@ -834,7 +836,72 @@ def make_map_json() -> None:
     print("wrote", path, f"{W}x{H}")
 
 
+def write_wav_mono(path: Path, samples: list[float], sr: int = 22050) -> None:
+    """16-bit PCM mono WAV. samples are floats in roughly [-1, 1]."""
+    with wave.open(str(path), "w") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        frames = bytearray()
+        for s in samples:
+            v = max(-1.0, min(1.0, s))
+            frames += struct.pack("<h", int(v * 32767))
+        wf.writeframes(bytes(frames))
+
+
+def make_ambient_bgm() -> None:
+    """
+    Soft looping office ambient (cool slate drone + gentle shimmer).
+    Duration chosen so all tones complete whole cycles (seam-friendly loop).
+    """
+    sr = 22050
+    duration = 8.0  # seconds
+    n = int(sr * duration)
+    # Hz chosen so periods divide duration evenly: f * duration is integer
+    tones = [
+        (110.0, 0.11),   # A2 pad
+        (164.814, 0.07),  # E3
+        (220.0, 0.05),   # A3
+        (329.628, 0.028),  # E4 shimmer
+    ]
+    samples: list[float] = []
+    for i in range(n):
+        t = i / sr
+        # slow amplitude breathe so loop feels alive, still start≈end
+        breathe = 0.85 + 0.15 * math.sin(2 * math.pi * t / duration)
+        v = 0.0
+        for freq, amp in tones:
+            v += amp * math.sin(2 * math.pi * freq * t)
+        # very soft high noise tickle (filtered-ish by low gain)
+        noise = ((i * 1103515245 + 12345) & 0x7FFF) / 32768.0 - 0.5
+        v += noise * 0.012
+        samples.append(v * breathe * 0.55)
+    path = OUT / "office-ambient.wav"
+    write_wav_mono(path, samples, sr)
+    print("wrote", path, f"{duration}s@{sr}Hz")
+
+
+def make_sfx_oneshot(name: str, freq: float, ms: int = 90, amp: float = 0.22) -> None:
+    sr = 22050
+    n = int(sr * ms / 1000)
+    samples: list[float] = []
+    for i in range(n):
+        t = i / sr
+        env = math.sin(math.pi * i / max(1, n - 1))  # fade in/out
+        samples.append(amp * env * math.sin(2 * math.pi * freq * t))
+    path = OUT / name
+    write_wav_mono(path, samples, sr)
+    print("wrote", path)
+
+
+def make_audio() -> None:
+    make_ambient_bgm()
+    make_sfx_oneshot("sfx-running.wav", freq=523.25, ms=70, amp=0.18)  # C5 soft
+    make_sfx_oneshot("sfx-blocked.wav", freq=311.13, ms=95, amp=0.16)  # Eb4 soft
+
+
 if __name__ == "__main__":
     make_tileset()
     make_characters()
     make_map_json()
+    make_audio()

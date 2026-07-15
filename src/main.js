@@ -11,7 +11,7 @@ toolbar.className = "toolbar";
 toolbar.innerHTML = `
   <div class="toolbar__brand">
     <strong>Hermes Agent Area</strong>
-    <span class="toolbar__hint">WASD 이동 · 클릭=칸반 상세</span>
+    <span class="toolbar__hint">WASD 이동 · M 뮤트 · 클릭=칸반 상세</span>
   </div>
   <div class="toolbar__actions">
     <button type="button" class="toolbar__btn" data-role="toggle-kanban" aria-pressed="true">칸반</button>

@@ -20,9 +20,24 @@ npm install && npm run dev
 ```
 
 > **주의:** GitHub Pages(`https://…`)는 `ws://localhost` 연결이 브라우저에 막힘.
-> Pages만 열면 전부 mock/오프라인이라 양파가 항상 휴식처럼 보임.
+> Pages만 열면 mock/오프라인이라 실시간 프로필·상태가 안 보임.
 > 실시간 = `npm run dev` 로컬 FE + `python server/main.py`.
 > 터널 쓸 때만 Pages에 `?ws=wss://xxxx.trycloudflare.com/ws` 붙이면 됨.
+
+## 에이전트 이름 (Hermes 프로필)
+
+BE가 각 PC의 `HERMES_HOME` 프로필을 읽어 캐릭터를 만듦 (하드코딩 닉네임 X).
+
+표시 이름 우선순위:
+1. `$HERMES_HOME[/profiles/<name>]/area.json` → `displayName`
+2. 해당 프로필 `gateway.log`의 마지막 `Connected as …`
+3. `SOUL.md` 첫 헤딩
+4. 프로필 폴더명 (`default`, `nous-work`, …)
+
+```json
+// 예: ~/.hermes/area.json  (default 프로필)
+{ "displayName": "양파쿵야", "sheet": "char-onion" }
+```
 
 ## WebSocket
 

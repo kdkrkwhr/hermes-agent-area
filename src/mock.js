@@ -1,24 +1,29 @@
+/** Fallback roster for offline/mock only — live names come from local Hermes profiles via BE. */
+
+export const SHEETS = ["char-mushroom", "char-onion", "char-claude"];
+
+/** Demo placeholders when BE unreachable (profile-id labels, not personal nicknames). */
 export const AGENTS = [
   {
-    id: "mushroom",
-    displayName: "버섯쿵야",
-    profile: "nous-work",
-    sheet: "char-mushroom",
-    homeDesk: 0,
-    statuses: ["칸반 검토 중", "코드 분석 중...", "스펙 정리 중"],
-  },
-  {
-    id: "onion",
-    displayName: "양파쿵야",
+    id: "default",
+    displayName: "default",
     profile: "default",
     sheet: "char-onion",
-    homeDesk: 1,
+    homeDesk: 0,
     statuses: ["코드 작업 중...", "PR 올리는 중", "버그 고치는 중"],
   },
   {
-    id: "claude",
-    displayName: "클로드",
-    profile: "claude",
+    id: "profile-2",
+    displayName: "profile-2",
+    profile: "profile-2",
+    sheet: "char-mushroom",
+    homeDesk: 1,
+    statuses: ["칸반 검토 중", "코드 분석 중...", "스펙 정리 중"],
+  },
+  {
+    id: "profile-3",
+    displayName: "profile-3",
+    profile: "profile-3",
     sheet: "char-claude",
     homeDesk: 2,
     statuses: ["리뷰 작성 중", "조언 중...", "휴식 중"],
@@ -38,10 +43,27 @@ export function pickStatus(agent, kind) {
   if (kind === "break") return "휴식 중";
   if (kind === "sleep") return "수면 중...";
   if (kind === "desk") {
-    const list = agent.statuses;
+    const list = agent.statuses || STATUS_POOL;
     return list[Math.floor(Math.random() * list.length)];
   }
   return STATUS_POOL[Math.floor(Math.random() * STATUS_POOL.length)];
+}
+
+export function sheetForIndex(i) {
+  return SHEETS[i % SHEETS.length];
+}
+
+/** Build Phaser agent def from BE/WS agent payload. */
+export function defFromServerAgent(raw, index = 0) {
+  const profile = raw.profile || raw.id || `agent-${index}`;
+  return {
+    id: raw.id || profile,
+    displayName: raw.displayName || profile,
+    profile,
+    sheet: raw.sheet || sheetForIndex(index),
+    homeDesk: typeof raw.homeDesk === "number" ? raw.homeDesk : index,
+    statuses: ["작업 중..."],
+  };
 }
 
 /** WS URL — local BE. Override: ?ws=… or VITE_WS_URL (.env) */
@@ -88,7 +110,8 @@ export function buildMockAgents() {
       "가상사무실: 칸반 상태 패널",
       null,
     ];
-    const zones = status === "running" ? "desk" : status === "blocked" ? "meeting" : "break";
+    const zones =
+      status === "running" ? "desk" : status === "blocked" ? "meeting" : "break";
     const bubbles =
       status === "running"
         ? "코드 작업 중... (mock)"
@@ -99,6 +122,7 @@ export function buildMockAgents() {
       id: def.id,
       displayName: def.displayName,
       profile: def.profile,
+      sheet: def.sheet,
       status,
       zone: zones,
       bubble: bubbles,
@@ -122,6 +146,7 @@ export function buildDisconnectedAgents() {
       id: def.id,
       displayName: def.displayName,
       profile: def.profile,
+      sheet: def.sheet,
       status: "offline",
       zone: "away",
       bubble: "BE 연결 필요 (로컬 FE)",
