@@ -20,8 +20,10 @@ import {
   resolveTimeOfDay,
   TOD_PRESETS,
 } from "../effects/officeEffects.js";
+import { deskFxEnabledFromQuery } from "../effects/deskGlow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
+import { Minimap } from "../ui/minimap.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
 export class OfficeScene extends Phaser.Scene {
@@ -165,6 +167,8 @@ export class OfficeScene extends Phaser.Scene {
     this.officeEvents = new OfficeEvents(this);
     this.officeEvents.start();
 
+    this.minimap = new Minimap(this);
+
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
   }
@@ -182,6 +186,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lightingOverlay = createLightingOverlay(this, mapW, mapH);
     this.agentEmitters = new Map();
     this._emitterKinds = new Map();
+    this.deskFxEnabled = deskFxEnabledFromQuery();
     this.devTimeIndex = this.parseDevTimeOverride();
     this.applyTimeOfDayLighting();
 
@@ -505,8 +510,16 @@ export class OfficeScene extends Phaser.Scene {
       effectKinds: Object.fromEntries(
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
       ),
+      deskFxEnabled: this.deskFxEnabled !== false,
+      deskGlow: Object.fromEntries(
+        this.agents.map((a) => {
+          const on = a.deskGlowGfx?.visible;
+          return [a.def.id, on ? a.serverStatus : null];
+        }),
+      ),
       audio: this.officeAudio?.snapshot?.() ?? null,
       events: this.officeEvents?.snapshot?.() ?? null,
+      minimap: this.minimap?.snapshot?.() ?? null,
     };
   }
 
@@ -520,5 +533,6 @@ export class OfficeScene extends Phaser.Scene {
       this.boss.maybeSendPos(this.ws);
       this.publishDebug(this.ws?.url);
     }
+    this.minimap?.update();
   }
 }

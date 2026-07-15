@@ -1,4 +1,5 @@
 import { pickStatus } from "../mock.js";
+import { createDeskGlow, updateDeskGlow } from "../effects/deskGlow.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -62,6 +63,8 @@ export class Agent {
 
     // thin progress under nameplate (running/chatting only)
     this.progressGfx = scene.add.graphics().setDepth(20).setVisible(false);
+    // desk monitor glow (running/chatting) — see ?deskfx=0
+    this.deskGlowGfx = createDeskGlow(scene);
 
     this.setStatus(pickStatus(def, "desk"));
     this.ensureAnims();
@@ -284,6 +287,7 @@ export class Agent {
     this.bubbleBg?.destroy();
     this.bubbleText?.destroy();
     this.progressGfx?.destroy();
+    this.deskGlowGfx?.destroy();
   }
 
   async applyServer(agentMsg) {
@@ -403,5 +407,10 @@ export class Agent {
     this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 40);
     this.drawBubble();
     this.drawProgressBar();
+    updateDeskGlow(
+      this.deskGlowGfx,
+      this,
+      this.scene.deskFxEnabled !== false,
+    );
   }
 }
