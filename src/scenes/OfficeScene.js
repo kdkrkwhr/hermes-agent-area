@@ -1,8 +1,18 @@
 import Phaser from "phaser";
-import { AGENTS, resolveWsUrl } from "../mock.js";
+import { AGENTS, resolveWsUrl, buildMockAgents, buildMockSnapshot } from "../mock.js";
 import { Agent } from "../agents/Agent.js";
 import { Boss } from "../agents/Boss.js";
 import { createPathfinder, gridFromCollisionLayer } from "../pathfinding.js";
+import { assetUrl } from "../assets.js";
+import { createKanbanPanel } from "../kanbanPanel.js";
+import {
+  applyLightingOverlay,
+  createLightingOverlay,
+  createStatusEmitter,
+  registerEffectTextures,
+  resolveTimeOfDay,
+  TOD_PRESETS,
+} from "../effects/officeEffects.js";
 
 export class OfficeScene extends Phaser.Scene {
   constructor() {
@@ -10,21 +20,21 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.tilemapTiledJSON("office-map", "/assets/office-map.json");
-    this.load.image("office-tiles", "/assets/office-tiles.png");
-    this.load.spritesheet("char-mushroom", "/assets/char-mushroom.png", {
+    this.load.tilemapTiledJSON("office-map", assetUrl("assets/office-map.json"));
+    this.load.image("office-tiles", assetUrl("assets/office-tiles.png"));
+    this.load.spritesheet("char-mushroom", assetUrl("assets/char-mushroom.png"), {
       frameWidth: 16,
       frameHeight: 24,
     });
-    this.load.spritesheet("char-onion", "/assets/char-onion.png", {
+    this.load.spritesheet("char-onion", assetUrl("assets/char-onion.png"), {
       frameWidth: 16,
       frameHeight: 24,
     });
-    this.load.spritesheet("char-claude", "/assets/char-claude.png", {
+    this.load.spritesheet("char-claude", assetUrl("assets/char-claude.png"), {
       frameWidth: 16,
       frameHeight: 24,
     });
-    this.load.spritesheet("char-boss", "/assets/char-boss.png", {
+    this.load.spritesheet("char-boss", assetUrl("assets/char-boss.png"), {
       frameWidth: 16,
       frameHeight: 24,
     });
@@ -98,12 +108,105 @@ export class OfficeScene extends Phaser.Scene {
 
     this.live = false;
     this.lastSnapshot = null;
+    this.kanbanPanel = createKanbanPanel();
+    this.refreshMockKanban();
     this.agents.forEach((agent, i) => {
       agent.idleUntil = this.time.now + 400 + i * 700;
     });
 
+    this.initVisualEffects();
+
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
+  }
+
+  initVisualEffects() {
+    registerEffectTextures(this);
+    const mapW = this.map.widthInPixels;
+    const mapH = this.map.heightInPixels;
+    this.lightingOverlay = createLightingOverlay(this, mapW, mapH);
+    this.agentEmitters = new Map();
+    this._emitterKinds = new Map();
+    this.devTimeIndex = this.parseDevTimeOverride();
+    this.applyTimeOfDayLighting();
+
+    this.input.keyboard?.on("keydown-L", () => {
+      this.devTimeIndex =
+        this.devTimeIndex == null ? 0 : (this.devTimeIndex + 1) % TOD_PRESETS.length;
+      this.applyTimeOfDayLighting();
+    });
+  }
+
+  parseDevTimeOverride() {
+    const tod = new URLSearchParams(location.search).get("tod");
+    if (!tod) return null;
+    const idx = TOD_PRESETS.findIndex((p) => p.name === tod);
+    return idx >= 0 ? idx : null;
+  }
+
+  applyTimeOfDayLighting() {
+    const preset = resolveTimeOfDay(new Date().getHours(), this.devTimeIndex);
+    applyLightingOverlay(this.lightingOverlay, preset);
+    this.lightingPreset = preset;
+  }
+
+  syncAgentEmitter(agent) {
+    const kind = agent.getEffectKind();
+    const prev = this._emitterKinds.get(agent.def.id);
+    if (prev === kind) return;
+
+    const old = this.agentEmitters.get(agent.def.id);
+    if (old) {
+      old.stop();
+      old.destroy();
+      this.agentEmitters.delete(agent.def.id);
+    }
+    this._emitterKinds.set(agent.def.id, kind);
+
+    const emitter = createStatusEmitter(this, kind, agent.sprite);
+    if (emitter) {
+      emitter.setDepth(9);
+      this.agentEmitters.set(agent.def.id, emitter);
+    }
+  }
+
+  updateVisualEffects() {
+    for (const agent of this.agents) {
+      this.syncAgentEmitter(agent);
+    }
+    if (this.devTimeIndex == null) {
+      const minute = Math.floor(this.time.now / 60000);
+      if (this._lightMinute !== minute) {
+        this._lightMinute = minute;
+        this.applyTimeOfDayLighting();
+      }
+    }
+  }
+
+  refreshMockKanban() {
+    const mockSnap = buildMockSnapshot(buildMockAgents());
+    this.lastSnapshot = mockSnap;
+    this.kanbanPanel.update(mockSnap, { live: false, mock: true });
+    this.publishDebug(resolveWsUrl(), mockSnap);
+  }
+
+  onAgentSpriteClick(agent) {
+    const id = agent?.def?.id;
+    if (!id) return;
+    this.kanbanPanel.toggleAgent(id);
+    this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
+  }
+
+  updateKanbanPanel(snapshot, opts = {}) {
+    if (!this.kanbanPanel || !snapshot) return;
+    const panelState = this.kanbanPanel.update(snapshot, opts);
+    if (typeof window !== "undefined") {
+      window.__HERMES_AREA__ = {
+        ...(window.__HERMES_AREA__ || {}),
+        kanbanPanel: panelState,
+      };
+    }
+    return panelState;
   }
 
   /** Zoom/center so the full office fits the viewport. Integer zoom only (pixel-art). */
@@ -153,6 +256,7 @@ export class OfficeScene extends Phaser.Scene {
       ws = new WebSocket(url);
     } catch (e) {
       this.hudLabel.setText("Hermes Agent Area · WS fail → mock");
+      this.refreshMockKanban();
       return;
     }
     this.ws = ws;
@@ -171,15 +275,18 @@ export class OfficeScene extends Phaser.Scene {
       if (msg.type === "snapshot" || msg.agents) {
         this.lastSnapshot = msg;
         this.applySnapshot(msg);
+        this.updateKanbanPanel(msg, { live: this.live, mock: !!msg.mock });
         this.publishDebug(url, msg);
       }
     };
     ws.onerror = () => {
       this.hudLabel.setText("Hermes Agent Area · WS error → mock");
+      this.refreshMockKanban();
     };
     ws.onclose = () => {
       this.setLive(false);
       this.hudLabel.setText("Hermes Agent Area · offline mock");
+      this.refreshMockKanban();
       this.time.delayedCall(3000, () => this.connectWs());
     };
   }
@@ -202,13 +309,15 @@ export class OfficeScene extends Phaser.Scene {
   publishDebug(url, msg) {
     if (typeof window === "undefined") return;
     const boss = this.boss;
+    const snap = msg ?? this.lastSnapshot;
     window.__HERMES_AREA__ = {
       ...(window.__HERMES_AREA__ || {}),
       ready: true,
       live: this.live,
-      snapshot: msg ?? this.lastSnapshot,
+      snapshot: snap,
       wsUrl: url,
       cameraZoom: this.cameras.main.zoom,
+      kanbanPanel: this.kanbanPanel?.getState?.() ?? null,
       boss: boss
         ? {
             x: Math.round(boss.sprite.x),
@@ -217,6 +326,10 @@ export class OfficeScene extends Phaser.Scene {
             label: "대장님",
           }
         : null,
+      lighting: this.lightingPreset?.name ?? null,
+      effectKinds: Object.fromEntries(
+        this.agents.map((a) => [a.def.id, a.getEffectKind()]),
+      ),
     };
   }
 
@@ -224,6 +337,7 @@ export class OfficeScene extends Phaser.Scene {
     for (const agent of this.agents) {
       agent.update(time, delta);
     }
+    this.updateVisualEffects();
     if (this.boss) {
       this.boss.update(time, delta);
       this.boss.maybeSendPos(this.ws);

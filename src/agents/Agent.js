@@ -23,6 +23,7 @@ export class Agent {
     this.live = false;
     this._liveDestKey = "";
     this.serverStatus = null;
+    this.serverData = null;
 
     const px = startTile.x * this.tileSize + this.tileSize / 2;
     const py = startTile.y * this.tileSize + this.tileSize / 2;
@@ -30,6 +31,10 @@ export class Agent {
     this.sprite = scene.add.sprite(px, py, def.sheet, 0);
     this.sprite.setDepth(10);
     this.sprite.setOrigin(0.5, 0.85);
+    this.sprite.setInteractive({ useHandCursor: true, pixelPerfect: true });
+    this.sprite.on("pointerdown", () => {
+      if (scene.onAgentSpriteClick) scene.onAgentSpriteClick(this);
+    });
 
     this.nameLabel = scene.add
       .text(px, py - 22, `${def.displayName}\n(${def.profile})`, {
@@ -107,6 +112,15 @@ export class Agent {
     this.drawBubble();
   }
 
+  /** Particle/lighting hook: live server status or mock room kind. */
+  getEffectKind() {
+    if (this.live && this.serverStatus) return this.serverStatus;
+    if (this.currentKind === "desk") return "running";
+    if (this.currentKind === "meeting") return "blocked";
+    if (this.currentKind === "break" || this.currentKind === "sleep") return "idle";
+    return "idle";
+  }
+
   drawBubble() {
     const padX = 3;
     const padY = 2;
@@ -174,6 +188,7 @@ export class Agent {
 
   async applyServer(agentMsg) {
     if (!agentMsg) return;
+    this.serverData = { ...agentMsg, displayName: this.def.displayName };
     this.serverStatus = agentMsg.status;
     if (agentMsg.bubble) this.setStatus(agentMsg.bubble);
 

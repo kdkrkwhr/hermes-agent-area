@@ -53,6 +53,50 @@ export function resolveWsUrl() {
   return "ws://localhost:8765/ws";
 }
 
+/** Offline/mock kanban snapshot fragment (matches BE shape). */
+export function buildMockSnapshot(agents) {
+  const running = agents.filter((a) => a.status === "running").length;
+  const blocked = agents.filter((a) => a.status === "blocked").length;
+  return {
+    type: "snapshot",
+    ts: Date.now() / 1000,
+    agents,
+    stats: {
+      raw: `By status:\n  running   ${running}\n  blocked   ${blocked}\n  ready     0\n  done      0\n(mock mode)`,
+    },
+    mock: true,
+  };
+}
+
+export function buildMockAgents() {
+  return AGENTS.map((def, i) => {
+    const status = i === 0 ? "running" : i === 1 ? "blocked" : "idle";
+    const titles = [
+      "칸반 보드 UI 검토",
+      "가상사무실: 칸반 상태 패널",
+      null,
+    ];
+    const zones = status === "running" ? "desk" : status === "blocked" ? "meeting" : "break";
+    const bubbles =
+      status === "running"
+        ? "코드 작업 중... (mock)"
+        : status === "blocked"
+          ? "검토 대기 중... (mock)"
+          : "휴식 중 ☕";
+    return {
+      id: def.id,
+      displayName: def.displayName,
+      profile: def.profile,
+      status,
+      zone: zones,
+      bubble: bubbles,
+      task_id: titles[i] ? `t_mock_${def.id}` : null,
+      task_title: titles[i],
+      gateway: i === 2 ? "stopped" : "running",
+    };
+  });
+}
+
 export function resolveApiBase() {
   const q = new URLSearchParams(location.search).get("api");
   if (q) return q.replace(/\/$/, "");
