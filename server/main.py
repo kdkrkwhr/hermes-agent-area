@@ -304,35 +304,39 @@ def discover_agent_defs(
     return defs
 
 
+def _kanban_connect() -> sqlite3.Connection | None:
+    if not KANBAN_DB.exists():
+        return None
+    conn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True, timeout=2)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
 def read_kanban_active() -> dict[str, dict[str, Any]]:
     """assignee → best active task {status, id, title, started_at, max_runtime_seconds}."""
-    if not KANBAN_DB.exists():
+    conn = _kanban_connect()
+    if conn is None:
         return {}
     try:
-        conn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True, timeout=2)
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            """
-            SELECT id, title, status, assignee, started_at, max_runtime_seconds
-            FROM tasks
-            WHERE status IN ('running', 'blocked', 'ready')
-              AND assignee IS NOT NULL
-            ORDER BY
-              CASE status
-                WHEN 'running' THEN 0
-                WHEN 'blocked' THEN 1
-                ELSE 2
-              END,
-              started_at DESC NULLS LAST,
-              created_at DESC
-            """
-        ).fetchall()
-        conn.close()
-    except Exception:
-        # SQLite older may not like NULLS LAST
         try:
-            conn = sqlite3.connect(f"file:{KANBAN_DB}?mode=ro", uri=True, timeout=2)
-            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                """
+                SELECT id, title, status, assignee, started_at, max_runtime_seconds
+                FROM tasks
+                WHERE status IN ('running', 'blocked', 'ready')
+                  AND assignee IS NOT NULL
+                ORDER BY
+                  CASE status
+                    WHEN 'running' THEN 0
+                    WHEN 'blocked' THEN 1
+                    ELSE 2
+                  END,
+                  started_at DESC NULLS LAST,
+                  created_at DESC
+                """
+            ).fetchall()
+        except Exception:
+            # SQLite older may not like NULLS LAST
             rows = conn.execute(
                 """
                 SELECT id, title, status, assignee, started_at, max_runtime_seconds
@@ -341,11 +345,12 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
                   AND assignee IS NOT NULL
                 """
             ).fetchall()
-            conn.close()
             rank = {"running": 0, "blocked": 1, "ready": 2}
             rows = sorted(rows, key=lambda r: rank.get(r["status"], 9))
-        except Exception as e:
-            return {"__error__": {"status": "error", "id": "", "title": str(e)}}
+    except Exception as e:
+        return {"__error__": {"status": "error", "id": "", "title": str(e)}}
+    finally:
+        conn.close()
 
     best: dict[str, dict[str, Any]] = {}
     for r in rows:
@@ -360,6 +365,96 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
             "max_runtime_seconds": r["max_runtime_seconds"],
         }
     return best
+
+
+def _task_row_brief(r: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "id": r["id"],
+        "title": r["title"],
+        "status": r["status"],
+        "assignee": r["assignee"],
+        "started_at": r["started_at"],
+        "completed_at": r["completed_at"] if "completed_at" in r.keys() else None,
+        "created_at": r["created_at"] if "created_at" in r.keys() else None,
+    }
+
+
+def read_kanban_desk_board(active_limit: int = 4, done_limit: int = 3) -> dict[str, Any]:
+    """Per-assignee recent active + done tasks from HERMES_HOME kanban.db (no hardcoded bots)."""
+    out: dict[str, Any] = {
+        "hermes_home": str(HERMES_HOME),
+        "kanban_db": str(KANBAN_DB),
+        "by_assignee": [],
+        "generated_at": time.time(),
+        "source": "be-kanban-db",
+        "error": None,
+    }
+    conn = _kanban_connect()
+    if conn is None:
+        out["error"] = f"kanban db missing: {KANBAN_DB}"
+        out["source"] = "empty"
+        return out
+    try:
+        assignees = [
+            r[0]
+            for r in conn.execute(
+                """
+                SELECT DISTINCT assignee FROM tasks
+                WHERE assignee IS NOT NULL AND assignee != ''
+                ORDER BY assignee COLLATE NOCASE
+                """
+            ).fetchall()
+        ]
+        groups: list[dict[str, Any]] = []
+        for assignee in assignees:
+            active = conn.execute(
+                """
+                SELECT id, title, status, assignee, started_at, completed_at, created_at
+                FROM tasks
+                WHERE assignee = ?
+                  AND status IN ('running', 'blocked', 'ready', 'review', 'todo')
+                ORDER BY
+                  CASE status
+                    WHEN 'running' THEN 0
+                    WHEN 'blocked' THEN 1
+                    WHEN 'review' THEN 2
+                    WHEN 'ready' THEN 3
+                    ELSE 4
+                  END,
+                  COALESCE(started_at, created_at) DESC
+                LIMIT ?
+                """,
+                (assignee, active_limit),
+            ).fetchall()
+            done = conn.execute(
+                """
+                SELECT id, title, status, assignee, started_at, completed_at, created_at
+                FROM tasks
+                WHERE assignee = ? AND status = 'done'
+                ORDER BY COALESCE(completed_at, created_at) DESC
+                LIMIT ?
+                """,
+                (assignee, done_limit),
+            ).fetchall()
+            if not active and not done:
+                continue
+            groups.append(
+                {
+                    "assignee": assignee,
+                    "display_name": resolve_display_name(assignee),
+                    "active": [_task_row_brief(r) for r in active],
+                    "done": [_task_row_brief(r) for r in done],
+                }
+            )
+        out["by_assignee"] = groups
+        if not groups:
+            out["source"] = "empty"
+    except Exception as e:
+        out["error"] = str(e)
+        out["source"] = "error"
+    finally:
+        conn.close()
+    return out
 
 
 def tail_gateway_log(n: int = 30) -> list[str]:
@@ -441,6 +536,7 @@ class OfficeSim:
         self.logs: list[str] = []
         self.last_poll_at: float | None = None
         self.poll_error: str | None = None
+        self.desk_kanban: dict[str, Any] = read_kanban_desk_board()
         self._clients: set[WebSocket] = set()
         self._lock = asyncio.Lock()
         # cold start from filesystem so first WS snapshot isn't empty
@@ -489,6 +585,7 @@ class OfficeSim:
             "last_poll_at": self.last_poll_at,
             "kanban_db": str(KANBAN_DB),
             "hermes_home": str(HERMES_HOME),
+            "deskKanban": self.desk_kanban,
         }
 
     def apply_hermes(self, profiles: dict[str, dict[str, str]], tasks: dict[str, dict[str, Any]]) -> None:
@@ -638,20 +735,26 @@ def _read_json_file(path: Path) -> Any | None:
 
 @app.get("/api/desk-brief")
 def api_desk_brief():
-    """CEO desk panel: attendance-pwa weather/news (cron deliverables) + cron meta."""
+    """CEO desk panel: weather/news (PWA) + kanban board digest (HERMES_HOME)."""
     weather_path = ATTENDANCE_PWA / "data" / "weather" / "latest.json"
     news_path = ATTENDANCE_PWA / "data" / "news" / "latest.json"
     weather = _read_json_file(weather_path)
     news = _read_json_file(news_path)
+    kanban = read_kanban_desk_board()
+    # keep WS snapshot warm for clients that listen only
+    office.desk_kanban = kanban
     return {
         "weather": weather,
         "news": news,
-        "source": "be-pwa" if weather or news else "empty",
+        "kanban": kanban,
+        "source": "be-pwa" if weather or news or kanban.get("by_assignee") else "empty",
         "paths": {
             "weather": str(weather_path),
             "news": str(news_path),
             "weather_exists": weather_path.is_file(),
             "news_exists": news_path.is_file(),
+            "kanban_db": str(KANBAN_DB),
+            "hermes_home": str(HERMES_HOME),
         },
         "cron": {
             "company-weather-pwa": _latest_cron_meta(WEATHER_CRON_ID),
@@ -689,6 +792,7 @@ async def poll_loop() -> None:
             if "__error__" in tasks:
                 err = tasks.pop("__error__")["title"]
 
+            desk_kanban = await asyncio.to_thread(read_kanban_desk_board)
             stats_raw = await asyncio.to_thread(_run_cmd, ["hermes", "kanban", "stats"])
             logs = await asyncio.to_thread(tail_gateway_log, 30)
             defs = discover_agent_defs(profiles)
@@ -698,6 +802,7 @@ async def poll_loop() -> None:
                 office.stats = {"raw": stats_raw.strip()[:2000]}
                 office.logs = logs
                 office.poll_error = err
+                office.desk_kanban = desk_kanban
                 office.last_poll_at = time.time()
                 office.sync_agents_from_defs(defs)
                 office.apply_hermes(profiles, tasks)

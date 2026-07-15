@@ -647,6 +647,7 @@ export class OfficeScene extends Phaser.Scene {
         this.lastSnapshot = msg;
         this.applySnapshot(msg);
         this.updateKanbanPanel(msg, { live: this.live, mock: !!msg.mock });
+        if (msg.deskKanban) this.deskBriefPanel?.applyWsKanban?.(msg.deskKanban);
         this.publishDebug(url, msg);
       }
     };
@@ -762,6 +763,9 @@ export class OfficeScene extends Phaser.Scene {
             )
               ? this.deskBriefPanel.lastPayload.news.markets.kr.items.length
               : 0,
+            kanbanBots:
+              this.deskBriefPanel.lastPayload.kanban?.by_assignee?.length ?? 0,
+            activeTab: this.deskBriefPanel.activeTab,
           }
         : null,
       lighting: this.lightingPreset?.name ?? null,

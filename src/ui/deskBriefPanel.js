@@ -1,9 +1,15 @@
-/** DOM overlay: CEO desk weather + news (PWA cron JSON). */
+/** DOM overlay: CEO desk weather / news / kanban tabs. */
 
 const PAGES_WEATHER =
   "https://kdkrkwhr.github.io/attendance-pwa/data/weather/latest.json";
 const PAGES_NEWS =
   "https://kdkrkwhr.github.io/attendance-pwa/data/news/latest.json";
+
+const TABS = [
+  { id: "weather", label: "🌤 날씨" },
+  { id: "news", label: "📰 뉴스" },
+  { id: "kanban", label: "📋 칸반" },
+];
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -53,11 +59,13 @@ async function fetchJson(url) {
   return res.json();
 }
 
-/** Prefer local BE (cron → PWA files); fall back to Pages JSON. */
+/** Prefer local BE (cron → PWA + HERMES_HOME kanban); fall back to Pages JSON. */
 export async function loadDeskBrief() {
   try {
     const local = await fetchJson("/api/desk-brief");
-    if (local?.weather || local?.news) return { ...local, source: local.source || "be" };
+    if (local?.weather || local?.news || local?.kanban) {
+      return { ...local, source: local.source || "be" };
+    }
   } catch {
     /* Pages / offline */
   }
@@ -65,7 +73,55 @@ export async function loadDeskBrief() {
     fetchJson(PAGES_WEATHER).catch(() => null),
     fetchJson(PAGES_NEWS).catch(() => null),
   ]);
-  return { weather, news, source: "pages" };
+  return {
+    weather,
+    news,
+    kanban: null,
+    source: "pages",
+  };
+}
+
+function statusBadge(status) {
+  const s = String(status || "");
+  return `<span class="desk-brief__badge desk-brief__badge--${escapeHtml(s)}">${escapeHtml(s)}</span>`;
+}
+
+function renderTaskList(tasks, emptyLabel) {
+  if (!Array.isArray(tasks) || !tasks.length) {
+    return `<p class="desk-brief__muted">${escapeHtml(emptyLabel)}</p>`;
+  }
+  return `<ul class="desk-brief__klist">${tasks
+    .map(
+      (t) =>
+        `<li><span class="desk-brief__kid">${escapeHtml(t.id)}</span>${statusBadge(t.status)}<span class="desk-brief__ktitle" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</span></li>`,
+    )
+    .join("")}</ul>`;
+}
+
+function renderKanban(kanban) {
+  if (!kanban) {
+    return `<p class="desk-brief__muted">로컬 BE 연결 시 HERMES_HOME 칸반이 표시됨</p>`;
+  }
+  if (kanban.error) {
+    return `<p class="desk-brief__muted">칸반 오류: ${escapeHtml(kanban.error)}</p>`;
+  }
+  const groups = kanban.by_assignee || [];
+  if (!groups.length) {
+    return `<p class="desk-brief__muted">태스크 없음</p>`;
+  }
+  return groups
+    .map((g) => {
+      const name = g.display_name || g.assignee || "?";
+      return `
+        <div class="desk-brief__bot">
+          <div class="desk-brief__bot-name">${escapeHtml(name)} <span class="desk-brief__muted">@${escapeHtml(g.assignee)}</span></div>
+          <div class="desk-brief__bot-sec">진행</div>
+          ${renderTaskList(g.active, "진행 중 없음")}
+          <div class="desk-brief__bot-sec">최근 완료</div>
+          ${renderTaskList(g.done, "완료 없음")}
+        </div>`;
+    })
+    .join("");
 }
 
 export function createDeskBriefPanel(opts = {}) {
@@ -79,13 +135,20 @@ export function createDeskBriefPanel(opts = {}) {
       <span class="desk-brief__title">🏢 대장님 사무실</span>
       <button type="button" class="desk-brief__close" data-role="close" aria-label="닫기">×</button>
     </header>
+    <nav class="desk-brief__tabs" data-role="tabs" role="tablist">
+      ${TABS.map(
+        (t, i) =>
+          `<button type="button" role="tab" class="desk-brief__tab${i === 0 ? " is-active" : ""}" data-tab="${t.id}" aria-selected="${i === 0 ? "true" : "false"}">${t.label}</button>`,
+      ).join("")}
+    </nav>
     <div class="desk-brief__body">
-      <section class="desk-brief__col desk-brief__col--weather" data-role="weather">
-        <h3>🌤 날씨</h3>
+      <section class="desk-brief__pane is-active" data-pane="weather" role="tabpanel">
         <p class="desk-brief__muted">불러오는 중…</p>
       </section>
-      <section class="desk-brief__col desk-brief__col--news" data-role="news">
-        <h3>📰 뉴스</h3>
+      <section class="desk-brief__pane" data-pane="news" role="tabpanel" hidden>
+        <p class="desk-brief__muted">불러오는 중…</p>
+      </section>
+      <section class="desk-brief__pane" data-pane="kanban" role="tabpanel" hidden>
         <p class="desk-brief__muted">불러오는 중…</p>
       </section>
     </div>
@@ -93,14 +156,31 @@ export function createDeskBriefPanel(opts = {}) {
   `;
   document.body.appendChild(root);
 
-  const elWeather = root.querySelector('[data-role="weather"]');
-  const elNews = root.querySelector('[data-role="news"]');
+  const elWeather = root.querySelector('[data-pane="weather"]');
+  const elNews = root.querySelector('[data-pane="news"]');
+  const elKanban = root.querySelector('[data-pane="kanban"]');
   const elFoot = root.querySelector('[data-role="foot"]');
   const elClose = root.querySelector('[data-role="close"]');
+  const elTabs = root.querySelectorAll("[data-tab]");
 
   let open = false;
   let loading = false;
   let lastPayload = null;
+  let activeTab = "weather";
+
+  function setTab(tabId) {
+    activeTab = tabId;
+    for (const btn of elTabs) {
+      const on = btn.getAttribute("data-tab") === tabId;
+      btn.classList.toggle("is-active", on);
+      btn.setAttribute("aria-selected", on ? "true" : "false");
+    }
+    for (const pane of root.querySelectorAll("[data-pane]")) {
+      const on = pane.getAttribute("data-pane") === tabId;
+      pane.classList.toggle("is-active", on);
+      pane.hidden = !on;
+    }
+  }
 
   function render(payload) {
     lastPayload = payload;
@@ -115,7 +195,6 @@ export function createDeskBriefPanel(opts = {}) {
       period?.reh ?? period?.humidity ?? w?.humidity ?? (pop != null ? null : "—");
 
     elWeather.innerHTML = `
-      <h3>🌤 날씨</h3>
       <div class="desk-brief__weather-main">${escapeHtml(loc)} ${escapeHtml(temp)}°C</div>
       <div>${escapeHtml(sky)}</div>
       ${
@@ -129,21 +208,19 @@ export function createDeskBriefPanel(opts = {}) {
     `;
 
     const lines = newsHeadlines(payload?.news, 5);
-    elNews.innerHTML = `
-      <h3>📰 뉴스</h3>
-      ${
-        lines.length
-          ? `<ul class="desk-brief__list">${lines
-              .map((t) => `<li>${escapeHtml(t)}</li>`)
-              .join("")}</ul>`
-          : `<p class="desk-brief__muted">뉴스 없음</p>`
-      }
-    `;
+    elNews.innerHTML = lines.length
+      ? `<ul class="desk-brief__list">${lines
+          .map((t) => `<li>${escapeHtml(t)}</li>`)
+          .join("")}</ul>`
+      : `<p class="desk-brief__muted">뉴스 없음</p>`;
+
+    elKanban.innerHTML = renderKanban(payload?.kanban);
 
     const src = payload?.source || "—";
     const wAt = w?.generatedAt || w?.date || "";
     const nAt = payload?.news?.generatedAt || payload?.news?.date || "";
-    elFoot.textContent = `source:${src}${wAt ? ` · weather ${wAt}` : ""}${nAt ? ` · news ${nAt}` : ""}`;
+    const bots = payload?.kanban?.by_assignee?.length ?? 0;
+    elFoot.textContent = `source:${src}${wAt ? ` · weather ${wAt}` : ""}${nAt ? ` · news ${nAt}` : ""}${bots ? ` · kanban ${bots}bots` : ""}`;
   }
 
   async function refresh() {
@@ -153,10 +230,24 @@ export function createDeskBriefPanel(opts = {}) {
       const data = await loadDeskBrief();
       render(data);
     } catch (e) {
-      elWeather.innerHTML = `<h3>🌤 날씨</h3><p class="desk-brief__muted">로드 실패</p>`;
-      elNews.innerHTML = `<h3>📰 뉴스</h3><p class="desk-brief__muted">${escapeHtml(e.message || e)}</p>`;
+      elWeather.innerHTML = `<p class="desk-brief__muted">로드 실패</p>`;
+      elNews.innerHTML = `<p class="desk-brief__muted">${escapeHtml(e.message || e)}</p>`;
+      elKanban.innerHTML = `<p class="desk-brief__muted">칸반 로드 실패</p>`;
     } finally {
       loading = false;
+    }
+  }
+
+  /** Merge WS deskKanban into open panel without full weather reload. */
+  function applyWsKanban(deskKanban) {
+    if (!deskKanban || !open) return;
+    if (!lastPayload) lastPayload = { source: "ws" };
+    lastPayload = { ...lastPayload, kanban: deskKanban };
+    elKanban.innerHTML = renderKanban(deskKanban);
+    const bots = deskKanban?.by_assignee?.length ?? 0;
+    if (elFoot && bots) {
+      const base = elFoot.textContent.replace(/ · kanban \d+bots/, "");
+      elFoot.textContent = `${base} · kanban ${bots}bots`;
     }
   }
 
@@ -173,9 +264,19 @@ export function createDeskBriefPanel(opts = {}) {
     setOpen(false);
   });
 
+  for (const btn of elTabs) {
+    btn.addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      setTab(btn.getAttribute("data-tab"));
+    });
+  }
+
   return {
     get open() {
       return open;
+    },
+    get activeTab() {
+      return activeTab;
     },
     get lastPayload() {
       return lastPayload;
@@ -187,6 +288,8 @@ export function createDeskBriefPanel(opts = {}) {
       return open;
     },
     refresh,
+    applyWsKanban,
+    setTab,
     root,
   };
 }

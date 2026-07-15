@@ -79,8 +79,26 @@ const openState = await page.evaluate(() => ({
   deskBrief: window.__HERMES_AREA__?.deskBrief,
   panelHidden: document.querySelector(".desk-brief")?.hidden,
   weatherText: document.querySelector(".desk-brief__weather-main")?.textContent || "",
-  newsCount: document.querySelectorAll(".desk-brief__list li").length,
+  newsCount: document.querySelectorAll('.desk-brief__pane[data-pane="news"] .desk-brief__list li').length,
+  tabLabels: [...document.querySelectorAll(".desk-brief__tab")].map((b) => b.textContent.trim()),
+  tabCount: document.querySelectorAll(".desk-brief__tab").length,
 }));
+
+// switch to kanban tab
+await page.click('.desk-brief__tab[data-tab="kanban"]');
+await page.waitForTimeout(200);
+const kanbanState = await page.evaluate(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const pane = document.querySelector('.desk-brief__pane[data-pane="kanban"]');
+  return {
+    activeTab: sc?.deskBriefPanel?.activeTab,
+    paneHidden: pane?.hidden,
+    botCount: document.querySelectorAll(".desk-brief__bot").length,
+    klistCount: document.querySelectorAll(".desk-brief__klist li").length,
+    kanbanBots: window.__HERMES_AREA__?.deskBrief?.kanbanBots ?? 0,
+    muted: pane?.querySelector(".desk-brief__muted")?.textContent || "",
+  };
+});
 
 // E again closes
 await page.keyboard.press("KeyE");
@@ -91,6 +109,17 @@ const closed = await page.evaluate(() => ({
 }));
 
 const fatal = errors.filter((e) => !/Framebuffer|WebGL|CORS|Failed to fetch/i.test(e));
+const tabsOk =
+  openState.tabCount === 3 &&
+  openState.tabLabels.some((t) => t.includes("날씨")) &&
+  openState.tabLabels.some((t) => t.includes("뉴스")) &&
+  openState.tabLabels.some((t) => t.includes("칸반"));
+const kanbanOk =
+  kanbanState.activeTab === "kanban" &&
+  kanbanState.paneHidden === false &&
+  (kanbanState.botCount > 0 ||
+    kanbanState.klistCount > 0 ||
+    /BE|칸반|태스크|없음/.test(kanbanState.muted));
 const ok =
   mapCheck.hasCeoDesk &&
   mapCheck.labelCeo.includes("사장실") &&
@@ -100,10 +129,12 @@ const ok =
   openState.deskBriefOpen === true &&
   !!openState.deskBrief?.source &&
   openState.weatherText.length > 0 &&
+  tabsOk &&
+  kanbanOk &&
   closed.deskBriefOpen === false &&
   fatal.length === 0;
 
-const result = { ok, mapCheck, openState, closed, errors: fatal };
+const result = { ok, mapCheck, openState, kanbanState, closed, errors: fatal };
 console.log(JSON.stringify(result, null, 2));
 await browser.close();
 process.exit(ok ? 0 : 1);
