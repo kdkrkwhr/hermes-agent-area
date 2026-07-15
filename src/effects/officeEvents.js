@@ -2,7 +2,7 @@
 
 import Phaser from "phaser";
 
-const RANDOM_KINDS = ["standup", "coffee_rush", "quiet_hours"];
+const RANDOM_KINDS = ["standup", "coffee_rush", "quiet_hours", "rain_shower"];
 const COFFEE_GID = 16;
 
 function parseEventsMode() {
@@ -162,8 +162,14 @@ export class OfficeEvents {
     else if (kind === "coffee_rush") this.runCoffeeRush();
     else if (kind === "ship_it") this.runShipIt(agent);
     else if (kind === "quiet_hours") this.runQuietHours();
+    else if (kind === "rain_shower") this.runRainShower();
 
     this.publish();
+  }
+
+  runRainShower() {
+    this.showToast("우천");
+    this.scene.windowRain?.pulseEvent(5000 + Math.floor(Math.random() * 4000));
   }
 
   runStandup() {
