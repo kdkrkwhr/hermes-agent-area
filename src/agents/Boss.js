@@ -1,6 +1,6 @@
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
-const SPEED = 90;
-const PROXIMITY = 40;
+const SPEED = 180;
+const PROXIMITY = 80;
 const GREETINGS = ["대장님!", "지시 대기중", "보고 준비됨", "안녕하세요 대장님"];
 
 export class Boss {
@@ -19,27 +19,25 @@ export class Boss {
     this.sprite.setOrigin(0.5, 0.85);
 
     this.nameLabel = scene.add
-      .text(px, py - 20, "대장님", {
+      .text(px, py - 40, "대장님", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "8px",
+        fontSize: "16px",
         color: "#7dffb2",
         align: "center",
         stroke: "#0b1016",
-        strokeThickness: 3,
-        resolution: 2,
+        strokeThickness: 6,
       })
       .setOrigin(0.5, 1)
       .setDepth(20);
 
     this.bubbleBg = scene.add.graphics().setDepth(21);
     this.bubbleText = scene.add
-      .text(px, py - 26, "", {
+      .text(px, py - 52, "", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "6px",
+        fontSize: "12px",
         color: "#0e1620",
         align: "center",
-        wordWrap: { width: 48 },
-        resolution: 2,
+        wordWrap: { width: 96 },
       })
       .setOrigin(0.5, 1)
       .setDepth(22)
@@ -89,10 +87,10 @@ export class Boss {
     // feet sample points — avoid wall/furniture pierce
     const pads = [
       [0, 0],
-      [-4, 0],
-      [4, 0],
-      [0, -2],
-      [0, 2],
+      [-8, 0],
+      [8, 0],
+      [0, -4],
+      [0, 4],
     ];
     for (const [ox, oy] of pads) {
       const tx = Math.floor((nx + ox) / this.tileSize);
@@ -195,30 +193,30 @@ export class Boss {
 
   drawBubble() {
     if (!this.bubbleText.visible) return;
-    const padX = 3;
-    const padY = 2;
+    const padX = 6;
+    const padY = 4;
     const w = this.bubbleText.width + padX * 2;
     const h = this.bubbleText.height + padY * 2;
     const x = this.sprite.x - w / 2;
-    const y = this.sprite.y - 38 - h;
+    const y = this.sprite.y - 76 - h;
     this.bubbleBg.clear();
     this.bubbleBg.fillStyle(0xd8f4f0, 0.94);
-    this.bubbleBg.fillRoundedRect(x, y, w, h, 2);
-    this.bubbleBg.lineStyle(1, 0x2a4a56, 1);
-    this.bubbleBg.strokeRoundedRect(x, y, w, h, 2);
+    this.bubbleBg.fillRoundedRect(x, y, w, h, 4);
+    this.bubbleBg.lineStyle(2, 0x2a4a56, 1);
+    this.bubbleBg.strokeRoundedRect(x, y, w, h, 4);
     this.bubbleBg.fillTriangle(
-      this.sprite.x - 2,
+      this.sprite.x - 4,
       y + h,
-      this.sprite.x + 2,
+      this.sprite.x + 4,
       y + h,
       this.sprite.x,
-      y + h + 3,
+      y + h + 6,
     );
     this.bubbleText.setPosition(this.sprite.x, y + h - padY);
   }
 
   syncUi() {
-    this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 20);
+    this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 40);
     this.drawBubble();
   }
 

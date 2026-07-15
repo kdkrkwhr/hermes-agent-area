@@ -27,8 +27,8 @@ KANBAN_DB = Path(
 GATEWAY_LOG = HERMES_HOME / "logs" / "gateway.log"
 POLL_SECONDS = 5.0
 TICK_SECONDS = 0.05  # 20 Hz position interpolate
-SPEED_PX = 100.0  # px/s
-TILE = 16
+SPEED_PX = 200.0  # px/s @ 32px tiles
+TILE = 32
 
 # Pixel centers — public/assets/office-map.json properties.waypoints (tile → px)
 WAYPOINTS = {
@@ -271,7 +271,7 @@ def discover_agent_defs(
 
 
 def read_kanban_active() -> dict[str, dict[str, Any]]:
-    """assignee → best active task {status, id, title} (running > blocked)."""
+    """assignee → best active task {status, id, title, started_at, max_runtime_seconds}."""
     if not KANBAN_DB.exists():
         return {}
     try:
@@ -279,7 +279,7 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
             """
-            SELECT id, title, status, assignee
+            SELECT id, title, status, assignee, started_at, max_runtime_seconds
             FROM tasks
             WHERE status IN ('running', 'blocked', 'ready')
               AND assignee IS NOT NULL
@@ -301,7 +301,7 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """
-                SELECT id, title, status, assignee
+                SELECT id, title, status, assignee, started_at, max_runtime_seconds
                 FROM tasks
                 WHERE status IN ('running', 'blocked', 'ready')
                   AND assignee IS NOT NULL
@@ -318,7 +318,13 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
         a = r["assignee"]
         if a in best:
             continue
-        best[a] = {"status": r["status"], "id": r["id"], "title": r["title"]}
+        best[a] = {
+            "status": r["status"],
+            "id": r["id"],
+            "title": r["title"],
+            "started_at": r["started_at"],
+            "max_runtime_seconds": r["max_runtime_seconds"],
+        }
     return best
 
 
@@ -360,9 +366,18 @@ class AgentState:
     bubble: str = BUBBLES["idle"]
     task_id: str | None = None
     task_title: str | None = None
+    task_started_at: float | None = None
+    task_max_runtime_s: float | None = None
     gateway: str = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
+        elapsed: float | None = None
+        progress: float | None = None
+        if self.task_started_at is not None:
+            elapsed = max(0.0, time.time() - float(self.task_started_at))
+            max_rt = self.task_max_runtime_s
+            if max_rt is not None and float(max_rt) > 0:
+                progress = min(1.0, elapsed / float(max_rt))
         return {
             "id": self.id,
             "displayName": self.display_name,
@@ -377,6 +392,9 @@ class AgentState:
             "dest_y": round(self.dest_y, 2),
             "task_id": self.task_id,
             "task_title": self.task_title,
+            "task_started_at": self.task_started_at,
+            "task_elapsed_s": round(elapsed, 1) if elapsed is not None else None,
+            "task_progress": round(progress, 3) if progress is not None else None,
             "gateway": self.gateway,
         }
 
@@ -469,6 +487,10 @@ class OfficeSim:
             if task:
                 a.task_id = task.get("id")
                 a.task_title = task.get("title")
+                started = task.get("started_at")
+                a.task_started_at = float(started) if started is not None else None
+                max_rt = task.get("max_runtime_seconds")
+                a.task_max_runtime_s = float(max_rt) if max_rt is not None else None
                 if status == "running" and a.task_title:
                     a.bubble = f"코드 작업 중... ({a.task_title[:24]})"
                 elif status == "blocked" and a.task_title:
@@ -476,6 +498,8 @@ class OfficeSim:
             else:
                 a.task_id = None
                 a.task_title = None
+                a.task_started_at = None
+                a.task_max_runtime_s = None
 
     def tick(self, dt: float) -> None:
         step = SPEED_PX * dt
@@ -520,6 +544,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/health")
+def health():
+    return {"ok": True, "clients": len(office._clients)}
 
 
 @app.get("/api/agents")

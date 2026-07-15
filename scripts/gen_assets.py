@@ -12,10 +12,31 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public" / "assets"
 OUT.mkdir(parents=True, exist_ok=True)
 
-TILE = 16
+DRAW_TILE = 16  # procedural draw unit
+EXPORT_TILE = 32  # shipped tile / map size (2×)
+ASSET_SCALE = EXPORT_TILE // DRAW_TILE
+TILE = DRAW_TILE  # drawing helpers use 16px grid
 
 
-def write_png(path: Path, w: int, h: int, rgba: bytes) -> None:
+def upscale_rgba(rgba: bytes, w: int, h: int, factor: int) -> tuple[bytes, int, int]:
+    """Nearest-neighbor upscale for pixel-art PNGs."""
+    if factor <= 1:
+        return rgba, w, h
+    nw, nh = w * factor, h * factor
+    out = bytearray(nw * nh * 4)
+    for y in range(nh):
+        sy = y // factor
+        for x in range(nw):
+            sx = x // factor
+            si = (sy * w + sx) * 4
+            di = (y * nw + x) * 4
+            out[di : di + 4] = rgba[si : si + 4]
+    return bytes(out), nw, nh
+
+
+def write_png(path: Path, w: int, h: int, rgba: bytes, scale: int = 1) -> None:
+    if scale > 1:
+        rgba, w, h = upscale_rgba(rgba, w, h, scale)
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
@@ -299,8 +320,9 @@ def make_tileset() -> None:
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL_WARM)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)
 
-    write_png(OUT / "office-tiles.png", w, h, bytes(buf))
-    print("wrote", OUT / "office-tiles.png", f"{w}x{h}")
+    write_png(OUT / "office-tiles.png", w, h, bytes(buf), scale=ASSET_SCALE)
+    ew, eh = w * ASSET_SCALE, h * ASSET_SCALE
+    print("wrote", OUT / "office-tiles.png", f"{ew}x{eh}")
 
 
 def draw_char_frame(
@@ -470,8 +492,8 @@ def make_characters() -> None:
             for ci, step in enumerate([0, 1, 2]):
                 draw_char_frame(buf, w, ci * fw, rj * fh, body, hair, facing, step, style)
         path = OUT / f"char-{name}.png"
-        write_png(path, w, h, bytes(buf))
-        print("wrote", path)
+        write_png(path, w, h, bytes(buf), scale=ASSET_SCALE)
+        print("wrote", path, f"{w * ASSET_SCALE}x{h * ASSET_SCALE}")
 
     # boss = human 대장님
     w, h = cols * fw, rows * fh
@@ -480,8 +502,8 @@ def make_characters() -> None:
         for ci, step in enumerate([0, 1, 2]):
             draw_human_boss_frame(buf, w, ci * fw, rj * fh, facing, step)
     path = OUT / "char-boss.png"
-    write_png(path, w, h, bytes(buf))
-    print("wrote", path)
+    write_png(path, w, h, bytes(buf), scale=ASSET_SCALE)
+    print("wrote", path, f"{w * ASSET_SCALE}x{h * ASSET_SCALE}")
 
 
 def make_map_json() -> None:
@@ -722,6 +744,159 @@ def make_map_json() -> None:
             decor[y][x] = 10
             coll[y][x] = 13
 
+    waypoints = {
+        "desks": [
+            {"x": 3, "y": 6},   # work1 — mushroom
+            {"x": 7, "y": 6},   # work1/near — onion
+            {"x": 9, "y": 20},  # work2 art — claude
+        ],
+        "meeting": {"x": 17, "y": 10},
+        "break": {"x": 32, "y": 6},
+        "sleep": {"x": 32, "y": 21},
+        "entrance": {"x": 20, "y": 27},
+    }
+
+    # densify furniture: plants/lamps/pictures/rugs/sideTables — never block waypoints
+    # or leave solid strips across corridor centers (keep y=13 mid path open).
+    reserved = {(p["x"], p["y"]) for p in waypoints["desks"]}
+    reserved |= {
+        (waypoints["meeting"]["x"], waypoints["meeting"]["y"]),
+        (waypoints["break"]["x"], waypoints["break"]["y"]),
+        (waypoints["sleep"]["x"], waypoints["sleep"]["y"]),
+        (waypoints["entrance"]["x"], waypoints["entrance"]["y"]),
+        # keep desk / door approach tiles walkable
+        (3, 5),
+        (7, 5),
+        (9, 19),
+        (6, 10),
+        (6, 12),
+        (6, 14),
+        (6, 16),
+        (32, 10),
+        (32, 12),
+        (32, 14),
+        (32, 16),
+        (19, 13),
+        (20, 13),
+        (20, 26),
+        (20, 28),
+    }
+
+    def place_decor(x: int, y: int, gid: int, solid: bool = True) -> bool:
+        if not (0 <= x < W and 0 <= y < H):
+            return False
+        if (x, y) in reserved:
+            return False
+        if floor[y][x] in (3, 11, 13):  # wall / door / void
+            return False
+        if decor[y][x] != 0 or coll[y][x]:
+            return False
+        decor[y][x] = gid
+        if solid:
+            coll[y][x] = 13
+        return True
+
+    # solid: plant=10 lamp=20 picture=19 sideTable=24 plantBreak=27
+    solid_places = [
+        # workroom 1
+        (1, 3, 10),
+        (11, 3, 10),
+        (1, 8, 10),
+        (11, 8, 20),
+        (5, 2, 20),
+        (9, 3, 24),
+        (5, 8, 24),
+        (2, 9, 10),
+        (10, 9, 19),
+        (8, 2, 19),
+        (4, 9, 20),
+        # break
+        (28, 2, 10),
+        (37, 5, 27),
+        (28, 9, 27),
+        (36, 9, 20),
+        (33, 3, 24),
+        (37, 8, 19),
+        (34, 8, 10),
+        (29, 9, 20),
+        # meeting — whiteboard flanks + corners
+        (18, 4, 24),
+        (21, 4, 24),
+        (15, 5, 10),
+        (24, 5, 10),
+        (15, 13, 20),
+        (24, 13, 19),
+        (16, 12, 10),
+        (23, 12, 20),
+        (15, 7, 19),
+        (24, 9, 10),
+        # workroom 2
+        (1, 17, 10),
+        (11, 17, 20),
+        (2, 23, 20),
+        (6, 17, 24),
+        (11, 23, 10),
+        (1, 21, 19),
+        (7, 24, 24),
+        (4, 24, 10),
+        (11, 19, 19),
+        (2, 20, 20),
+        # sleep
+        (28, 17, 20),
+        (37, 17, 10),
+        (28, 24, 10),
+        (33, 24, 20),
+        (36, 22, 19),
+        (28, 21, 24),
+        (37, 21, 10),
+        (30, 24, 19),
+        # corridor edges (not mid y=13 spine)
+        (2, 12, 10),
+        (8, 12, 19),
+        (22, 12, 10),
+        (34, 12, 19),
+        (2, 14, 19),
+        (8, 14, 10),
+        (22, 14, 19),
+        (34, 14, 10),
+        (37, 13, 10),
+        (14, 13, 19),
+        (25, 13, 10),
+        # entrance hall
+        (15, 28, 19),
+        (24, 28, 20),
+        (17, 27, 10),
+        (22, 27, 10),
+        (14, 27, 19),
+        (25, 27, 24),
+    ]
+    for x, y, gid in solid_places:
+        place_decor(x, y, gid, solid=True)
+
+    # walkable rugs: rug=18 sleepRug=28
+    rug_places = [
+        (5, 9, 18),
+        (8, 9, 18),
+        (5, 6, 18),
+        (33, 8, 18),
+        (36, 6, 18),
+        (30, 8, 18),
+        (16, 10, 18),
+        (22, 10, 18),
+        (7, 23, 18),
+        (3, 24, 18),
+        (33, 22, 28),
+        (35, 22, 28),
+        (28, 22, 28),
+        (19, 28, 18),
+        (18, 27, 18),
+        (21, 27, 18),
+        (4, 3, 18),
+        (10, 7, 18),
+    ]
+    for x, y, gid in rug_places:
+        place_decor(x, y, gid, solid=False)
+
     # floor variation noise on open floors
     for y in range(1, H - 1):
         for x in range(1, W - 1):
@@ -744,24 +919,12 @@ def make_map_json() -> None:
         for x in range(W):
             coll_tiles.append(3 if coll[y][x] else 0)
 
-    waypoints = {
-        "desks": [
-            {"x": 3, "y": 6},   # work1 — mushroom
-            {"x": 7, "y": 6},   # work1/near — onion
-            {"x": 9, "y": 20},  # work2 art — claude
-        ],
-        "meeting": {"x": 17, "y": 10},
-        "break": {"x": 32, "y": 6},
-        "sleep": {"x": 32, "y": 21},
-        "entrance": {"x": 20, "y": 27},
-    }
-
     data = {
         "compressionlevel": -1,
         "height": H,
         "width": W,
-        "tilewidth": TILE,
-        "tileheight": TILE,
+        "tilewidth": EXPORT_TILE,
+        "tileheight": EXPORT_TILE,
         "infinite": False,
         "orientation": "orthogonal",
         "renderorder": "right-down",
@@ -775,14 +938,14 @@ def make_map_json() -> None:
                 "columns": 8,
                 "firstgid": 1,
                 "image": "office-tiles.png",
-                "imageheight": 96,
-                "imagewidth": 128,
+                "imageheight": 6 * EXPORT_TILE,
+                "imagewidth": 8 * EXPORT_TILE,
                 "margin": 0,
                 "name": "office",
                 "spacing": 0,
                 "tilecount": 48,
-                "tileheight": TILE,
-                "tilewidth": TILE,
+                "tileheight": EXPORT_TILE,
+                "tilewidth": EXPORT_TILE,
             }
         ],
         "layers": [

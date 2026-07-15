@@ -1,5 +1,7 @@
 /** Fallback roster for offline/mock only — live names come from local Hermes profiles via BE. */
 
+import { TILE_SIZE } from "./constants.js";
+
 export const SHEETS = ["char-mushroom", "char-onion", "char-claude"];
 
 /** Demo placeholders when BE unreachable (profile-id labels, not personal nicknames). */
@@ -66,13 +68,52 @@ export function defFromServerAgent(raw, index = 0) {
   };
 }
 
-/** WS URL — local BE. Override: ?ws=… or VITE_WS_URL (.env) */
+const LS_WS = "hermes-area-ws";
+const LS_API = "hermes-area-api";
+
+function readLs(key) {
+  try {
+    return localStorage.getItem(key) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeLs(key, value) {
+  try {
+    if (!value) localStorage.removeItem(key);
+    else localStorage.setItem(key, value);
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+/** Persist connection overrides (empty string clears). */
+export function setConnectionUrls({ ws, api } = {}) {
+  if (ws != null) writeLs(LS_WS, String(ws).trim());
+  if (api != null) writeLs(LS_API, String(api).trim().replace(/\/$/, ""));
+}
+
+/**
+ * WS URL priority: ?ws → localStorage → VITE_WS_URL →
+ * local FE same-origin `/ws` (Vite proxy) → ws://127.0.0.1:8765/ws
+ */
 export function resolveWsUrl() {
   const q = new URLSearchParams(location.search).get("ws");
-  if (q) return q;
+  if (q) {
+    writeLs(LS_WS, q);
+    return q;
+  }
+  const saved = readLs(LS_WS);
+  if (saved) return saved;
   const fromEnv = import.meta.env.VITE_WS_URL;
   if (fromEnv) return String(fromEnv);
-  return "ws://localhost:8765/ws";
+  // Vite dev: proxy /ws → BE (avoids hardcoding port, same-origin)
+  if (location.hostname === "localhost" || location.hostname === "127.0.0.1") {
+    const proto = location.protocol === "https:" ? "wss:" : "ws:";
+    return `${proto}//${location.host}/ws`;
+  }
+  return "ws://127.0.0.1:8765/ws";
 }
 
 /**
@@ -83,7 +124,7 @@ export function isPagesLocalWsBlocked() {
   if (typeof location === "undefined") return false;
   if (location.protocol !== "https:") return false;
   const url = resolveWsUrl();
-  return /^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url);
+  return /^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?(\/|$)/i.test(url);
 }
 
 /** Offline/mock kanban snapshot fragment (matches BE shape). */
@@ -118,6 +159,12 @@ export function buildMockAgents() {
         : status === "blocked"
           ? "검토 대기 중... (mock)"
           : "휴식 중 ☕";
+    const now = Date.now() / 1000;
+    // running: determined progress; blocked/idle: no bar fields
+    const taskStarted =
+      status === "running" ? now - 420 : status === "blocked" ? now - 900 : null;
+    const taskProgress = status === "running" ? 0.42 : null;
+    const taskElapsed = taskStarted != null ? Math.round(now - taskStarted) : null;
     return {
       id: def.id,
       displayName: def.displayName,
@@ -128,11 +175,14 @@ export function buildMockAgents() {
       bubble: bubbles,
       task_id: titles[i] ? `t_mock_${def.id}` : null,
       task_title: titles[i],
+      task_started_at: taskStarted,
+      task_elapsed_s: taskElapsed,
+      task_progress: taskProgress,
       gateway: i === 2 ? "stopped" : "running",
-      x: (def.homeDesk * 7 + 4) * 16 + 8,
-      y: 14 * 16 + 8,
-      dest_x: (def.homeDesk * 7 + 4) * 16 + 8,
-      dest_y: 14 * 16 + 8,
+      x: (def.homeDesk * 7 + 4) * TILE_SIZE + TILE_SIZE / 2,
+      y: 14 * TILE_SIZE + TILE_SIZE / 2,
+      dest_x: (def.homeDesk * 7 + 4) * TILE_SIZE + TILE_SIZE / 2,
+      dest_y: 14 * TILE_SIZE + TILE_SIZE / 2,
     };
   });
 }
@@ -140,8 +190,8 @@ export function buildMockAgents() {
 /** HTTPS Pages에서 localhost WS 막혔을 때 — 전부 offline로 표시. */
 export function buildDisconnectedAgents() {
   return AGENTS.map((def) => {
-    const x = (def.homeDesk * 7 + 4) * 16 + 8;
-    const y = 14 * 16 + 8;
+    const x = (def.homeDesk * 7 + 4) * TILE_SIZE + TILE_SIZE / 2;
+    const y = 14 * TILE_SIZE + TILE_SIZE / 2;
     return {
       id: def.id,
       displayName: def.displayName,
@@ -152,6 +202,9 @@ export function buildDisconnectedAgents() {
       bubble: "BE 연결 필요 (로컬 FE)",
       task_id: null,
       task_title: null,
+      task_started_at: null,
+      task_elapsed_s: null,
+      task_progress: null,
       gateway: "stopped",
       x,
       y,
@@ -163,11 +216,18 @@ export function buildDisconnectedAgents() {
 
 export function resolveApiBase() {
   const q = new URLSearchParams(location.search).get("api");
-  if (q) return q.replace(/\/$/, "");
+  if (q) {
+    const cleaned = q.replace(/\/$/, "");
+    writeLs(LS_API, cleaned);
+    return cleaned;
+  }
+  const saved = readLs(LS_API);
+  if (saved) return saved;
   const fromEnv = import.meta.env.VITE_API_BASE;
   if (fromEnv) return String(fromEnv).replace(/\/$/, "");
+  // Vite dev: same-origin /api proxy
   if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
-    return "http://localhost:8765";
+    return ""; // relative → /api/... via Vite proxy
   }
-  return "http://localhost:8765";
+  return "http://127.0.0.1:8765";
 }

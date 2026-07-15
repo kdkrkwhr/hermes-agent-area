@@ -26,6 +26,41 @@ await page.waitForFunction(
 
 await page.waitForTimeout(5000);
 
+// Audio: unlock on gesture, BGM loop, M mute toggle + HUD glyph
+await page.click("canvas", { position: { x: 200, y: 200 } });
+await page.waitForFunction(
+  () =>
+    window.__HERMES_AREA__?.audio?.unlocked === true &&
+    window.__HERMES_AREA__?.audio?.bgmPlaying === true,
+  null,
+  { timeout: 8000 },
+);
+
+const audioBeforeMute = await page.evaluate(() => window.__HERMES_AREA__?.audio);
+await page.keyboard.press("M");
+await page.waitForFunction(
+  () => window.__HERMES_AREA__?.audio?.muted === true,
+  null,
+  { timeout: 3000 },
+);
+const mutedSnap = await page.evaluate(() => ({
+  audio: window.__HERMES_AREA__?.audio,
+  muteKey: localStorage.getItem("hermes-area-mute"),
+  cacheKeys: (() => {
+    const g = window.__HERMES_GAME__;
+    const sc = g?.scene?.getScene?.("OfficeScene");
+    const audio = sc?.cache?.audio;
+    return audio ? audio.getKeys() : [];
+  })(),
+}));
+
+await page.keyboard.press("M");
+await page.waitForFunction(
+  () => window.__HERMES_AREA__?.audio?.muted === false,
+  null,
+  { timeout: 3000 },
+);
+
 const snapshot = await page.evaluate(() => {
   const canvas = document.querySelector("canvas");
   const g = window.__HERMES_GAME__;
@@ -59,6 +94,7 @@ const snapshot = await page.evaluate(() => {
       bubble: a.bubble,
       task_id: a.task_id,
     })),
+    audio: window.__HERMES_AREA__?.audio ?? null,
   };
 });
 
@@ -76,6 +112,17 @@ const bossOk =
   snapshot.boss &&
   snapshot.boss.label === "대장님" &&
   typeof snapshot.boss.x === "number";
+const audioCacheOk = ["office-ambient", "sfx-running", "sfx-blocked"].every((k) =>
+  mutedSnap.cacheKeys.includes(k),
+);
+const audioOk =
+  audioBeforeMute?.unlocked === true &&
+  audioBeforeMute?.bgmPlaying === true &&
+  mutedSnap.audio?.muted === true &&
+  mutedSnap.muteKey === "1" &&
+  audioCacheOk &&
+  snapshot.audio?.muted === false;
+
 const result = {
   snapshot,
   errors,
@@ -83,12 +130,15 @@ const result = {
   hasOfflineClaude,
   zoomOk,
   bossOk,
+  audioOk,
+  mutedSnap,
   ok:
     snapshot.canvas &&
     snapshot.agentCount === 3 &&
     fatal.length === 0 &&
     zoomOk &&
     bossOk &&
+    audioOk &&
     snapshot.ready === true,
 };
 console.log(JSON.stringify(result, null, 2));

@@ -41,9 +41,11 @@ BE가 각 PC의 `HERMES_HOME` 프로필을 읽어 캐릭터를 만듦 (하드코
 
 ## WebSocket
 
-- 기본: `ws://localhost:8765/ws` (로컬 BE)
-- 쿼리: `?ws=ws://127.0.0.1:8765/ws` 또는 `?ws=wss://…`
+- 로컬 FE(`npm run dev`): 같은 오리진 `ws://localhost:5173/ws` → Vite가 BE로 프록시
+- 직접 BE: `ws://127.0.0.1:8765/ws`
+- 툴바 **연결** 버튼 / `localStorage` / 쿼리 `?ws=` · `?api=`
 - env: `.env`에 `VITE_WS_URL=...` (빌드 시 주입)
+- Pages에서 실시간 보려면: 로컬 FE 쓰거나 cloudflared `wss://` 터널을 연결 패널에 저장
 
 ## 개발 / 빌드
 

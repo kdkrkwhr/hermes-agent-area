@@ -46,8 +46,8 @@ const blocked = await page.evaluate(() => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
   const boss = sc?.boss;
   const layer = sc?.collision;
-  const tx = Math.floor(boss.sprite.x / 16);
-  const ty = Math.floor(boss.sprite.y / 16);
+  const tx = Math.floor(boss.sprite.x / 32);
+  const ty = Math.floor(boss.sprite.y / 32);
   const tile = layer.getTileAt(tx, ty);
   return {
     x: Math.round(boss.sprite.x),
@@ -65,20 +65,64 @@ await page.screenshot({
 const area = await page.evaluate(() => ({
   ready: window.__HERMES_AREA__?.ready,
   zoom: window.__HERMES_AREA__?.cameraZoom,
+  follow: window.__HERMES_AREA__?.cameraFollow,
   boss: window.__HERMES_AREA__?.boss,
   agentCount: window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene")?.agents?.length,
 }));
 
+// F toggles follow ↔ overview (integer zoom)
+await page.keyboard.press("KeyF");
+await page.waitForTimeout(300);
+const followOn = await page.evaluate(() => ({
+  follow: window.__HERMES_AREA__?.cameraFollow,
+  zoom: window.__HERMES_AREA__?.cameraZoom,
+  scrollX: window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene")?.cameras?.main?.scrollX,
+  scrollY: window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene")?.cameras?.main?.scrollY,
+  bossX: window.__HERMES_AREA__?.boss?.x,
+  bossY: window.__HERMES_AREA__?.boss?.y,
+}));
+
+await page.keyboard.press("KeyF");
+await page.waitForTimeout(300);
+const followOff = await page.evaluate(() => ({
+  follow: window.__HERMES_AREA__?.cameraFollow,
+  zoom: window.__HERMES_AREA__?.cameraZoom,
+}));
+
+// L/M still work while follow was on (toggle follow back briefly for M/L side-effect check)
+await page.keyboard.press("KeyF");
+await page.waitForTimeout(100);
+await page.keyboard.press("KeyM");
+await page.waitForTimeout(100);
+await page.keyboard.press("KeyL");
+await page.waitForTimeout(100);
+const keysWhileFollow = await page.evaluate(() => ({
+  mute: window.__HERMES_AREA__?.audio?.muted,
+  lighting: window.__HERMES_AREA__?.lighting,
+  follow: window.__HERMES_AREA__?.cameraFollow,
+}));
+await page.keyboard.press("KeyF"); // back to overview
+
 const fatal = errors.filter((e) => !/Framebuffer|WebGL/i.test(e));
 const moved = before && mid && (mid.x !== before.x || mid.y !== before.y);
+const followToggleOk =
+  followOn.follow === true &&
+  followOn.zoom === 2 &&
+  Number.isInteger(followOn.zoom) &&
+  followOff.follow === false &&
+  followOff.zoom === 1;
 const result = {
   before,
   mid,
   after,
   blocked,
   area,
+  followOn,
+  followOff,
+  keysWhileFollow,
   moved,
   zoomOk: Number.isInteger(area.zoom) && area.zoom >= 1,
+  followToggleOk,
   bossOk: area.boss?.label === "대장님",
   notInsideWall: blocked.onCollision === false,
   errors: fatal,
@@ -88,6 +132,11 @@ const result = {
     moved &&
     Number.isInteger(area.zoom) &&
     area.zoom >= 1 &&
+    area.follow === false &&
+    followToggleOk &&
+    keysWhileFollow.follow === true &&
+    typeof keysWhileFollow.mute === "boolean" &&
+    !!keysWhileFollow.lighting &&
     area.boss?.label === "대장님" &&
     blocked.onCollision === false &&
     fatal.length === 0,

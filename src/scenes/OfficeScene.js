@@ -21,6 +21,8 @@ import {
   TOD_PRESETS,
 } from "../effects/officeEffects.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
+import { OfficeEvents } from "../effects/officeEvents.js";
+import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
 export class OfficeScene extends Phaser.Scene {
   constructor() {
@@ -31,20 +33,20 @@ export class OfficeScene extends Phaser.Scene {
     this.load.tilemapTiledJSON("office-map", assetUrl("assets/office-map.json"));
     this.load.image("office-tiles", assetUrl("assets/office-tiles.png"));
     this.load.spritesheet("char-mushroom", assetUrl("assets/char-mushroom.png"), {
-      frameWidth: 16,
-      frameHeight: 24,
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
     });
     this.load.spritesheet("char-onion", assetUrl("assets/char-onion.png"), {
-      frameWidth: 16,
-      frameHeight: 24,
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
     });
     this.load.spritesheet("char-claude", assetUrl("assets/char-claude.png"), {
-      frameWidth: 16,
-      frameHeight: 24,
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
     });
     this.load.spritesheet("char-boss", assetUrl("assets/char-boss.png"), {
-      frameWidth: 16,
-      frameHeight: 24,
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
     });
     this.officeAudio = new OfficeAudio(this);
     this.officeAudio.preload();
@@ -92,34 +94,48 @@ export class OfficeScene extends Phaser.Scene {
 
     this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
     this.cameras.main.roundPixels = true;
-    // fit whole office on screen (integer zoom — non-integer cracks pixel-art)
-    this.fitOfficeCamera();
-    this.scale.on("resize", () => this.fitOfficeCamera());
+    this.cameraFollow = this.parseFollowDefault();
+    // overview = fit whole office; follow = boss-centered zoom 2
+    this.applyCameraMode();
+    this.scale.on("resize", () => this.applyCameraMode());
 
     // connection status — DOM toolbar handles branding/hints
     this.hudLabel = this.add
       .text(8, 8, "connecting…", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "9px",
+        fontSize: "18px",
         color: "#5ee0c8",
         stroke: "#0b1016",
-        strokeThickness: 3,
+        strokeThickness: 6,
       })
       .setScrollFactor(0)
       .setDepth(50);
 
     this.muteLabel = this.add
-      .text(8, 20, "♪", {
+      .text(8, 36, "♪", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "10px",
+        fontSize: "20px",
         color: "#8aa0b8",
         stroke: "#0b1016",
-        strokeThickness: 3,
+        strokeThickness: 6,
+      })
+      .setScrollFactor(0)
+      .setDepth(50);
+
+    this.followLabel = this.add
+      .text(8, 64, "⛶", {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "20px",
+        color: "#8aa0b8",
+        stroke: "#0b1016",
+        strokeThickness: 6,
       })
       .setScrollFactor(0)
       .setDepth(50);
 
     this.hintLabel = null;
+    this.input.keyboard?.on("keydown-F", () => this.toggleCameraFollow());
+    this.refreshFollowHud();
 
     this.live = false;
     this.lastSnapshot = null;
@@ -133,6 +149,9 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.officeAudio) this.officeAudio = new OfficeAudio(this);
     this.officeAudio.create(() => this.refreshMuteHud());
     this.refreshMuteHud();
+
+    this.officeEvents = new OfficeEvents(this);
+    this.officeEvents.start();
 
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
@@ -180,6 +199,7 @@ export class OfficeScene extends Phaser.Scene {
     if (prev === kind) return;
 
     this.officeAudio?.playStatusSfx(kind, prev);
+    this.officeEvents?.onStatusTransition(prev, kind, agent);
 
     const old = this.agentEmitters.get(agent.def.id);
     if (old) {
@@ -241,6 +261,36 @@ export class OfficeScene extends Phaser.Scene {
     return panelState;
   }
 
+  parseFollowDefault() {
+    const q = new URLSearchParams(location.search).get("follow");
+    return q === "1" || q === "true";
+  }
+
+  toggleCameraFollow() {
+    this.cameraFollow = !this.cameraFollow;
+    this.applyCameraMode();
+    this.refreshFollowHud();
+  }
+
+  applyCameraMode() {
+    if (this.cameraFollow && this.boss?.sprite) {
+      this.enableFollowCamera();
+    } else {
+      this.fitOfficeCamera();
+    }
+  }
+
+  /** Boss-centered follow; integer zoom 2; clamps to map bounds. */
+  enableFollowCamera() {
+    const cam = this.cameras.main;
+    const mapW = this.map.widthInPixels;
+    const mapH = this.map.heightInPixels;
+    cam.setBounds(0, 0, mapW, mapH);
+    cam.roundPixels = true;
+    cam.setZoom(2);
+    cam.startFollow(this.boss.sprite, true, 0.12, 0.12);
+  }
+
   /** Canvas size == map size; keep zoom 1 so FIT shows the whole office. */
   fitOfficeCamera() {
     const cam = this.cameras.main;
@@ -250,6 +300,21 @@ export class OfficeScene extends Phaser.Scene {
     cam.setZoom(1);
     cam.centerOn(mapW / 2, mapH / 2);
     cam.setBounds(0, 0, mapW, mapH);
+  }
+
+  refreshFollowHud() {
+    if (!this.followLabel) return;
+    this.followLabel.setText(this.cameraFollow ? "👁" : "⛶");
+    this.followLabel.setColor(this.cameraFollow ? "#5ee0c8" : "#8aa0b8");
+    const btn =
+      typeof document !== "undefined"
+        ? document.querySelector('[data-role="toggle-follow"]')
+        : null;
+    if (btn) {
+      btn.setAttribute("aria-pressed", this.cameraFollow ? "true" : "false");
+      btn.classList.toggle("is-off", !this.cameraFollow);
+      btn.textContent = this.cameraFollow ? "팔로우 on" : "팔로우";
+    }
   }
 
   addZoneLabels() {
@@ -266,11 +331,10 @@ export class OfficeScene extends Phaser.Scene {
       this.add
         .text(z.tx * tw + tw / 2, z.ty * tw + 2, z.name, {
           fontFamily: "Segoe UI, sans-serif",
-          fontSize: "8px",
+          fontSize: "16px",
           color: "#9fd6e8",
           stroke: "#0b1016",
-          strokeThickness: 3,
-          resolution: 2,
+          strokeThickness: 6,
         })
         .setOrigin(0.5, 0)
         .setDepth(5)
@@ -278,11 +342,23 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  reconnectWs() {
+    this._wsManualClose = true;
+    try {
+      this.ws?.close();
+    } catch {
+      /* ignore */
+    }
+    this.ws = null;
+    this._wsManualClose = false;
+    this.connectWs();
+  }
+
   connectWs() {
     const url = resolveWsUrl();
     // Pages(HTTPS) + ws://localhost = 브라우저가 차단 → 가짜 휴식만 보임
     if (isPagesLocalWsBlocked()) {
-      this.hudLabel.setText("⚠ Pages→localhost WS 막힘 · npm run dev / ?ws=wss://…");
+      this.hudLabel.setText("⚠ Pages→localhost 막힘 · 연결 버튼 / npm run dev");
       this.refreshMockKanban({ disconnected: true });
       return;
     }
@@ -296,7 +372,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.ws = ws;
     ws.onopen = () => {
-      this.hudLabel.setText("live");
+      this.hudLabel.setText(`live · ${url.replace(/^wss?:\/\//, "")}`);
       this.setLive(true);
     };
     ws.onmessage = (ev) => {
@@ -320,6 +396,7 @@ export class OfficeScene extends Phaser.Scene {
     };
     ws.onclose = () => {
       this.setLive(false);
+      if (this._wsManualClose) return;
       this.hudLabel.setText("offline mock");
       if (!this.lastSnapshot?.mock) this.refreshMockKanban();
       this.time.delayedCall(3000, () => this.connectWs());
@@ -402,6 +479,7 @@ export class OfficeScene extends Phaser.Scene {
       snapshot: snap,
       wsUrl: url,
       cameraZoom: this.cameras.main.zoom,
+      cameraFollow: !!this.cameraFollow,
       kanbanPanel: this.kanbanPanel?.getState?.() ?? null,
       boss: boss
         ? {
@@ -416,6 +494,7 @@ export class OfficeScene extends Phaser.Scene {
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
       ),
       audio: this.officeAudio?.snapshot?.() ?? null,
+      events: this.officeEvents?.snapshot?.() ?? null,
     };
   }
 

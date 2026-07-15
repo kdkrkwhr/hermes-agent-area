@@ -1,7 +1,7 @@
 import { pickStatus } from "../mock.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
-const SPEED = 100; // match BE 100px/s
+const SPEED = 200; // match BE 200px/s @ 32px tiles
 
 function truncateBubble(text, maxChars = 28) {
   const raw = String(text ?? "").replace(/\s+/g, " ").trim();
@@ -37,30 +37,31 @@ export class Agent {
     });
 
     this.nameLabel = scene.add
-      .text(px, py - 20, def.displayName, {
+      .text(px, py - 40, def.displayName, {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "8px",
+        fontSize: "16px",
         color: "#c8e8f4",
         align: "center",
         stroke: "#0b1016",
-        strokeThickness: 3,
-        resolution: 2,
+        strokeThickness: 6,
       })
       .setOrigin(0.5, 1)
       .setDepth(20);
 
     this.bubbleBg = scene.add.graphics().setDepth(21);
     this.bubbleText = scene.add
-      .text(px, py - 26, "", {
+      .text(px, py - 52, "", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "6px",
+        fontSize: "12px",
         color: "#0e1620",
         align: "center",
-        wordWrap: { width: 48 },
-        resolution: 2,
+        wordWrap: { width: 96 },
       })
       .setOrigin(0.5, 1)
       .setDepth(22);
+
+    // thin progress under nameplate (running/chatting only)
+    this.progressGfx = scene.add.graphics().setDepth(20).setVisible(false);
 
     this.setStatus(pickStatus(def, "desk"));
     this.ensureAnims();
@@ -125,30 +126,70 @@ export class Agent {
   }
 
   drawBubble() {
-    const padX = 3;
-    const padY = 2;
+    const padX = 6;
+    const padY = 4;
     const w = this.bubbleText.width + padX * 2;
     const h = this.bubbleText.height + padY * 2;
     const x = this.sprite.x - w / 2;
     // clears nameplate + head even when wrapped tall
-    const y = this.sprite.y - 38 - h;
+    const y = this.sprite.y - 76 - h;
 
     this.bubbleBg.clear();
     this.bubbleBg.fillStyle(0xd8f4f0, 0.94);
-    this.bubbleBg.fillRoundedRect(x, y, w, h, 2);
-    this.bubbleBg.lineStyle(1, 0x2a4a56, 1);
-    this.bubbleBg.strokeRoundedRect(x, y, w, h, 2);
+    this.bubbleBg.fillRoundedRect(x, y, w, h, 4);
+    this.bubbleBg.lineStyle(2, 0x2a4a56, 1);
+    this.bubbleBg.strokeRoundedRect(x, y, w, h, 4);
     this.bubbleBg.fillStyle(0xd8f4f0, 0.94);
     this.bubbleBg.fillTriangle(
-      this.sprite.x - 2,
+      this.sprite.x - 4,
       y + h,
-      this.sprite.x + 2,
+      this.sprite.x + 4,
       y + h,
       this.sprite.x,
-      y + h + 3,
+      y + h + 6,
     );
 
     this.bubbleText.setPosition(this.sprite.x, y + h - padY);
+  }
+
+  /** Under-nameplate bar: fill if task_progress set, else indeterminate pulse. */
+  drawProgressBar() {
+    const gfx = this.progressGfx;
+    if (!gfx) return;
+
+    const status = this.serverStatus;
+    const show = status === "running" || status === "chatting";
+    if (!show) {
+      gfx.clear();
+      gfx.setVisible(false);
+      return;
+    }
+
+    const BAR_W = 28;
+    const BAR_H = 4;
+    const x = this.sprite.x - BAR_W / 2;
+    const y = this.sprite.y - 36;
+
+    gfx.setVisible(true);
+    gfx.clear();
+    gfx.fillStyle(0x0b1016, 0.88);
+    gfx.fillRect(x, y, BAR_W, BAR_H);
+
+    const progress = this.serverData?.task_progress;
+    if (typeof progress === "number" && Number.isFinite(progress)) {
+      const fill = Math.max(0, Math.min(1, progress));
+      gfx.fillStyle(0x5be0c8, 1);
+      gfx.fillRect(x, y, Math.max(1, Math.round(BAR_W * fill)), BAR_H);
+      return;
+    }
+
+    // indeterminate: slide a chunk; clock-driven so it pulses between WS polls
+    const t = this.scene.time.now / 1000;
+    const phase = (Math.sin(t * 2.6) + 1) / 2;
+    const seg = Math.max(6, Math.round(BAR_W * 0.35));
+    const ox = x + (BAR_W - seg) * phase;
+    gfx.fillStyle(0x7ec8e8, 1);
+    gfx.fillRect(ox, y, seg, BAR_H);
   }
 
   tilePos() {
@@ -201,6 +242,7 @@ export class Agent {
     this.nameLabel?.destroy();
     this.bubbleBg?.destroy();
     this.bubbleText?.destroy();
+    this.progressGfx?.destroy();
   }
 
   async applyServer(agentMsg) {
@@ -213,6 +255,7 @@ export class Agent {
     const alpha = agentMsg.status === "offline" ? 0.45 : 1;
     this.sprite.setAlpha(alpha);
     this.nameLabel.setAlpha(alpha);
+    this.progressGfx?.setAlpha(alpha);
 
     const destX = agentMsg.dest_x ?? agentMsg.x;
     const destY = agentMsg.dest_y ?? agentMsg.y;
@@ -291,7 +334,8 @@ export class Agent {
   }
 
   syncUi() {
-    this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 20);
+    this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 40);
     this.drawBubble();
+    this.drawProgressBar();
   }
 }
