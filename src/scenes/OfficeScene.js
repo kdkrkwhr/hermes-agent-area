@@ -32,6 +32,7 @@ import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
 import { createDeskBriefPanel } from "../ui/deskBriefPanel.js";
+import { RoomInteract } from "../roomInteract.js";
 import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
@@ -123,6 +124,10 @@ export class OfficeScene extends Phaser.Scene {
 
     // spawn 대장님 near corridor center (walkable)
     this.boss = new Boss(this, { x: 12, y: 26 }); // corridor near lobby entrance
+
+    // per-room E interactions (coffee 2048, nap, meeting, lobby welcome)
+    this.roomInteract = new RoomInteract(this);
+    this.time.delayedCall(400, () => this.roomInteract?.greetOnStart?.());
 
     // ambient lounge cat — ambience only; ?mascot=0 off
     this.mascot = null;
@@ -553,11 +558,17 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Hint next to follow glyph — agent detail or CEO desk brief. */
+  /** Hint next to follow glyph — desk / coffee / nap / work / agent. */
   refreshInteractHud() {
     if (!this.hintLabel) return;
     const nearId = this.boss?.nearAgentId ?? null;
     const nearDesk = this.nearCeoDesk();
+    const roomHint = this.roomInteract?.hintLabel?.();
+    if (roomHint) {
+      this.hintLabel.setVisible(true);
+      this.hintLabel.setText(roomHint);
+      return;
+    }
     this.hintLabel.setVisible(!!nearId || nearDesk);
     this.hintLabel.setText(nearDesk && !nearId ? "E 데스크" : "E 상세");
   }
@@ -779,7 +790,6 @@ export class OfficeScene extends Phaser.Scene {
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
       ),
       deskFxEnabled: this.deskFxEnabled !== false,
-      focusFxEnabled: this.focusFxEnabled !== false,
       deskGlow: Object.fromEntries(
         this.agents.map((a) => {
           const on = a.deskGlowGfx?.visible;
@@ -794,6 +804,7 @@ export class OfficeScene extends Phaser.Scene {
       dust: this.dustMotes?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
+      roomInteract: this.roomInteract?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,
         done: !!this._clockOutDone,
@@ -812,6 +823,7 @@ export class OfficeScene extends Phaser.Scene {
       this.boss.update(time, delta);
       this.boss.maybeSendPos(this.ws);
       this.checkLobbyClockOut();
+      this.roomInteract?.update?.(time);
       this.publishDebug(this.ws?.url);
     }
     this.mascot?.update(time, delta);

@@ -711,6 +711,161 @@ body,
   text-overflow: ellipsis;
 }
 
+/* Lounge 2048 */
+.mg2048 {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 10, 16, 0.55);
+  backdrop-filter: blur(3px);
+}
+.mg2048[hidden] {
+  display: none !important;
+}
+.mg2048__card {
+  width: min(360px, 92vw);
+  padding: 14px 14px 10px;
+  border-radius: 12px;
+  background: linear-gradient(160deg, #1a2430, #121820);
+  border: 1px solid #3a4a58;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+.mg2048__head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: #e8eef4;
+  font-size: 14px;
+}
+.mg2048__scores {
+  margin-left: auto;
+  display: flex;
+  gap: 10px;
+  font-size: 12px;
+  color: #8ec0ff;
+  font-variant-numeric: tabular-nums;
+}
+.mg2048__x {
+  border: 0;
+  background: transparent;
+  color: #9aa0aa;
+  font-size: 20px;
+  cursor: pointer;
+  line-height: 1;
+}
+.mg2048__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+  padding: 8px;
+  border-radius: 8px;
+  background: #0d1218;
+}
+.mg2048__cell {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #1a222c;
+  color: #e8eef4;
+  font-weight: 700;
+  font-size: 18px;
+}
+.mg2048__cell--2 { background: #2a3a4a; }
+.mg2048__cell--4 { background: #2e4458; }
+.mg2048__cell--8 { background: #3a5a4a; color: #dff; }
+.mg2048__cell--16 { background: #3d6a3a; }
+.mg2048__cell--32 { background: #4a7a30; }
+.mg2048__cell--64 { background: #6a8a28; color: #102010; }
+.mg2048__cell--128 { background: #8aa020; color: #101808; font-size: 16px; }
+.mg2048__cell--256 { background: #a88820; color: #101008; font-size: 16px; }
+.mg2048__cell--512 { background: #c06030; font-size: 15px; }
+.mg2048__cell--1024 { background: #c04040; font-size: 14px; }
+.mg2048__cell--2048 { background: #e0c040; color: #201800; font-size: 14px; }
+.mg2048__hint,
+.mg2048__status {
+  margin: 8px 2px 0;
+  font-size: 12px;
+  color: #9aa0aa;
+}
+.mg2048__status {
+  color: #6ecfba;
+  min-height: 1.2em;
+}
+
+/* Nap Pod */
+.nap-mode {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.nap-mode[hidden] {
+  display: none !important;
+}
+.nap-mode.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+.nap-mode__veil {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 50% 40%, rgba(20, 28, 48, 0.55), rgba(4, 6, 12, 0.88));
+}
+.nap-mode__msg,
+.nap-mode__sub {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  color: #c8d4e8;
+  text-shadow: 0 2px 8px #000;
+  pointer-events: none;
+}
+.nap-mode__msg {
+  top: 42%;
+  font-size: 22px;
+  letter-spacing: 0.04em;
+}
+.nap-mode__sub {
+  top: 48%;
+  font-size: 13px;
+  color: #8aa0b8;
+}
+
+/* Room toasts */
+.room-toast {
+  position: fixed;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%) translateY(-8px);
+  z-index: 45;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(18, 28, 38, 0.92);
+  border: 1px solid #3a4a58;
+  color: #d8eef4;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  white-space: nowrap;
+  max-width: 90vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.room-toast.is-on {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
 @media (max-width: 640px) {
   #app {
     top: 40px;

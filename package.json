@@ -10,7 +10,8 @@
     "gen:assets": "python scripts/gen_assets.py",
     "smoke": "node scripts/smoke.mjs",
     "smoke:kanban": "node scripts/smoke-kanban.mjs",
-    "smoke:clockout": "node scripts/smoke-clockout.mjs"
+    "smoke:clockout": "node scripts/smoke-clockout.mjs",
+    "smoke:room": "node scripts/smoke-room.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1",

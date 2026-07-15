@@ -96,18 +96,19 @@ function questionConfig(follow) {
 }
 
 function zzzConfig(follow) {
+  // Nap Pod — denser / floatier Zzz than pre-interaction pass
   return {
     follow,
-    followOffset: { x: 2, y: -24 },
-    speedX: { min: -3, max: 8 },
-    speedY: { min: -14, max: -6 },
-    scale: { start: 0.9, end: 0.25 },
-    alpha: { start: 0.7, end: 0 },
-    lifespan: { min: 900, max: 1400 },
-    frequency: 520,
-    quantity: 1,
-    tint: [0xb8c8e8, 0xd0d8f0, 0x9aacc8],
-    rotate: { min: -8, max: 12 },
+    followOffset: { x: 2, y: -26 },
+    speedX: { min: -6, max: 12 },
+    speedY: { min: -22, max: -10 },
+    scale: { start: 1.25, end: 0.3 },
+    alpha: { start: 0.9, end: 0 },
+    lifespan: { min: 1100, max: 1700 },
+    frequency: 280,
+    quantity: 2,
+    tint: [0xb8c8e8, 0xd0d8f0, 0x9aacc8, 0xe8eef8],
+    rotate: { min: -12, max: 16 },
   };
 }
 

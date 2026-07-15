@@ -57,9 +57,10 @@ export class Boss {
     this.sprite.anims.play("boss-idle-down", true);
   }
 
-  /** E / Space — desk brief near CEO desk, else kanban for nearest agent. */
+  /** E / Space — desk / coffee / nap / work expand, else kanban for nearest agent. */
   tryFocusNearAgent() {
     if (this.scene.tryToggleDeskBrief?.()) return;
+    if (this.scene.roomInteract?.tryInteract?.()) return;
     if (this._nearAgent) {
       if (this.scene.onAgentSpriteClick) {
         this.scene.onAgentSpriteClick(this._nearAgent);
