@@ -25,6 +25,7 @@ import { deskFxEnabledFromQuery } from "../effects/deskGlow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { WindowRain } from "../effects/windowRain.js";
+import { LampGlow } from "../effects/lampGlow.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -378,6 +379,7 @@ export class OfficeScene extends Phaser.Scene {
     this.deskFxEnabled = deskFxEnabledFromQuery();
     this.devTimeIndex = this.parseDevTimeOverride();
     this.windowRain = new WindowRain(this);
+    this.lampGlow = new LampGlow(this);
     this.applyTimeOfDayLighting();
 
     this.input.keyboard?.on("keydown-L", () => {
@@ -399,6 +401,7 @@ export class OfficeScene extends Phaser.Scene {
     applyLightingOverlay(this.lightingOverlay, preset);
     this.lightingPreset = preset;
     this.windowRain?.sync();
+    this.lampGlow?.sync();
   }
 
   syncAgentEmitter(agent) {
@@ -433,6 +436,7 @@ export class OfficeScene extends Phaser.Scene {
     for (const agent of this.agents) {
       this.syncAgentEmitter(agent);
     }
+    this.lampGlow?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
       if (this._lightMinute !== minute) {
@@ -765,6 +769,7 @@ export class OfficeScene extends Phaser.Scene {
       audio: this.officeAudio?.snapshot?.() ?? null,
       events: this.officeEvents?.snapshot?.() ?? null,
       rain: this.windowRain?.snapshot?.() ?? null,
+      lampGlow: this.lampGlow?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       clockOut: {
