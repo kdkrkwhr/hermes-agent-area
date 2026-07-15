@@ -696,6 +696,11 @@ def make_map_json() -> None:
             {"x": 7, "y": 5},
             {"x": 3, "y": 19},
         ],
+        # stand tiles south of Focus furniture desks (GID6 @ 3,17 / 8,17)
+        "focusDesks": [
+            {"x": 3, "y": 19},
+            {"x": 8, "y": 19},
+        ],
         "meeting": {"x": 18, "y": 9},
         "break": {"x": 18, "y": 16},
         "lounge": [
@@ -719,6 +724,7 @@ def make_map_json() -> None:
 
     walk_pts = (
         waypoints["desks"]
+        + waypoints["focusDesks"]
         + waypoints["lounge"]
         + [waypoints[k] for k in ("meeting", "break", "sleep", "entrance", "ceoDesk")]
     )

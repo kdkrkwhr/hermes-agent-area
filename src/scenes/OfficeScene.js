@@ -21,7 +21,7 @@ import {
   resolveTimeOfDay,
   TOD_PRESETS,
 } from "../effects/officeEffects.js";
-import { deskFxEnabledFromQuery } from "../effects/deskGlow.js";
+import { deskFxEnabledFromQuery, focusFxEnabledFromQuery } from "../effects/deskGlow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { WindowRain } from "../effects/windowRain.js";
@@ -89,19 +89,24 @@ export class OfficeScene extends Phaser.Scene {
             { x: 7, y: 5 },
             { x: 3, y: 19 },
           ],
+          focusDesks: [
+            { x: 3, y: 19 },
+            { x: 8, y: 19 },
+          ],
           meeting: { x: 18, y: 9 },
-          break: { x: 31, y: 4 },
+          // match office-map.json Lounge (not CEO office)
+          break: { x: 18, y: 16 },
           lounge: [
-            { x: 31, y: 4 },
-            { x: 32, y: 5 },
-            { x: 28, y: 3 },
-            { x: 30, y: 7 },
-            { x: 33, y: 5 },
-            { x: 29, y: 4 },
-            { x: 32, y: 7 },
-            { x: 28, y: 7 },
-            { x: 31, y: 7 },
-            { x: 33, y: 4 },
+            { x: 18, y: 16 },
+            { x: 20, y: 17 },
+            { x: 16, y: 16 },
+            { x: 21, y: 16 },
+            { x: 17, y: 18 },
+            { x: 19, y: 18 },
+            { x: 22, y: 16 },
+            { x: 15, y: 17 },
+            { x: 23, y: 17 },
+            { x: 18, y: 18 },
           ],
           sleep: { x: 31, y: 21 },
           entrance: { x: 20, y: 27 },
@@ -381,6 +386,7 @@ export class OfficeScene extends Phaser.Scene {
     this.agentEmitters = new Map();
     this._emitterKinds = new Map();
     this.deskFxEnabled = deskFxEnabledFromQuery();
+    this.focusFxEnabled = focusFxEnabledFromQuery();
     this.devTimeIndex = this.parseDevTimeOverride();
     this.windowRain = new WindowRain(this);
     this.lampGlow = new LampGlow(this);
@@ -773,6 +779,7 @@ export class OfficeScene extends Phaser.Scene {
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
       ),
       deskFxEnabled: this.deskFxEnabled !== false,
+      focusFxEnabled: this.focusFxEnabled !== false,
       deskGlow: Object.fromEntries(
         this.agents.map((a) => {
           const on = a.deskGlowGfx?.visible;

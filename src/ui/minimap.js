@@ -12,10 +12,15 @@ const STATUS_COLOR = {
   blocked: 0xe8c547,
   idle: 0x5ee0c8,
   offline: 0x6a7a8a,
+  focus: 0xffb347,
 };
 
-function statusColor(status) {
-  return STATUS_COLOR[status] ?? STATUS_COLOR.idle;
+function statusColor(agent) {
+  const zone = agent?.serverData?.zone || agent?.currentKind;
+  if (zone === "focus" && (agent?.serverStatus === "running" || !agent?.serverStatus)) {
+    return STATUS_COLOR.focus;
+  }
+  return STATUS_COLOR[agent?.serverStatus] ?? STATUS_COLOR.idle;
 }
 
 function parseMinimapEnabled() {
@@ -160,7 +165,7 @@ export class Minimap {
     for (const agent of this.scene.agents || []) {
       if (!agent?.sprite) continue;
       const p = this.worldToMini(agent.sprite.x, agent.sprite.y);
-      const color = statusColor(agent.serverStatus || "idle");
+      const color = statusColor(agent);
       g.fillStyle(color, 1);
       g.fillCircle(p.x, p.y, 2.5);
     }

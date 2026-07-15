@@ -44,7 +44,7 @@ export function pickStatus(agent, kind) {
   if (kind === "meeting") return "회의 중...";
   if (kind === "break") return "휴식 중";
   if (kind === "sleep") return "수면 중...";
-  if (kind === "desk") {
+  if (kind === "desk" || kind === "focus") {
     const list = agent.statuses || STATUS_POOL;
     return list[Math.floor(Math.random() * list.length)];
   }
@@ -148,33 +148,40 @@ export function buildMockAgents() {
     x: 31 * TILE_SIZE + TILE_SIZE / 2,
     y: 21 * TILE_SIZE + TILE_SIZE / 2,
   };
+  const focusPx = {
+    x: 3 * TILE_SIZE + TILE_SIZE / 2,
+    y: 19 * TILE_SIZE + TILE_SIZE / 2,
+  };
+  const openDeskPx = (homeDesk) => ({
+    x: (homeDesk === 1 ? 7 : 3) * TILE_SIZE + TILE_SIZE / 2,
+    y: 5 * TILE_SIZE + TILE_SIZE / 2,
+  });
   return AGENTS.map((def, i) => {
-    // 0 running @desk, 1 blocked @meeting, 2 offline @Nap Pod (zzz)
+    // 0 deep-work running @focus, 1 blocked @meeting, 2 offline @Nap Pod
     const status = i === 0 ? "running" : i === 1 ? "blocked" : "offline";
     const titles = [
-      "칸반 보드 UI 검토",
+      "deep-work: Focus zone pipeline",
       "가상사무실: 칸반 상태 패널",
       null,
     ];
     const zones =
-      status === "running" ? "desk" : status === "blocked" ? "meeting" : "sleep";
+      status === "running" ? "focus" : status === "blocked" ? "meeting" : "sleep";
     const bubbles =
       status === "running"
-        ? "코드 작업 중... (mock)"
+        ? "딥워크 중... (mock)"
         : status === "blocked"
           ? "검토 대기 중... (mock)"
           : "오프라인 · 수면 중 (mock)";
     const now = Date.now() / 1000;
-    // running: determined progress; blocked/offline: no bar fields
     const taskStarted =
       status === "running" ? now - 420 : status === "blocked" ? now - 900 : null;
     const taskProgress = status === "running" ? 0.42 : null;
     const taskElapsed = taskStarted != null ? Math.round(now - taskStarted) : null;
     const atSleep = status === "offline";
-    const x = atSleep
-      ? sleepPx.x
-      : (def.homeDesk * 7 + 4) * TILE_SIZE + TILE_SIZE / 2;
-    const y = atSleep ? sleepPx.y : 14 * TILE_SIZE + TILE_SIZE / 2;
+    const atFocus = status === "running";
+    const desk = openDeskPx(def.homeDesk);
+    const x = atSleep ? sleepPx.x : atFocus ? focusPx.x : desk.x;
+    const y = atSleep ? sleepPx.y : atFocus ? focusPx.y : (14 * TILE_SIZE + TILE_SIZE / 2);
     return {
       id: def.id,
       displayName: def.displayName,
@@ -191,8 +198,8 @@ export function buildMockAgents() {
       gateway: atSleep ? "stopped" : "running",
       x,
       y,
-      dest_x: atSleep ? sleepPx.x : x,
-      dest_y: atSleep ? sleepPx.y : y,
+      dest_x: atSleep ? sleepPx.x : atFocus ? focusPx.x : x,
+      dest_y: atSleep ? sleepPx.y : atFocus ? focusPx.y : y,
     };
   });
 }

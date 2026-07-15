@@ -3,6 +3,7 @@
 export const DESK_GLOW_COLORS = {
   running: 0x5ee0c8,
   chatting: 0x88aaff,
+  focus: 0xffb347,
 };
 
 /** `?deskfx=0` (or false/off) disables glow. Default on. */
@@ -13,13 +14,30 @@ export function deskFxEnabledFromQuery() {
   return !(v === "0" || v === "false" || v === "off");
 }
 
+/**
+ * `?focusfx=0` forces open-desk tiles (ignore BE zone=focus). Default on.
+ * Regression knob — deep-work still shows as desk on Open Desk rows.
+ */
+export function focusFxEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  const v = new URLSearchParams(location.search).get("focusfx");
+  if (v == null || v === "") return true;
+  return !(v === "0" || v === "false" || v === "off");
+}
+
 /** Status that owns a glow — chatting keeps its own tint (not collapsed to running). */
 export function resolveDeskGlowKind(agent) {
   if (!agent) return null;
   const status = agent.serverStatus;
-  if (status === "running" || status === "chatting") return status;
-  // mock wander before first snapshot — desk room implies coding
-  if (!agent.live && !status && agent.currentKind === "desk") return "running";
+  if (status === "running" || status === "chatting") {
+    const zone = agent.serverData?.zone || agent.currentKind;
+    if (status === "running" && zone === "focus") return "focus";
+    return status;
+  }
+  // mock wander before first snapshot — desk/focus room implies coding
+  if (!agent.live && !status && (agent.currentKind === "desk" || agent.currentKind === "focus")) {
+    return agent.currentKind === "focus" ? "focus" : "running";
+  }
   return null;
 }
 

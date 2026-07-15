@@ -1,5 +1,9 @@
 import { pickStatus } from "../mock.js";
-import { createDeskGlow, updateDeskGlow } from "../effects/deskGlow.js";
+import {
+  createDeskGlow,
+  updateDeskGlow,
+  focusFxEnabledFromQuery,
+} from "../effects/deskGlow.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -150,7 +154,7 @@ export class Agent {
       if (this.serverStatus === "offline") return "sleep";
       return this.serverStatus;
     }
-    if (this.currentKind === "desk") return "running";
+    if (this.currentKind === "desk" || this.currentKind === "focus") return "running";
     if (this.currentKind === "meeting") return "blocked";
     if (this.currentKind === "sleep") return "sleep";
     if (this.currentKind === "break") return "idle";
@@ -382,17 +386,33 @@ export class Agent {
     this.progressGfx?.setAlpha(alpha);
     this.elapsedLabel?.setAlpha(alpha);
 
-    const destX = agentMsg.dest_x ?? agentMsg.x;
-    const destY = agentMsg.dest_y ?? agentMsg.y;
+    let zone = agentMsg.zone;
+    let destX = agentMsg.dest_x ?? agentMsg.x;
+    let destY = agentMsg.dest_y ?? agentMsg.y;
+
+    // ?focusfx=0 → force Open Desk tile (regression)
+    if (zone === "focus" && !focusFxEnabledFromQuery()) {
+      zone = "desk";
+      this.serverData.zone = "desk";
+      const desks = this.waypoints?.desks || [];
+      const d = desks[(this.def.homeDesk ?? 0) % Math.max(1, desks.length)];
+      if (d) {
+        destX = d.x * this.tileSize + this.tileSize / 2;
+        destY = d.y * this.tileSize + this.tileSize / 2;
+      }
+    }
+
     if (destX == null || destY == null) return;
 
-    // zone hint for FX (sleep = Nap Pod Zzz; break = lounge steam)
-    if (agentMsg.zone === "sleep" || agentMsg.status === "offline") {
+    // zone hint for FX (sleep = Nap Pod Zzz; break = lounge steam; focus = desk glow)
+    if (zone === "sleep" || agentMsg.status === "offline") {
       this.currentKind = "sleep";
-    } else if (agentMsg.zone === "meeting" || agentMsg.status === "blocked") {
+    } else if (zone === "meeting" || agentMsg.status === "blocked") {
       this.currentKind = "meeting";
+    } else if (zone === "focus") {
+      this.currentKind = "focus";
     } else if (
-      agentMsg.zone === "desk" ||
+      zone === "desk" ||
       agentMsg.status === "running" ||
       agentMsg.status === "chatting"
     ) {
@@ -420,7 +440,7 @@ export class Agent {
 
     const tx = Math.floor(destX / this.tileSize);
     const ty = Math.floor(destY / this.tileSize);
-    const key = `${tx},${ty}:${agentMsg.status}`;
+    const key = `${tx},${ty}:${agentMsg.status}:${zone || ""}`;
     if (key === this._liveDestKey && this.path.length) return;
     if (key === this._liveDestKey && !this.path.length) {
       // already arrived
