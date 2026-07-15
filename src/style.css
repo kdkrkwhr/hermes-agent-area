@@ -32,16 +32,22 @@ body,
 }
 
 #app {
-  display: grid;
-  place-items: center;
-  padding: 48px 12px 12px;
+  position: fixed;
+  top: 44px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0;
 }
 
 #app canvas {
-  border-radius: 10px;
-  box-shadow: 0 0 0 1px rgba(94, 224, 200, 0.12), 0 18px 48px rgba(0, 0, 0, 0.45);
-  max-width: 100%;
-  max-height: calc(100vh - 60px);
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .toolbar {
@@ -408,7 +414,7 @@ body,
 
 @media (max-width: 640px) {
   #app {
-    padding: 44px 4px 8px;
+    top: 40px;
   }
 
   .kanban-panel {

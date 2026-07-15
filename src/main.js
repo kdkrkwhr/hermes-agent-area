@@ -68,8 +68,9 @@ const game = new Phaser.Game({
   antialias: false,
   scene: [OfficeScene],
   scale: {
-    mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // RESIZE: canvas = viewport; overview zoom computed in OfficeScene (no FIT letterbox)
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.NO_CENTER,
     width: MAP_W,
     height: MAP_H,
   },

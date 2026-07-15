@@ -327,15 +327,16 @@ export class OfficeScene extends Phaser.Scene {
     cam.startFollow(this.boss.sprite, true, 0.12, 0.12);
   }
 
-  /** Canvas size == map size; keep zoom 1 so FIT shows the whole office. */
+  /** Fill viewport; zoom so the whole office is visible (no side letterbox on wide PC). */
   fitOfficeCamera() {
     const cam = this.cameras.main;
     const mapW = this.map.widthInPixels;
     const mapH = this.map.heightInPixels;
     cam.stopFollow();
-    cam.setZoom(1);
-    cam.centerOn(mapW / 2, mapH / 2);
     cam.setBounds(0, 0, mapW, mapH);
+    const zoom = Math.min(cam.width / mapW, cam.height / mapH) || 1;
+    cam.setZoom(zoom);
+    cam.centerOn(mapW / 2, mapH / 2);
   }
 
   refreshFollowHud() {
