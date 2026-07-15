@@ -124,6 +124,18 @@ export class Boss {
   }
 
   update(time, delta) {
+    // clock-out modal / fade locks movement
+    if (this.scene.clockOutLocked) {
+      const idleKey = `boss-idle-${this.lastDir}`;
+      if (this.sprite.anims.currentAnim?.key !== idleKey) {
+        this.sprite.anims.play(idleKey, true);
+      }
+      this.scene.officeAudio?.playFootstep?.(false);
+      this.updateProximity();
+      this.syncUi();
+      return;
+    }
+
     const keys = this.keys;
     let dx = 0;
     let dy = 0;
@@ -164,6 +176,8 @@ export class Boss {
         this.sprite.anims.play(idleKey, true);
       }
     }
+
+    this.scene.officeAudio?.playFootstep?.(moving);
 
     this.updateProximity();
     this.syncUi();

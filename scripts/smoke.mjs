@@ -107,7 +107,8 @@ const hasOnionRunning = snapshot.wsAgents?.some(
 const hasOfflineClaude = snapshot.wsAgents?.some(
   (a) => a.id === "claude" && a.status === "offline",
 );
-const zoomOk = Number.isInteger(snapshot.cameraZoom) && snapshot.cameraZoom >= 1;
+// overview stretch zoom may be fractional / <1
+const zoomOk = typeof snapshot.cameraZoom === "number" && snapshot.cameraZoom > 0;
 const bossOk =
   snapshot.boss &&
   snapshot.boss.label === "대장님" &&

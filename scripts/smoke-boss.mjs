@@ -25,6 +25,13 @@ const before = await page.evaluate(() => window.__HERMES_AREA__.boss);
 await page.keyboard.down("KeyD");
 await page.waitForTimeout(800);
 await page.keyboard.up("KeyD");
+// lobby entry may open clock-out modal — dismiss so other asserts keep moving
+await page.evaluate(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  if (sc?._clockOutPending) sc.cancelClockOut?.();
+  document.querySelector('.clockout-modal [data-role="no"]')?.click();
+});
+await page.waitForTimeout(100);
 const mid = await page.evaluate(() => window.__HERMES_AREA__.boss);
 
 await page.keyboard.down("KeyA");
@@ -172,12 +179,15 @@ const toggled = await page.evaluate(() => ({
 
 const fatal = errors.filter((e) => !/Framebuffer|WebGL/i.test(e));
 const moved = before && mid && (mid.x !== before.x || mid.y !== before.y);
+// overview stretch = non-uniform zoomX/Y (often <1); follow = uniform 2
 const followToggleOk =
   followOn.follow === true &&
   followOn.zoom === 2 &&
   Number.isInteger(followOn.zoom) &&
   followOff.follow === false &&
-  followOff.zoom === 1;
+  typeof followOff.zoom === "number" &&
+  followOff.zoom > 0 &&
+  followOff.zoom !== 2;
 const eFocusOk =
   interact.farNearId == null &&
   farAfterE.selectedId == null &&
@@ -201,7 +211,7 @@ const result = {
   nearAfterE,
   toggled,
   moved,
-  zoomOk: Number.isInteger(area.zoom) && area.zoom >= 1,
+  zoomOk: typeof area.zoom === "number" && area.zoom > 0,
   followToggleOk,
   eFocusOk,
   bossOk: area.boss?.label === "대장님",
@@ -211,8 +221,8 @@ const result = {
     !!area.ready &&
     area.agentCount === 3 &&
     moved &&
-    Number.isInteger(area.zoom) &&
-    area.zoom >= 1 &&
+    typeof area.zoom === "number" &&
+    area.zoom > 0 &&
     area.follow === false &&
     followToggleOk &&
     keysWhileFollow.follow === true &&
