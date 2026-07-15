@@ -4,6 +4,10 @@ import {
   updateDeskGlow,
   focusFxEnabledFromQuery,
 } from "../effects/deskGlow.js";
+import {
+  createSpriteShadow,
+  updateSpriteShadow,
+} from "../effects/spriteShadow.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -95,6 +99,8 @@ export class Agent {
       .setVisible(false);
     // desk monitor glow (running/chatting) — see ?deskfx=0
     this.deskGlowGfx = createDeskGlow(scene);
+    // soft foot shadow — see ?shadow=0; depth just under sprite (10 → 9)
+    this.shadowGfx = createSpriteShadow(scene, { depth: 9 });
 
     this.setStatus(pickStatus(def, "desk"));
     this.ensureAnims();
@@ -370,6 +376,7 @@ export class Agent {
     this.progressGfx?.destroy();
     this.elapsedLabel?.destroy();
     this.deskGlowGfx?.destroy();
+    this.shadowGfx?.destroy();
   }
 
   async applyServer(agentMsg) {
@@ -527,5 +534,8 @@ export class Agent {
       this,
       this.scene.deskFxEnabled !== false,
     );
+    updateSpriteShadow(this.shadowGfx, this.sprite, {
+      moving: this.path.length > 0,
+    });
   }
 }

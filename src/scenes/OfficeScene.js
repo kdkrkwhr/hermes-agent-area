@@ -22,6 +22,7 @@ import {
   TOD_PRESETS,
 } from "../effects/officeEffects.js";
 import { deskFxEnabledFromQuery, focusFxEnabledFromQuery } from "../effects/deskGlow.js";
+import { shadowSnapshot } from "../effects/spriteShadow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { WindowRain } from "../effects/windowRain.js";
@@ -29,6 +30,7 @@ import { SnowFlakes } from "../effects/snowFlakes.js";
 import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { DustMotes } from "../effects/dustMotes.js";
+import { SunBeams } from "../effects/sunBeams.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -398,6 +400,7 @@ export class OfficeScene extends Phaser.Scene {
     this.snowFlakes = new SnowFlakes(this);
     this.lampGlow = new LampGlow(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
+    this.sunBeams = new SunBeams(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
@@ -424,6 +427,7 @@ export class OfficeScene extends Phaser.Scene {
     this.snowFlakes?.sync();
     this.lampGlow?.sync();
     this.dustMotes?.sync();
+    this.sunBeams?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -797,7 +801,13 @@ export class OfficeScene extends Phaser.Scene {
       snow: this.snowFlakes?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
+      spriteShadow: shadowSnapshot([
+        ...(this.agents || []),
+        this.boss,
+        this.mascot,
+      ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
+      sunbeam: this.sunBeams?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,

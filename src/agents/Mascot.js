@@ -1,5 +1,10 @@
 /** Ambient lounge/corridor cat — no click, no chat. `?mascot=0` disables. */
 
+import {
+  createSpriteShadow,
+  updateSpriteShadow,
+} from "../effects/spriteShadow.js";
+
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 52; // lazy lounge pace (agents ~200)
 const SHEET = "char-mascot";
@@ -30,9 +35,19 @@ export class Mascot {
     this.sprite = scene.add.sprite(px, py, SHEET, 0);
     this.sprite.setDepth(9); // slightly under agents (10)
     this.sprite.setOrigin(0.5, 0.85);
+    // soft foot shadow — see ?shadow=0; under mascot (9 → 8)
+    this.shadowGfx = createSpriteShadow(scene, { depth: 8 });
 
     this.ensureAnims();
     this.sprite.anims.play(`${ID}-idle-down`, true);
+  }
+
+  syncShadow() {
+    updateSpriteShadow(this.shadowGfx, this.sprite, {
+      moving: this.path.length > 0,
+      width: 16,
+      height: 6,
+    });
   }
 
   ensureAnims() {
@@ -124,6 +139,7 @@ export class Mascot {
         this.idleUntil = time + 3500 + Math.random() * 6500;
         this.wander();
       }
+      this.syncShadow();
       return;
     }
 
@@ -153,5 +169,6 @@ export class Mascot {
         this.sprite.anims.play(walkKey, true);
       }
     }
+    this.syncShadow();
   }
 }

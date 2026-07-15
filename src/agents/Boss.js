@@ -1,3 +1,8 @@
+import {
+  createSpriteShadow,
+  updateSpriteShadow,
+} from "../effects/spriteShadow.js";
+
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 180;
 const PROXIMITY = 80;
@@ -10,6 +15,7 @@ export class Boss {
     this.lastDir = "down";
     this._nearAgent = null;
     this._greetIdx = 0;
+    this._moving = false;
 
     const px = startTile.x * this.tileSize + this.tileSize / 2;
     const py = startTile.y * this.tileSize + this.tileSize / 2;
@@ -17,6 +23,8 @@ export class Boss {
     this.sprite = scene.add.sprite(px, py, "char-boss", 0);
     this.sprite.setDepth(12);
     this.sprite.setOrigin(0.5, 0.85);
+    // soft foot shadow — see ?shadow=0; under boss (12 → 11)
+    this.shadowGfx = createSpriteShadow(scene, { depth: 11 });
 
     this.nameLabel = scene.add
       .text(px, py - 40, "대장님", {
@@ -128,6 +136,7 @@ export class Boss {
   update(time, delta) {
     // clock-out modal / fade locks movement
     if (this.scene.clockOutLocked) {
+      this._moving = false;
       const idleKey = `boss-idle-${this.lastDir}`;
       if (this.sprite.anims.currentAnim?.key !== idleKey) {
         this.sprite.anims.play(idleKey, true);
@@ -147,6 +156,7 @@ export class Boss {
     if (keys.down.isDown) dy += 1;
 
     const moving = dx !== 0 || dy !== 0;
+    this._moving = moving;
     if (moving) {
       const len = Math.hypot(dx, dy) || 1;
       const step = (SPEED * delta) / 1000;
@@ -258,6 +268,9 @@ export class Boss {
   syncUi() {
     this.nameLabel.setPosition(this.sprite.x, this.sprite.y - 40);
     this.drawBubble();
+    updateSpriteShadow(this.shadowGfx, this.sprite, {
+      moving: this._moving,
+    });
   }
 
   /** Optional: push position to BE if socket open. */
