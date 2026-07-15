@@ -15,11 +15,17 @@ function escapeHtml(s) {
 
 function pickNowPeriod(periods) {
   if (!Array.isArray(periods) || !periods.length) return null;
-  const h = new Date().getHours();
-  const pad = (n) => String(n).padStart(2, "0");
-  const want = `${pad(h)}:00`;
-  return periods.find((p) => p.time === want) || periods[0];
+  const nowMin = new Date().getHours() * 60 + new Date().getMinutes();
+  let best = periods[0];
+  for (const p of periods) {
+    const [h, m = 0] = String(p.time || "0:0").split(":").map(Number);
+    if (h * 60 + m <= nowMin) best = p;
+    else break;
+  }
+  return best;
 }
+
+export { pickNowPeriod };
 
 function newsHeadlines(news, limit = 5) {
   const items = [];
@@ -62,7 +68,8 @@ export async function loadDeskBrief() {
   return { weather, news, source: "pages" };
 }
 
-export function createDeskBriefPanel() {
+export function createDeskBriefPanel(opts = {}) {
+  const onPayload = typeof opts.onPayload === "function" ? opts.onPayload : null;
   const root = document.createElement("aside");
   root.className = "desk-brief";
   root.hidden = true;
@@ -97,6 +104,7 @@ export function createDeskBriefPanel() {
 
   function render(payload) {
     lastPayload = payload;
+    onPayload?.(payload);
     const w = payload?.weather;
     const period = pickNowPeriod(w?.periods);
     const temp = period?.temp ?? w?.highlights?.tempMax ?? "—";

@@ -25,6 +25,7 @@ import { deskFxEnabledFromQuery } from "../effects/deskGlow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { WindowRain } from "../effects/windowRain.js";
+import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
@@ -188,7 +189,9 @@ export class OfficeScene extends Phaser.Scene {
     this.live = false;
     this.lastSnapshot = null;
     this.kanbanPanel = createKanbanPanel();
-    this.deskBriefPanel = createDeskBriefPanel();
+    this.deskBriefPanel = createDeskBriefPanel({
+      onPayload: (payload) => this.weatherFx?.onDeskBriefPayload(payload),
+    });
     this.refreshMockKanban();
     this.agents.forEach((agent, i) => {
       agent.idleUntil = this.time.now + 400 + i * 700;
@@ -380,7 +383,9 @@ export class OfficeScene extends Phaser.Scene {
     this.devTimeIndex = this.parseDevTimeOverride();
     this.windowRain = new WindowRain(this);
     this.lampGlow = new LampGlow(this);
+    this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.applyTimeOfDayLighting();
+    this.weatherFx.start();
 
     this.input.keyboard?.on("keydown-L", () => {
       this.devTimeIndex =
@@ -402,6 +407,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lightingPreset = preset;
     this.windowRain?.sync();
     this.lampGlow?.sync();
+    this.weatherFx?.onLightingChanged();
   }
 
   syncAgentEmitter(agent) {
@@ -769,6 +775,7 @@ export class OfficeScene extends Phaser.Scene {
       audio: this.officeAudio?.snapshot?.() ?? null,
       events: this.officeEvents?.snapshot?.() ?? null,
       rain: this.windowRain?.snapshot?.() ?? null,
+      weatherFx: this.weatherFx?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,

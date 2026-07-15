@@ -105,6 +105,7 @@ export class WindowRain {
     this.emitters = [];
     this.active = false;
     this.eventUntil = 0;
+    this.weatherForceOn = false;
     this._eventTimer = null;
     this._showerTimer = null;
 
@@ -163,9 +164,25 @@ export class WindowRain {
     this.sync();
   }
 
+  /**
+   * Weather JSON rain — sustained force while raining.
+   * Clear/cloudy → false so TOD / day-shower resume. `?rain=` still wins.
+   * @param {boolean} on
+   */
+  setWeatherForceOn(on) {
+    const next = !!on;
+    if (next === this.weatherForceOn) {
+      this.sync();
+      return;
+    }
+    this.weatherForceOn = next;
+    this.sync();
+  }
+
   shouldBeActive() {
     if (this.forcedOff) return false;
     if (this.forcedOn) return true;
+    if (this.weatherForceOn) return true;
     if (this.scene.time.now < this.eventUntil) return true;
     const name = this.scene.lightingPreset?.name;
     return name === "evening" || name === "night";
@@ -189,6 +206,7 @@ export class WindowRain {
     return {
       enabled: !this.forcedOff,
       forcedOn: this.forcedOn,
+      weatherForceOn: !!this.weatherForceOn,
       active: this.active,
       emitterCount: this.emitters.length,
       windowTiles: this.tiles.length,
