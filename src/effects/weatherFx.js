@@ -174,6 +174,8 @@ export class WeatherFx {
       rain.setWeatherForceOn(!!cls.raining);
     }
 
+    this.scene.dustMotes?.setCloudy(!!cls.cloudy);
+
     this._applyCloudOverlay(cls);
     this._maybeToast(cls);
     this.publish();
@@ -234,6 +236,7 @@ export class WeatherFx {
   clearFx() {
     this.classification = null;
     this.scene.windowRain?.setWeatherForceOn(false);
+    this.scene.dustMotes?.setCloudy(false);
     this.cloudOverlay?.setFillStyle(0x6a7a8a, 0);
   }
 

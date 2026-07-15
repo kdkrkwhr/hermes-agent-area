@@ -27,6 +27,7 @@ import { OfficeEvents } from "../effects/officeEvents.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
+import { DustMotes } from "../effects/dustMotes.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -383,6 +384,7 @@ export class OfficeScene extends Phaser.Scene {
     this.devTimeIndex = this.parseDevTimeOverride();
     this.windowRain = new WindowRain(this);
     this.lampGlow = new LampGlow(this);
+    this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
@@ -407,6 +409,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lightingPreset = preset;
     this.windowRain?.sync();
     this.lampGlow?.sync();
+    this.dustMotes?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -777,6 +780,7 @@ export class OfficeScene extends Phaser.Scene {
       rain: this.windowRain?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
+      dust: this.dustMotes?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       clockOut: {
