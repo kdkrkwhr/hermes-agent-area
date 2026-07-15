@@ -9,6 +9,7 @@ import {
 } from "../mock.js";
 import { Agent } from "../agents/Agent.js";
 import { Boss } from "../agents/Boss.js";
+import { Mascot, mascotEnabledFromQuery } from "../agents/Mascot.js";
 import { createPathfinder, gridFromCollisionLayer } from "../pathfinding.js";
 import { assetUrl } from "../assets.js";
 import { createKanbanPanel } from "../kanbanPanel.js";
@@ -49,6 +50,10 @@ export class OfficeScene extends Phaser.Scene {
       frameHeight: CHAR_FRAME_H,
     });
     this.load.spritesheet("char-boss", assetUrl("assets/char-boss.png"), {
+      frameWidth: CHAR_FRAME_W,
+      frameHeight: CHAR_FRAME_H,
+    });
+    this.load.spritesheet("char-mascot", assetUrl("assets/char-mascot.png"), {
       frameWidth: CHAR_FRAME_W,
       frameHeight: CHAR_FRAME_H,
     });
@@ -104,6 +109,13 @@ export class OfficeScene extends Phaser.Scene {
 
     // spawn 대장님 near corridor center (walkable)
     this.boss = new Boss(this, { x: 12, y: 26 }); // corridor near lobby entrance
+
+    // ambient lounge cat — ambience only; ?mascot=0 off
+    this.mascot = null;
+    if (mascotEnabledFromQuery()) {
+      const lou = this.waypoints.lounge?.[0] || this.waypoints.break || { x: 31, y: 4 };
+      this.mascot = new Mascot(this, lou, this.waypoints);
+    }
 
     // zone labels — room readability without cluttering gameplay
     this.addZoneLabels();
@@ -570,6 +582,7 @@ export class OfficeScene extends Phaser.Scene {
       this.boss.maybeSendPos(this.ws);
       this.publishDebug(this.ws?.url);
     }
+    this.mascot?.update(time, delta);
     this.minimap?.update();
   }
 }

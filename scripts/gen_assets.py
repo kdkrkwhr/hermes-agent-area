@@ -843,6 +843,66 @@ def draw_human_boss_frame(
         px(buf, sheet_w, ox + 9, oy + 7 + bob, EYE)
 
 
+def draw_cat_frame(
+    buf: bytearray,
+    sheet_w: int,
+    ox: int,
+    oy: int,
+    facing: str,
+    step: int,
+) -> None:
+    """Tiny office cat — same 16×24 CHAR_FRAME grid as agents."""
+    FUR = (230, 150, 70, 255)
+    FUR_DK = (190, 110, 50, 255)
+    BELLY = (245, 220, 180, 255)
+    EYE = (30, 28, 26, 255)
+    NOSE = (220, 100, 110, 255)
+    WHISK = (40, 35, 30, 200)
+
+    fill(buf, sheet_w, ox, oy, ox + 16, oy + 24, TRANS)
+    bob = 0 if step == 0 else (1 if step == 1 else -1)
+    leg = 0 if step == 0 else (1 if step == 1 else -1)
+    fill(buf, sheet_w, ox + 4, oy + 22, ox + 12, oy + 23, (0, 0, 0, 45))
+
+    # body + head blob
+    fill(buf, sheet_w, ox + 4, oy + 10 + bob, ox + 12, oy + 18 + bob, FUR)
+    fill(buf, sheet_w, ox + 5, oy + 12 + bob, ox + 11, oy + 17 + bob, BELLY)
+    fill(buf, sheet_w, ox + 4, oy + 5 + bob, ox + 12, oy + 12 + bob, FUR)
+    # ears
+    fill(buf, sheet_w, ox + 4, oy + 3 + bob, ox + 7, oy + 6 + bob, FUR_DK)
+    fill(buf, sheet_w, ox + 9, oy + 3 + bob, ox + 12, oy + 6 + bob, FUR_DK)
+    px(buf, sheet_w, ox + 5, oy + 4 + bob, BELLY)
+    px(buf, sheet_w, ox + 10, oy + 4 + bob, BELLY)
+    # legs
+    fill(buf, sheet_w, ox + 5, oy + 17 + bob, ox + 7, oy + 21 + bob + max(leg, 0), FUR_DK)
+    fill(buf, sheet_w, ox + 9, oy + 17 + bob, ox + 11, oy + 21 + bob + max(-leg, 0), FUR_DK)
+    # tail tip (behind / side)
+    if facing == "left":
+        fill(buf, sheet_w, ox + 12, oy + 12 + bob - leg, ox + 15, oy + 14 + bob - leg, FUR_DK)
+    elif facing == "right":
+        fill(buf, sheet_w, ox + 1, oy + 12 + bob - leg, ox + 4, oy + 14 + bob - leg, FUR_DK)
+    else:
+        fill(buf, sheet_w, ox + 12, oy + 14 + bob, ox + 15, oy + 16 + bob - leg, FUR_DK)
+
+    if facing == "down":
+        px(buf, sheet_w, ox + 6, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 9, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 7, oy + 10 + bob, NOSE)
+        px(buf, sheet_w, ox + 8, oy + 10 + bob, NOSE)
+        px(buf, sheet_w, ox + 3, oy + 10 + bob, WHISK)
+        px(buf, sheet_w, ox + 12, oy + 10 + bob, WHISK)
+    elif facing == "up":
+        fill(buf, sheet_w, ox + 5, oy + 4 + bob, ox + 11, oy + 7 + bob, FUR_DK)
+    elif facing == "left":
+        px(buf, sheet_w, ox + 5, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 5, oy + 10 + bob, NOSE)
+        px(buf, sheet_w, ox + 2, oy + 10 + bob, WHISK)
+    else:
+        px(buf, sheet_w, ox + 10, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 10, oy + 10 + bob, NOSE)
+        px(buf, sheet_w, ox + 13, oy + 10 + bob, WHISK)
+
+
 def make_characters() -> None:
     dirs = ["down", "left", "right", "up"]
     agents = [
@@ -869,6 +929,16 @@ def make_characters() -> None:
         for ci, step in enumerate([0, 1, 2]):
             draw_human_boss_frame(buf, w, ci * fw, rj * fh, facing, step)
     path = OUT / "char-boss.png"
+    write_png(path, w, h, bytes(buf), scale=ASSET_SCALE)
+    print("wrote", path, f"{w * ASSET_SCALE}x{h * ASSET_SCALE}")
+
+    # lounge mascot cat (same sheet layout)
+    w, h = cols * fw, rows * fh
+    buf = bytearray(w * h * 4)
+    for rj, facing in enumerate(dirs):
+        for ci, step in enumerate([0, 1, 2]):
+            draw_cat_frame(buf, w, ci * fw, rj * fh, facing, step)
+    path = OUT / "char-mascot.png"
     write_png(path, w, h, bytes(buf), scale=ASSET_SCALE)
     print("wrote", path, f"{w * ASSET_SCALE}x{h * ASSET_SCALE}")
 
