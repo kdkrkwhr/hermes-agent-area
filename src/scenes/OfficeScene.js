@@ -148,9 +148,22 @@ export class OfficeScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(50);
 
-    this.hintLabel = null;
+    // shown only when boss is within proximity of an agent
+    this.hintLabel = this.add
+      .text(40, 64, "E 상세", {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "14px",
+        color: "#5ee0c8",
+        stroke: "#0b1016",
+        strokeThickness: 5,
+      })
+      .setScrollFactor(0)
+      .setDepth(50)
+      .setVisible(false);
+
     this.input.keyboard?.on("keydown-F", () => this.toggleCameraFollow());
     this.refreshFollowHud();
+    this.refreshInteractHud();
 
     this.live = false;
     this.lastSnapshot = null;
@@ -340,6 +353,13 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
+  /** Hint next to follow glyph — only while boss is near an agent. */
+  refreshInteractHud() {
+    if (!this.hintLabel) return;
+    const nearId = this.boss?.nearAgentId ?? null;
+    this.hintLabel.setVisible(!!nearId);
+  }
+
   addZoneLabels() {
     const tw = this.map.tileWidth;
     const zones = [
@@ -512,6 +532,7 @@ export class OfficeScene extends Phaser.Scene {
             label: "대장님",
           }
         : null,
+      bossNearAgentId: boss?.nearAgentId ?? null,
       lighting: this.lightingPreset?.name ?? null,
       effectKinds: Object.fromEntries(
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),

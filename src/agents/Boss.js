@@ -44,15 +44,37 @@ export class Boss {
       .setVisible(false);
     this.bubbleBg.setVisible(false);
 
-    // WASD only
+    // WASD move; E/Space focus nearby agent (kanban)
     this.keys = scene.input.keyboard.addKeys({
       up: "W",
       left: "A",
       down: "S",
       right: "D",
     });
+    scene.input.keyboard?.on("keydown-E", () => this.tryFocusNearAgent());
+    scene.input.keyboard?.on("keydown-SPACE", () => this.tryFocusNearAgent());
     this.ensureAnims();
     this.sprite.anims.play("boss-idle-down", true);
+  }
+
+  /** E / Space — open kanban for nearest agent, or short "누구?" bubble. */
+  tryFocusNearAgent() {
+    if (this._nearAgent) {
+      if (this.scene.onAgentSpriteClick) {
+        this.scene.onAgentSpriteClick(this._nearAgent);
+      }
+      return;
+    }
+    this.showBubble("누구?");
+    if (this._whoTimer) this._whoTimer.remove(false);
+    this._whoTimer = this.scene.time.delayedCall(900, () => {
+      if (!this._nearAgent) this.hideBubble();
+      this._whoTimer = null;
+    });
+  }
+
+  get nearAgentId() {
+    return this._nearAgent?.def?.id ?? null;
   }
 
   ensureAnims() {
@@ -176,6 +198,7 @@ export class Boss {
       } else {
         this.hideBubble();
       }
+      this.scene.refreshInteractHud?.();
     }
   }
 

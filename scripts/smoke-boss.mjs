@@ -103,6 +103,73 @@ const keysWhileFollow = await page.evaluate(() => ({
 }));
 await page.keyboard.press("KeyF"); // back to overview
 
+// E near agent → kanban focus; far → no selection / bossNearAgentId null
+const interact = await page.evaluate(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const boss = sc?.boss;
+  const agent = sc?.agents?.[0];
+  if (!boss || !agent) return { ok: false, reason: "missing boss/agent" };
+  // far first
+  boss.sprite.setPosition(40, 800);
+  boss.updateProximity();
+  sc.refreshInteractHud?.();
+  sc.publishDebug(sc.ws?.url ?? "smoke", sc.lastSnapshot);
+  return {
+    farNearId: window.__HERMES_AREA__?.bossNearAgentId ?? null,
+    hintVisible: sc.hintLabel?.visible === true,
+    agentId: agent.def.id,
+    agentX: agent.sprite.x,
+    agentY: agent.sprite.y,
+  };
+});
+
+await page.keyboard.press("KeyE");
+await page.waitForTimeout(200);
+const farAfterE = await page.evaluate(() => ({
+  selectedId: window.__HERMES_AREA__?.kanbanPanel?.selectedId ?? null,
+  bossNearAgentId: window.__HERMES_AREA__?.bossNearAgentId ?? null,
+}));
+
+await page.evaluate(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const boss = sc?.boss;
+  const agent = sc?.agents?.[0];
+  if (!boss || !agent) return;
+  boss.sprite.setPosition(agent.sprite.x + 20, agent.sprite.y);
+  boss.updateProximity();
+  sc.refreshInteractHud?.();
+  sc.publishDebug(sc.ws?.url ?? "smoke", sc.lastSnapshot);
+});
+await page.waitForFunction(
+  () => !!window.__HERMES_AREA__?.bossNearAgentId,
+  null,
+  { timeout: 3000 },
+);
+const nearState = await page.evaluate(() => ({
+  bossNearAgentId: window.__HERMES_AREA__?.bossNearAgentId,
+  hintVisible: window.__HERMES_GAME__?.scene
+    ?.getScene?.("OfficeScene")
+    ?.hintLabel?.visible,
+}));
+
+await page.keyboard.press("KeyE");
+await page.waitForFunction(
+  () => !!window.__HERMES_AREA__?.kanbanPanel?.selectedId,
+  null,
+  { timeout: 3000 },
+);
+const nearAfterE = await page.evaluate(() => ({
+  selectedId: window.__HERMES_AREA__?.kanbanPanel?.selectedId,
+  bossNearAgentId: window.__HERMES_AREA__?.bossNearAgentId,
+}));
+
+// toggle same agent (close)
+await page.keyboard.press("KeyE");
+await page.waitForTimeout(200);
+const toggled = await page.evaluate(() => ({
+  selectedId: window.__HERMES_AREA__?.kanbanPanel?.selectedId ?? null,
+}));
+
 const fatal = errors.filter((e) => !/Framebuffer|WebGL/i.test(e));
 const moved = before && mid && (mid.x !== before.x || mid.y !== before.y);
 const followToggleOk =
@@ -111,6 +178,14 @@ const followToggleOk =
   Number.isInteger(followOn.zoom) &&
   followOff.follow === false &&
   followOff.zoom === 1;
+const eFocusOk =
+  interact.farNearId == null &&
+  farAfterE.selectedId == null &&
+  farAfterE.bossNearAgentId == null &&
+  !!nearState.bossNearAgentId &&
+  nearState.hintVisible === true &&
+  nearAfterE.selectedId === nearState.bossNearAgentId &&
+  toggled.selectedId == null;
 const result = {
   before,
   mid,
@@ -120,9 +195,15 @@ const result = {
   followOn,
   followOff,
   keysWhileFollow,
+  interact,
+  farAfterE,
+  nearState,
+  nearAfterE,
+  toggled,
   moved,
   zoomOk: Number.isInteger(area.zoom) && area.zoom >= 1,
   followToggleOk,
+  eFocusOk,
   bossOk: area.boss?.label === "대장님",
   notInsideWall: blocked.onCollision === false,
   errors: fatal,
@@ -139,6 +220,7 @@ const result = {
     !!keysWhileFollow.lighting &&
     area.boss?.label === "대장님" &&
     blocked.onCollision === false &&
+    eFocusOk &&
     fatal.length === 0,
 };
 console.log(JSON.stringify(result, null, 2));
