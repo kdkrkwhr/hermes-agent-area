@@ -1,4 +1,4 @@
-/** Smoke: weather JSON → rain force + cloudy overlay; ?weatherfx=0 / ?rain= gates. */
+/** Smoke: weather JSON → rain/snow force + cloudy overlay; ?weatherfx=0 / ?rain= / ?snow= gates. */
 import { chromium } from "playwright";
 
 const base = process.env.SMOKE_URL || "http://127.0.0.1:5173/hermes-agent-area";
@@ -9,6 +9,15 @@ const rainyWeather = {
   periods: [
     { time: "00:00", sky: "흐림", pty: "비", pop: 80, temp: 18 },
     { time: "23:00", sky: "흐림", pty: "비", pop: 90, temp: 17 },
+  ],
+};
+
+const snowyWeather = {
+  date: "2099-01-04",
+  summary: "눈 옴",
+  periods: [
+    { time: "00:00", sky: "흐림", pty: "눈", pop: 80, temp: -2 },
+    { time: "23:00", sky: "흐림", pty: "진눈개비", pop: 90, temp: -1 },
   ],
 };
 
@@ -100,6 +109,12 @@ async function goto(qs, waitLabel = null) {
       null,
       { timeout: 10000 },
     );
+  } else if (waitLabel === "snow") {
+    await page.waitForFunction(
+      () => window.__HERMES_AREA__?.weatherFx?.snowing === true,
+      null,
+      { timeout: 10000 },
+    );
   } else if (waitLabel === "cloudy") {
     await page.waitForFunction(
       () => window.__HERMES_AREA__?.weatherFx?.cloudy === true,
@@ -127,6 +142,7 @@ async function snap() {
   return page.evaluate(() => ({
     weatherFx: window.__HERMES_AREA__?.weatherFx,
     rain: window.__HERMES_AREA__?.rain,
+    snow: window.__HERMES_AREA__?.snow,
     lighting: window.__HERMES_AREA__?.lighting,
   }));
 }
@@ -150,6 +166,50 @@ await goto("tod=day&events=0&rain=", "rain");
   );
 }
 
+stubbedWeather = snowyWeather;
+await goto("tod=day&events=0&rain=&snow=", "snow");
+{
+  const s = await snap();
+  check(
+    "snow-json-forces-snow-not-rain",
+    s.weatherFx?.snowing === true &&
+      s.weatherFx?.raining === false &&
+      s.weatherFx?.label === "snow" &&
+      s.snow?.weatherForceOn === true &&
+      s.snow?.active === true &&
+      s.rain?.weatherForceOn === false &&
+      s.rain?.active === false,
+    s,
+  );
+}
+
+stubbedWeather = snowyWeather;
+await goto("tod=evening&events=0&rain=&snow=", "snow");
+{
+  const s = await snap();
+  check(
+    "snow-suppresses-tod-rain",
+    s.weatherFx?.snowing === true &&
+      s.snow?.active === true &&
+      s.rain?.active === false &&
+      s.rain?.weatherSnowing === true,
+    s,
+  );
+}
+
+stubbedWeather = null;
+await goto("tod=day&events=0&rain=0&snow=1");
+{
+  const s = await snap();
+  check(
+    "snow-query-1-force",
+    s.snow?.forcedOn === true &&
+      s.snow?.active === true &&
+      s.rain?.active === false,
+    s,
+  );
+}
+
 stubbedWeather = cloudyWeather;
 await goto("tod=day&events=0&rain=", "cloudy");
 {
@@ -158,8 +218,11 @@ await goto("tod=day&events=0&rain=", "cloudy");
     "cloudy-json-no-rain-day",
     s.weatherFx?.cloudy === true &&
       s.weatherFx?.raining === false &&
+      s.weatherFx?.snowing === false &&
       s.rain?.weatherForceOn === false &&
-      s.rain?.active === false,
+      s.rain?.active === false &&
+      s.snow?.weatherForceOn === false &&
+      s.snow?.active === false,
     s,
   );
 }
@@ -188,7 +251,21 @@ await goto("tod=day&events=0&rain=0", "rain");
   );
 }
 
-stubbedWeather = rainyWeather;
+stubbedWeather = snowyWeather;
+await goto("tod=day&events=0&snow=0", "snow");
+{
+  const s = await snap();
+  check(
+    "snow-query-0-wins",
+    s.weatherFx?.snowing === true &&
+      s.snow?.active === false &&
+      s.snow?.enabled === false &&
+      s.rain?.active === false,
+    s,
+  );
+}
+
+stubbedWeather = snowyWeather;
 await goto("tod=day&events=0&weatherfx=0", "off");
 {
   const s = await snap();
@@ -196,7 +273,9 @@ await goto("tod=day&events=0&weatherfx=0", "off");
     "weatherfx-0-noop",
     s.weatherFx?.enabled === false &&
       s.rain?.weatherForceOn === false &&
-      s.rain?.active === false,
+      s.rain?.active === false &&
+      s.snow?.weatherForceOn === false &&
+      s.snow?.active === false,
     s,
   );
 }
@@ -209,7 +288,9 @@ await goto("tod=day&events=0&rain=");
     "missing-weather-noop",
     s.weatherFx?.label == null &&
       s.rain?.weatherForceOn === false &&
-      s.rain?.active === false,
+      s.rain?.active === false &&
+      s.snow?.weatherForceOn === false &&
+      s.snow?.active === false,
     s,
   );
 }

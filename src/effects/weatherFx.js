@@ -32,8 +32,9 @@ export function pickWeatherPeriod(weather) {
 
 /**
  * Classify sky / precip / condition from PWA weather JSON (+ english aliases).
+ * Snow (눈/진눈/snow/sleet) is separate from rain — winter FX must not run WindowRain.
  * @param {object|null} weather
- * @returns {{ raining: boolean, cloudy: boolean, clear: boolean, sky: string, precip: string, label: string } | null}
+ * @returns {{ raining: boolean, snowing: boolean, cloudy: boolean, clear: boolean, sky: string, precip: string, label: string } | null}
  */
 export function classifyWeather(weather) {
   if (!weather || typeof weather !== "object") return null;
@@ -56,31 +57,42 @@ export function classifyWeather(weather) {
   const summary = String(weather.summary || "");
   const blob = `${sky} ${precip} ${summary}`.toLowerCase();
 
-  const raining =
+  // Snow wins over rain when precip/summary mentions flakes / 진눈개비 / sleet.
+  const snowing =
     (precip &&
       precip !== "없음" &&
-      /비|소나기|눈|진눈|빗|rain|shower|drizzle|snow/i.test(precip)) ||
-    /비|소나기|우산|강수|빗|rain|shower|drizzle/i.test(summary) ||
-    (period &&
-      Number(period.pop) >= 70 &&
-      /비|소나기|rain|shower/i.test(`${sky} ${summary}`));
+      /눈|진눈|snow|sleet/i.test(precip)) ||
+    /눈|진눈|snow|sleet/i.test(summary);
+
+  const raining =
+    !snowing &&
+    ((precip &&
+      precip !== "없음" &&
+      /비|소나기|빗|rain|shower|drizzle/i.test(precip)) ||
+      /비|소나기|우산|강수|빗|rain|shower|drizzle/i.test(summary) ||
+      (period &&
+        Number(period.pop) >= 70 &&
+        /비|소나기|rain|shower/i.test(`${sky} ${summary}`)));
 
   const clear =
     !raining &&
+    !snowing &&
     (/맑|clear|sunny/i.test(sky) || /맑|clear|sunny/i.test(blob));
 
   const cloudy =
     !raining &&
+    !snowing &&
     !clear &&
     (/흐림|구름|안개|fog|mist|overcast|cloud/i.test(sky) ||
       /흐림|구름|overcast|cloud/i.test(blob));
 
   let label = "unknown";
-  if (raining) label = "rain";
+  if (snowing) label = "snow";
+  else if (raining) label = "rain";
   else if (cloudy) label = "cloudy";
   else if (clear) label = "clear";
 
-  return { raining, cloudy, clear, sky, precip, label };
+  return { raining, snowing, cloudy, clear, sky, precip, label };
 }
 
 /**
@@ -99,7 +111,8 @@ export function createWeatherCloudOverlay(scene, mapW, mapH) {
 }
 
 /**
- * Controller: polls desk-brief weather, drives WindowRain + cloud overlay.
+ * Controller: polls desk-brief weather, drives WindowRain / SnowFlakes + cloud overlay.
+ * Rain and snow are mutually exclusive (never both weather-forced).
  */
 export class WeatherFx {
   /**
@@ -169,9 +182,20 @@ export class WeatherFx {
     }
 
     const rain = this.scene.windowRain;
-    if (rain) {
-      // raining → force on; clear/cloudy → release force (TOD / ?rain= resume)
-      rain.setWeatherForceOn(!!cls.raining);
+    const snow = this.scene.snowFlakes;
+    // snowing → snow on + rain fully suppressed (incl. TOD evening); raining → rain only
+    if (cls.snowing) {
+      rain?.setWeatherSnowing?.(true);
+      rain?.setWeatherForceOn(false);
+      snow?.setWeatherForceOn(true);
+    } else if (cls.raining) {
+      rain?.setWeatherSnowing?.(false);
+      rain?.setWeatherForceOn(true);
+      snow?.setWeatherForceOn(false);
+    } else {
+      rain?.setWeatherSnowing?.(false);
+      rain?.setWeatherForceOn(false);
+      snow?.setWeatherForceOn(false);
     }
 
     this.scene.dustMotes?.setCloudy(!!cls.cloudy);
@@ -204,13 +228,14 @@ export class WeatherFx {
     if (!cls || cls.label === "unknown") return;
     const key = cls.label;
     if (key === this._lastToastKey) return;
-    // only announce rain / cloudy transitions (not clear / unknown spam)
-    if (key !== "rain" && key !== "cloudy") {
+    // only announce rain / snow / cloudy transitions (not clear / unknown spam)
+    if (key !== "rain" && key !== "snow" && key !== "cloudy") {
       this._lastToastKey = key;
       return;
     }
     this._lastToastKey = key;
-    const text = key === "rain" ? "날씨: 비" : "날씨: 흐림";
+    const text =
+      key === "rain" ? "날씨: 비" : key === "snow" ? "날씨: 눈" : "날씨: 흐림";
     this._showToast(text);
   }
 
@@ -235,7 +260,9 @@ export class WeatherFx {
 
   clearFx() {
     this.classification = null;
+    this.scene.windowRain?.setWeatherSnowing?.(false);
     this.scene.windowRain?.setWeatherForceOn(false);
+    this.scene.snowFlakes?.setWeatherForceOn(false);
     this.scene.dustMotes?.setCloudy(false);
     this.cloudOverlay?.setFillStyle(0x6a7a8a, 0);
   }
@@ -245,6 +272,7 @@ export class WeatherFx {
       enabled: this.enabled,
       label: this.classification?.label ?? null,
       raining: !!this.classification?.raining,
+      snowing: !!this.classification?.snowing,
       cloudy: !!this.classification?.cloudy,
       sky: this.classification?.sky ?? null,
       precip: this.classification?.precip ?? null,
@@ -257,6 +285,7 @@ export class WeatherFx {
       ...(window.__HERMES_AREA__ || {}),
       weatherFx: this.snapshot(),
       rain: this.scene.windowRain?.snapshot?.() ?? null,
+      snow: this.scene.snowFlakes?.snapshot?.() ?? null,
     };
   }
 

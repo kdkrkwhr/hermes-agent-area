@@ -106,6 +106,8 @@ export class WindowRain {
     this.active = false;
     this.eventUntil = 0;
     this.weatherForceOn = false;
+    /** When true, WeatherFx is snowing — suppress TOD/event rain (mutual exclusion). */
+    this.weatherSnowing = false;
     this._eventTimer = null;
     this._showerTimer = null;
 
@@ -179,9 +181,30 @@ export class WindowRain {
     this.sync();
   }
 
+  /**
+   * WeatherFx snowing — keeps rain off even on evening/night TOD / event pulse.
+   * `?rain=1` still wins (forcedOn checked before this).
+   * @param {boolean} on
+   */
+  setWeatherSnowing(on) {
+    const next = !!on;
+    if (next === this.weatherSnowing) {
+      this.sync();
+      return;
+    }
+    this.weatherSnowing = next;
+    this.sync();
+  }
+
   shouldBeActive() {
     if (this.forcedOff) return false;
     if (this.forcedOn) return true;
+    if (this.weatherSnowing) return false;
+    // ?snow=1 / weather snow — never dual-emit with flakes
+    const snow = this.scene.snowFlakes;
+    if (snow && !snow.forcedOff && (snow.forcedOn || snow.weatherForceOn)) {
+      return false;
+    }
     if (this.weatherForceOn) return true;
     if (this.scene.time.now < this.eventUntil) return true;
     const name = this.scene.lightingPreset?.name;
@@ -207,6 +230,7 @@ export class WindowRain {
       enabled: !this.forcedOff,
       forcedOn: this.forcedOn,
       weatherForceOn: !!this.weatherForceOn,
+      weatherSnowing: !!this.weatherSnowing,
       active: this.active,
       emitterCount: this.emitters.length,
       windowTiles: this.tiles.length,
