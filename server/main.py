@@ -47,6 +47,11 @@ WAYPOINTS = {
         _px(7, 5),
         _px(3, 19),
     ],
+    # stand south of Focus furniture desks (GID6 @ 3,17 / 8,17)
+    "focusDesks": [
+        _px(3, 19),
+        _px(8, 19),
+    ],
     "meeting": _px(18, 9),
     "break": _px(18, 16),
     "lounge": [
@@ -87,10 +92,54 @@ def _idle_lounge_dest(home_desk: int) -> dict[str, float]:
     return spots[idx]
 
 
-def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
+_DEEP_HINT = re.compile(r"focus|deep", re.IGNORECASE)
+
+
+def _skills_blob(skills: Any) -> str:
+    if skills is None:
+        return ""
+    if isinstance(skills, str):
+        return skills
+    if isinstance(skills, (list, tuple)):
+        parts: list[str] = []
+        for s in skills:
+            if isinstance(s, str):
+                parts.append(s)
+            else:
+                parts.append(str(s))
+        return " ".join(parts)
+    return str(skills)
+
+
+def _is_deep_work(task: dict[str, Any] | None) -> bool:
+    """Long runtime and/or focus|deep hint in title/skills → Focus zone."""
+    if not task:
+        return False
+    max_rt = task.get("max_runtime_seconds")
+    try:
+        if max_rt is not None and float(max_rt) >= 3600:
+            return True
+    except (TypeError, ValueError):
+        pass
+    title = str(task.get("title") or "")
+    if _DEEP_HINT.search(title):
+        return True
+    if _DEEP_HINT.search(_skills_blob(task.get("skills"))):
+        return True
+    return False
+
+
+def _tile_to_zone(
+    status: str,
+    home_desk: int,
+    task: dict[str, Any] | None = None,
+) -> tuple[str, dict[str, float]]:
     desks = WAYPOINTS["desks"]
     desk = desks[home_desk % len(desks)]
     if status in ("running", "chatting"):
+        focus = WAYPOINTS.get("focusDesks") or []
+        if status == "running" and focus and _is_deep_work(task):
+            return "focus", focus[home_desk % len(focus)]
         return "desk", desk
     if status == "blocked":
         return "meeting", WAYPOINTS["meeting"]
@@ -321,7 +370,7 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
         try:
             rows = conn.execute(
                 """
-                SELECT id, title, status, assignee, started_at, max_runtime_seconds
+                SELECT id, title, status, assignee, started_at, max_runtime_seconds, skills
                 FROM tasks
                 WHERE status IN ('running', 'blocked', 'ready')
                   AND assignee IS NOT NULL
@@ -339,7 +388,7 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
             # SQLite older may not like NULLS LAST
             rows = conn.execute(
                 """
-                SELECT id, title, status, assignee, started_at, max_runtime_seconds
+                SELECT id, title, status, assignee, started_at, max_runtime_seconds, skills
                 FROM tasks
                 WHERE status IN ('running', 'blocked', 'ready')
                   AND assignee IS NOT NULL
@@ -357,12 +406,19 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
         a = r["assignee"]
         if a in best:
             continue
+        skills = r["skills"] if "skills" in r.keys() else None
+        if isinstance(skills, str) and skills.strip().startswith(("[", "{")):
+            try:
+                skills = json.loads(skills)
+            except Exception:
+                pass
         best[a] = {
             "status": r["status"],
             "id": r["id"],
             "title": r["title"],
             "started_at": r["started_at"],
             "max_runtime_seconds": r["max_runtime_seconds"],
+            "skills": skills,
         }
     return best
 
@@ -628,7 +684,7 @@ class OfficeSim:
                 else:
                     status = "idle"
                     task = None
-            zone, dest = _tile_to_zone(status, a.home_desk)
+            zone, dest = _tile_to_zone(status, a.home_desk, task)
             a.status = status
             a.zone = zone
             a.bubble = BUBBLES.get(status, BUBBLES["idle"])
@@ -863,11 +919,18 @@ def _read_cron_data(job_id: str) -> dict[str, Any] | None:
 
 @app.get("/api/desk-brief")
 def api_desk_brief():
-    """CEO desk panel: weather/news (PWA) + kanban board digest (HERMES_HOME)."""
+    """CEO desk panel: weather/news (PWA + cron) + kanban board digest (HERMES_HOME)."""
     weather_path = ATTENDANCE_PWA / "data" / "weather" / "latest.json"
     news_path = ATTENDANCE_PWA / "data" / "news" / "latest.json"
     weather = _read_json_file(weather_path)
     news = _read_json_file(news_path)
+
+    # fallback: read from cron outputs if PWA data is missing
+    if not weather:
+        weather = _read_cron_data(WEATHER_CRON_ID)
+    if not news:
+        news = _read_cron_data(NEWS_CRON_ID)
+
     kanban = read_kanban_desk_board()
     # keep WS snapshot warm for clients that listen only
     office.desk_kanban = kanban
