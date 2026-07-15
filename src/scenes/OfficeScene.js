@@ -27,6 +27,7 @@ import { OfficeEvents } from "../effects/officeEvents.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
+import { mountClockOutModal } from "../ui/clockOutModal.js";
 import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
@@ -100,6 +101,7 @@ export class OfficeScene extends Phaser.Scene {
           ],
           sleep: { x: 31, y: 21 },
           entrance: { x: 20, y: 27 },
+          lobby: { xMin: 14, yMin: 26, xMax: 25, yMax: 28 },
         };
 
     // start empty; first WS/mock snapshot fills from local Hermes profiles (or mock)
@@ -201,8 +203,142 @@ export class OfficeScene extends Phaser.Scene {
       this.whiteboardTicker.updateFromSnapshot(this.lastSnapshot);
     }
 
+    this.initClockOut();
+
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
+  }
+
+  /** Lobby exit gate: enter lobby tiles → confirm → fade / disconnect. */
+  initClockOut() {
+    this.clockOutLocked = false;
+    this._inLobby = false;
+    this._clockOutPending = false;
+    this._clockOutDone = false;
+    this.clockOutModal = mountClockOutModal({
+      onConfirm: () => this.confirmClockOut(),
+      onCancel: () => this.cancelClockOut(),
+    });
+  }
+
+  bossTile() {
+    if (!this.boss?.sprite) return null;
+    const tw = this.map.tileWidth;
+    return {
+      x: Math.floor(this.boss.sprite.x / tw),
+      y: Math.floor(this.boss.sprite.y / tw),
+    };
+  }
+
+  isInLobbyZone(tile) {
+    if (!tile) return false;
+    const lob = this.waypoints?.lobby;
+    if (
+      lob &&
+      typeof lob.xMin === "number" &&
+      typeof lob.yMin === "number" &&
+      typeof lob.xMax === "number" &&
+      typeof lob.yMax === "number"
+    ) {
+      return (
+        tile.x >= lob.xMin &&
+        tile.x <= lob.xMax &&
+        tile.y >= lob.yMin &&
+        tile.y <= lob.yMax
+      );
+    }
+    const ent = this.waypoints?.entrance || { x: 20, y: 27 };
+    return Math.abs(tile.x - ent.x) <= 4 && Math.abs(tile.y - ent.y) <= 2;
+  }
+
+  checkLobbyClockOut() {
+    if (this._clockOutDone || this._clockOutPending) return;
+    const tile = this.bossTile();
+    const inLobby = this.isInLobbyZone(tile);
+    if (inLobby && !this._inLobby) {
+      this._inLobby = true;
+      this.openClockOutModal();
+    } else if (!inLobby) {
+      this._inLobby = false;
+    }
+  }
+
+  openClockOutModal() {
+    this._clockOutPending = true;
+    this.clockOutLocked = true;
+    this.clockOutModal?.open();
+    if (typeof window !== "undefined") {
+      window.__HERMES_AREA__ = {
+        ...(window.__HERMES_AREA__ || {}),
+        clockOut: { pending: true, done: false },
+      };
+    }
+  }
+
+  cancelClockOut() {
+    this._clockOutPending = false;
+    this.clockOutLocked = false;
+    // stay _inLobby so modal won't re-fire until boss leaves lobby
+    if (typeof window !== "undefined") {
+      window.__HERMES_AREA__ = {
+        ...(window.__HERMES_AREA__ || {}),
+        clockOut: { pending: false, done: false, cancelled: true },
+      };
+    }
+  }
+
+  confirmClockOut() {
+    if (this._clockOutDone) return;
+    this._clockOutDone = true;
+    this._clockOutPending = false;
+    this.clockOutLocked = true;
+    this.officeAudio?.playClockOutSfx?.();
+
+    // BE disconnect: close WS intentionally (skip auto mock reconnect)
+    this._wsManualClose = true;
+    try {
+      this.ws?.close();
+    } catch {
+      /* ignore */
+    }
+    this.ws = null;
+    this.setLive(false);
+
+    if (typeof window !== "undefined") {
+      window.__HERMES_AREA__ = {
+        ...(window.__HERMES_AREA__ || {}),
+        clockOut: { pending: false, done: true },
+      };
+    }
+
+    this.runClockOutFade();
+  }
+
+  runClockOutFade() {
+    let fade = document.querySelector(".clockout-fade");
+    if (!fade) {
+      fade = document.createElement("div");
+      fade.className = "clockout-fade";
+      fade.innerHTML = `<span class="clockout-fade__text">또 오세요!</span>`;
+      document.body.appendChild(fade);
+    }
+    requestAnimationFrame(() => {
+      fade.classList.add("is-on");
+    });
+
+    window.setTimeout(() => {
+      try {
+        window.close();
+      } catch {
+        /* ignore */
+      }
+      try {
+        this.game?.loop?.sleep?.();
+        this.scene?.pause?.();
+      } catch {
+        /* ignore */
+      }
+    }, 2000);
   }
 
   refreshMuteHud() {
@@ -573,6 +709,12 @@ export class OfficeScene extends Phaser.Scene {
       rain: this.windowRain?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
+      clockOut: {
+        pending: !!this._clockOutPending,
+        done: !!this._clockOutDone,
+        inLobby: !!this._inLobby,
+        locked: !!this.clockOutLocked,
+      },
     };
   }
 
@@ -584,6 +726,7 @@ export class OfficeScene extends Phaser.Scene {
     if (this.boss) {
       this.boss.update(time, delta);
       this.boss.maybeSendPos(this.ws);
+      this.checkLobbyClockOut();
       this.publishDebug(this.ws?.url);
     }
     this.mascot?.update(time, delta);

@@ -382,6 +382,86 @@ body,
   color: var(--accent);
 }
 
+.clockout-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 55;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: rgba(4, 8, 12, 0.68);
+  backdrop-filter: blur(4px);
+}
+
+.clockout-modal[hidden] {
+  display: none;
+}
+
+.clockout-modal__card {
+  width: min(320px, 100%);
+  padding: 18px 18px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  text-align: center;
+}
+
+.clockout-modal__title {
+  display: block;
+  color: var(--accent);
+  font-size: 15px;
+  margin-bottom: 8px;
+}
+
+.clockout-modal__msg {
+  margin: 0 0 14px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.clockout-modal__row {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.clockout-modal__yes {
+  border-color: var(--accent-dim);
+  color: var(--accent);
+}
+
+.clockout-fade {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: #04080c;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 2s ease;
+  display: grid;
+  place-items: center;
+}
+
+.clockout-fade.is-on {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.clockout-fade__text {
+  color: var(--accent);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  transition: opacity 0.6s ease 0.4s;
+}
+
+.clockout-fade.is-on .clockout-fade__text {
+  opacity: 1;
+}
+
 .office-toast {
   position: fixed;
   left: 50%;
