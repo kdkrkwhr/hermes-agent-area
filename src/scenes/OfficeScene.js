@@ -1,5 +1,12 @@
 import Phaser from "phaser";
-import { AGENTS, resolveWsUrl, buildMockAgents, buildMockSnapshot } from "../mock.js";
+import {
+  AGENTS,
+  resolveWsUrl,
+  buildMockAgents,
+  buildMockSnapshot,
+  buildDisconnectedAgents,
+  isPagesLocalWsBlocked,
+} from "../mock.js";
 import { Agent } from "../agents/Agent.js";
 import { Boss } from "../agents/Boss.js";
 import { createPathfinder, gridFromCollisionLayer } from "../pathfinding.js";
@@ -183,9 +190,15 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  refreshMockKanban() {
-    const mockSnap = buildMockSnapshot(buildMockAgents());
+  refreshMockKanban({ disconnected = false } = {}) {
+    const agents = disconnected ? buildDisconnectedAgents() : buildMockAgents();
+    const reason = disconnected
+      ? "Pages HTTPS → localhost WS blocked"
+      : "mock mode";
+    const mockSnap = buildMockSnapshot(agents, reason);
     this.lastSnapshot = mockSnap;
+    this.setLive(false);
+    this.applySnapshot(mockSnap);
     this.kanbanPanel.update(mockSnap, { live: false, mock: true });
     this.publishDebug(resolveWsUrl(), mockSnap);
   }
@@ -251,6 +264,13 @@ export class OfficeScene extends Phaser.Scene {
 
   connectWs() {
     const url = resolveWsUrl();
+    // Pages(HTTPS) + ws://localhost = 브라우저가 차단 → 가짜 휴식만 보임
+    if (isPagesLocalWsBlocked()) {
+      this.hudLabel.setText("⚠ Pages→localhost WS 막힘 · npm run dev 쓰셈");
+      this.hintLabel?.setText("실시간 상태: 로컬 FE 또는 ?ws=wss://터널/ws");
+      this.refreshMockKanban({ disconnected: true });
+      return;
+    }
     let ws;
     try {
       ws = new WebSocket(url);
@@ -262,6 +282,7 @@ export class OfficeScene extends Phaser.Scene {
     this.ws = ws;
     ws.onopen = () => {
       this.hudLabel.setText("Hermes Agent Area · live");
+      this.hintLabel?.setText("WASD 대장님 이동");
       this.setLive(true);
     };
     ws.onmessage = (ev) => {
@@ -281,12 +302,12 @@ export class OfficeScene extends Phaser.Scene {
     };
     ws.onerror = () => {
       this.hudLabel.setText("Hermes Agent Area · WS error → mock");
-      this.refreshMockKanban();
+      if (!this.lastSnapshot?.mock) this.refreshMockKanban();
     };
     ws.onclose = () => {
       this.setLive(false);
       this.hudLabel.setText("Hermes Agent Area · offline mock");
-      this.refreshMockKanban();
+      if (!this.lastSnapshot?.mock) this.refreshMockKanban();
       this.time.delayedCall(3000, () => this.connectWs());
     };
   }

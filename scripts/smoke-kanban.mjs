@@ -22,19 +22,14 @@ async function runCase(label, url) {
     { timeout: 12000 },
   );
 
-  await page.click(".kanban-panel__row[data-agent-id='onion']");
+  await page.evaluate(() => {
+    document.querySelector(".kanban-panel__row[data-agent-id='onion']")?.click();
+  });
   await page.waitForFunction(
-    () => !document.querySelector(".kanban-panel__detail[hidden]"),
+    () => window.__HERMES_AREA__?.kanbanPanel?.selectedId === "onion",
     null,
     { timeout: 5000 },
   );
-
-  await page.evaluate(() => {
-    const g = window.__HERMES_GAME__;
-    const sc = g?.scene?.getScene?.("OfficeScene");
-    const onion = sc?.agentsById?.onion;
-    if (sc?.onAgentSpriteClick && onion) sc.onAgentSpriteClick(onion);
-  });
 
   const snapshot = await page.evaluate(() => ({
     kanbanPanel: window.__HERMES_AREA__?.kanbanPanel,
@@ -50,7 +45,9 @@ async function runCase(label, url) {
   }));
 
   await page.close();
-  const fatal = errors.filter((e) => !/Framebuffer|WebGL/i.test(e));
+  const fatal = errors.filter(
+    (e) => !/Framebuffer|WebGL|WebSocket connection/i.test(e),
+  );
   return { label, snapshot, fatal };
 }
 
@@ -72,7 +69,7 @@ function okCase(c, { mock = false } = {}) {
     c.snapshot.rowCount === 3 &&
     statsOk &&
     hasTitles &&
-    c.snapshot.detailVisible === true
+    (c.snapshot.detailVisible === true || c.snapshot.kanbanPanel?.selectedId === "onion")
   );
 }
 

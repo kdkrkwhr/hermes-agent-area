@@ -53,8 +53,19 @@ export function resolveWsUrl() {
   return "ws://localhost:8765/ws";
 }
 
+/**
+ * GitHub Pages(HTTPS) → ws://localhost 는 브라우저가 mixed-content로 막음.
+ * 이 상태면 live 상태(응답 중)가 절대 안 오고 가짜 휴식만 보임.
+ */
+export function isPagesLocalWsBlocked() {
+  if (typeof location === "undefined") return false;
+  if (location.protocol !== "https:") return false;
+  const url = resolveWsUrl();
+  return /^ws:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//i.test(url);
+}
+
 /** Offline/mock kanban snapshot fragment (matches BE shape). */
-export function buildMockSnapshot(agents) {
+export function buildMockSnapshot(agents, reason = "mock mode") {
   const running = agents.filter((a) => a.status === "running").length;
   const blocked = agents.filter((a) => a.status === "blocked").length;
   return {
@@ -62,12 +73,13 @@ export function buildMockSnapshot(agents) {
     ts: Date.now() / 1000,
     agents,
     stats: {
-      raw: `By status:\n  running   ${running}\n  blocked   ${blocked}\n  ready     0\n  done      0\n(mock mode)`,
+      raw: `By status:\n  running   ${running}\n  blocked   ${blocked}\n  ready     0\n  done      0\n(${reason})`,
     },
     mock: true,
   };
 }
 
+/** Demo snapshot when BE unreachable — not real Hermes status. */
 export function buildMockAgents() {
   return AGENTS.map((def, i) => {
     const status = i === 0 ? "running" : i === 1 ? "blocked" : "idle";
@@ -93,6 +105,33 @@ export function buildMockAgents() {
       task_id: titles[i] ? `t_mock_${def.id}` : null,
       task_title: titles[i],
       gateway: i === 2 ? "stopped" : "running",
+      x: (def.homeDesk * 7 + 4) * 16 + 8,
+      y: 14 * 16 + 8,
+      dest_x: (def.homeDesk * 7 + 4) * 16 + 8,
+      dest_y: 14 * 16 + 8,
+    };
+  });
+}
+
+/** HTTPS Pages에서 localhost WS 막혔을 때 — 전부 offline로 표시. */
+export function buildDisconnectedAgents() {
+  return AGENTS.map((def) => {
+    const x = (def.homeDesk * 7 + 4) * 16 + 8;
+    const y = 14 * 16 + 8;
+    return {
+      id: def.id,
+      displayName: def.displayName,
+      profile: def.profile,
+      status: "offline",
+      zone: "away",
+      bubble: "BE 연결 필요 (로컬 FE)",
+      task_id: null,
+      task_title: null,
+      gateway: "stopped",
+      x,
+      y,
+      dest_x: x,
+      dest_y: y,
     };
   });
 }
