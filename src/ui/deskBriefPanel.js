@@ -1,15 +1,4 @@
-/** DOM overlay: CEO desk weather / news / kanban tabs. */
-
-const PAGES_WEATHER =
-  "https://kdkrkwhr.github.io/attendance-pwa/data/weather/latest.json";
-const PAGES_NEWS =
-  "https://kdkrkwhr.github.io/attendance-pwa/data/news/latest.json";
-
-const TABS = [
-  { id: "weather", label: "🌤 날씨" },
-  { id: "news", label: "📰 뉴스" },
-  { id: "kanban", label: "📋 칸반" },
-];
+/** DOM overlay: CEO desk weather + news, two-column card layout with WebSocket live updates. */
 
 function escapeHtml(s) {
   return String(s ?? "")
@@ -18,6 +7,8 @@ function escapeHtml(s) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
 }
+
+// ── weather helpers ──────────────────────────────────────────────
 
 function pickNowPeriod(periods) {
   if (!Array.isArray(periods) || !periods.length) return null;
@@ -31,27 +22,55 @@ function pickNowPeriod(periods) {
   return best;
 }
 
-export { pickNowPeriod };
+function weatherIcon(skyCode) {
+  const c = String(skyCode ?? "");
+  if (c === "1") return "☀️";
+  if (c === "2") return "⛅";
+  if (c === "3") return "☁️";
+  if (c === "4") return "☁️";
+  return "🌤️";
+}
 
-function newsHeadlines(news, limit = 5) {
+function rainIcon(pty) {
+  const c = String(pty ?? "");
+  if (c === "1") return "🌧️";
+  if (c === "2") return "🌧️";
+  if (c === "3") return "❄️";
+  if (c === "4") return "🌦️";
+  if (c === "5") return "🌧️";
+  if (c === "6") return "🌨️";
+  if (c === "7") return "❄️";
+  return "";
+}
+
+// ── news helpers ──────────────────────────────────────────────────
+
+function newsHeadlines(news, limit = 8) {
   const items = [];
   const markets = news?.markets || {};
   for (const key of ["kr", "us", "all"]) {
     const pack = markets[key];
     const list = pack?.items || pack?.stock || [];
     for (const it of list) {
-      if (it?.title) items.push(it.title);
+      if (it?.title) items.push({ title: it.title, link: it.link || "" });
       if (items.length >= limit) return items;
     }
   }
   if (Array.isArray(news?.items)) {
     for (const it of news.items) {
-      if (it?.title) items.push(it.title);
+      if (it?.title) items.push({ title: it.title, link: it.link || "" });
       if (items.length >= limit) break;
     }
   }
   return items;
 }
+
+// ── HTTP fallback (backward compat for weatherFx.js) ──────────────
+
+const PAGES_WEATHER =
+  "https://kdkrkwhr.github.io/attendance-pwa/data/weather/latest.json";
+const PAGES_NEWS =
+  "https://kdkrkwhr.github.io/attendance-pwa/data/news/latest.json";
 
 async function fetchJson(url) {
   const res = await fetch(url, { cache: "no-store" });
@@ -59,7 +78,6 @@ async function fetchJson(url) {
   return res.json();
 }
 
-/** Prefer local BE (cron → PWA + HERMES_HOME kanban); fall back to Pages JSON. */
 export async function loadDeskBrief() {
   try {
     const local = await fetchJson("/api/desk-brief");
@@ -81,215 +99,241 @@ export async function loadDeskBrief() {
   };
 }
 
-function statusBadge(status) {
-  const s = String(status || "");
-  return `<span class="desk-brief__badge desk-brief__badge--${escapeHtml(s)}">${escapeHtml(s)}</span>`;
-}
+export { pickNowPeriod, newsHeadlines };
 
-function renderTaskList(tasks, emptyLabel) {
-  if (!Array.isArray(tasks) || !tasks.length) {
-    return `<p class="desk-brief__muted">${escapeHtml(emptyLabel)}</p>`;
-  }
-  return `<ul class="desk-brief__klist">${tasks
-    .map(
-      (t) =>
-        `<li><span class="desk-brief__kid">${escapeHtml(t.id)}</span>${statusBadge(t.status)}<span class="desk-brief__ktitle" title="${escapeHtml(t.title)}">${escapeHtml(t.title)}</span></li>`,
-    )
-    .join("")}</ul>`;
-}
-
-function renderKanban(kanban) {
-  if (!kanban) {
-    return `<p class="desk-brief__muted">로컬 BE 연결 시 HERMES_HOME 칸반이 표시됨</p>`;
-  }
-  if (kanban.error) {
-    return `<p class="desk-brief__muted">칸반 오류: ${escapeHtml(kanban.error)}</p>`;
-  }
-  const groups = kanban.by_assignee || [];
-  if (!groups.length) {
-    return `<p class="desk-brief__muted">태스크 없음</p>`;
-  }
-  return groups
-    .map((g) => {
-      const name = g.display_name || g.assignee || "?";
-      return `
-        <div class="desk-brief__bot">
-          <div class="desk-brief__bot-name">${escapeHtml(name)} <span class="desk-brief__muted">@${escapeHtml(g.assignee)}</span></div>
-          <div class="desk-brief__bot-sec">진행</div>
-          ${renderTaskList(g.active, "진행 중 없음")}
-          <div class="desk-brief__bot-sec">최근 완료</div>
-          ${renderTaskList(g.done, "완료 없음")}
-        </div>`;
-    })
-    .join("");
-}
+// ── create panel ──────────────────────────────────────────────────
 
 export function createDeskBriefPanel(opts = {}) {
   const onPayload = typeof opts.onPayload === "function" ? opts.onPayload : null;
+
   const root = document.createElement("aside");
-  root.className = "desk-brief";
+  root.className = "desk-brief-panel";
   root.hidden = true;
   root.setAttribute("aria-hidden", "true");
   root.innerHTML = `
-    <header class="desk-brief__head">
-      <span class="desk-brief__title">🏢 대장님 사무실</span>
-      <button type="button" class="desk-brief__close" data-role="close" aria-label="닫기">×</button>
+    <header class="dbp__head">
+      <span class="dbp__title">🏢 대장님 사무실</span>
+      <button type="button" class="dbp__close" data-role="close" aria-label="닫기">×</button>
     </header>
-    <nav class="desk-brief__tabs" data-role="tabs" role="tablist">
-      ${TABS.map(
-        (t, i) =>
-          `<button type="button" role="tab" class="desk-brief__tab${i === 0 ? " is-active" : ""}" data-tab="${t.id}" aria-selected="${i === 0 ? "true" : "false"}">${t.label}</button>`,
-      ).join("")}
-    </nav>
-    <div class="desk-brief__body">
-      <section class="desk-brief__pane is-active" data-pane="weather" role="tabpanel">
-        <p class="desk-brief__muted">불러오는 중…</p>
-      </section>
-      <section class="desk-brief__pane" data-pane="news" role="tabpanel" hidden>
-        <p class="desk-brief__muted">불러오는 중…</p>
-      </section>
-      <section class="desk-brief__pane" data-pane="kanban" role="tabpanel" hidden>
-        <p class="desk-brief__muted">불러오는 중…</p>
-      </section>
+    <div class="dbp__body">
+      <div class="dbp__col dbp__col--weather">
+        <div class="dbp__card dbp__card--weather">
+          <div class="dbp__card-head">🌤 날씨 · 서울</div>
+          <div class="dbp__card-body" data-pane="weather">
+            <p class="dbp__muted">연결 대기 중…</p>
+          </div>
+        </div>
+      </div>
+      <div class="dbp__col dbp__col--news">
+        <div class="dbp__card dbp__card--news">
+          <div class="dbp__card-head">📰 뉴스</div>
+          <div class="dbp__card-body" data-pane="news">
+            <p class="dbp__muted">연결 대기 중…</p>
+          </div>
+        </div>
+      </div>
     </div>
-    <footer class="desk-brief__foot" data-role="foot"></footer>
+    <footer class="dbp__foot" data-role="foot"></footer>
   `;
   document.body.appendChild(root);
 
   const elWeather = root.querySelector('[data-pane="weather"]');
   const elNews = root.querySelector('[data-pane="news"]');
-  const elKanban = root.querySelector('[data-pane="kanban"]');
   const elFoot = root.querySelector('[data-role="foot"]');
   const elClose = root.querySelector('[data-role="close"]');
-  const elTabs = root.querySelectorAll("[data-tab]");
 
   let open = false;
-  let loading = false;
   let lastPayload = null;
-  let activeTab = "weather";
+  let ws = null;
+  let wsReconnectTimer = null;
 
-  function setTab(tabId) {
-    activeTab = tabId;
-    for (const btn of elTabs) {
-      const on = btn.getAttribute("data-tab") === tabId;
-      btn.classList.toggle("is-active", on);
-      btn.setAttribute("aria-selected", on ? "true" : "false");
+  // ── render ────────────────────────────────────────────────
+
+  function renderWeather(w) {
+    if (!w) {
+      elWeather.innerHTML = '<p class="dbp__muted">날씨 데이터 없음</p>';
+      return;
     }
-    for (const pane of root.querySelectorAll("[data-pane]")) {
-      const on = pane.getAttribute("data-pane") === tabId;
-      pane.classList.toggle("is-active", on);
-      pane.hidden = !on;
+    const period = pickNowPeriod(w.periods);
+    const temp = period?.temp ?? w?.highlights?.tempMax ?? "—";
+    const sky = period?.sky ?? w?.sky ?? "—";
+    const pty = period?.pty ?? w?.pty;
+    const pop = period?.pop ?? w?.pop;
+    const humidity = period?.reh ?? period?.humidity ?? w?.reh ?? w?.humidity;
+
+    const icons = [
+      weatherIcon(period?.skyCode ?? period?.SKY),
+      rainIcon(pty),
+    ]
+      .filter(Boolean)
+      .join(" ");
+
+    const parts = [];
+    parts.push(
+      '<div class="dbp__weather-main">' + icons + ' <span class="dbp__weather-temp">' + escapeHtml(temp) + '°C</span></div>'
+    );
+    parts.push('<div class="dbp__weather-detail">' + escapeHtml(sky) + '</div>');
+    if (humidity != null) {
+      parts.push(
+        '<div class="dbp__weather-detail">💧 습도 ' + escapeHtml(humidity) + '%</div>'
+      );
     }
+    if (pop != null) {
+      parts.push(
+        '<div class="dbp__weather-detail">🌂 강수확률 ' + escapeHtml(pop) + '%</div>'
+      );
+    }
+    if (w?.summary) {
+      parts.push(
+        '<p class="dbp__weather-summary">' + escapeHtml(w.summary) + '</p>'
+      );
+    }
+    elWeather.innerHTML = parts.join("");
+  }
+
+  function renderNews(n) {
+    const headlines = newsHeadlines(n, 8);
+    if (!headlines.length) {
+      elNews.innerHTML = '<p class="dbp__muted">뉴스 없음</p>';
+      return;
+    }
+    elNews.innerHTML =
+      '<ul class="dbp__news-list">' +
+      headlines
+        .map(function (h) {
+          var title = escapeHtml(h.title);
+          if (h.link) {
+            return '<li><a href="' + escapeHtml(h.link) + '" target="_blank" rel="noopener">' + title + '</a></li>';
+          }
+          return '<li>' + title + '</li>';
+        })
+        .join("") +
+      '</ul>';
   }
 
   function render(payload) {
     lastPayload = payload;
     onPayload?.(payload);
-    const w = payload?.weather;
-    const period = pickNowPeriod(w?.periods);
-    const temp = period?.temp ?? w?.highlights?.tempMax ?? "—";
-    const sky = period?.sky || "—";
-    const pop = period?.pop;
-    const loc = w?.location || "DMC";
-    const humidity =
-      period?.reh ?? period?.humidity ?? w?.humidity ?? (pop != null ? null : "—");
 
-    elWeather.innerHTML = `
-      <div class="desk-brief__weather-main">${escapeHtml(loc)} ${escapeHtml(temp)}°C</div>
-      <div>${escapeHtml(sky)}</div>
-      ${
-        humidity != null
-          ? `<div>습도 ${escapeHtml(humidity)}%</div>`
-          : pop != null
-            ? `<div>강수확률 ${escapeHtml(pop)}%</div>`
-            : ""
-      }
-      ${w?.summary ? `<p class="desk-brief__summary">${escapeHtml(w.summary)}</p>` : ""}
-    `;
+    renderWeather(payload?.weather);
+    renderNews(payload?.news);
 
-    const lines = newsHeadlines(payload?.news, 5);
-    elNews.innerHTML = lines.length
-      ? `<ul class="desk-brief__list">${lines
-          .map((t) => `<li>${escapeHtml(t)}</li>`)
-          .join("")}</ul>`
-      : `<p class="desk-brief__muted">뉴스 없음</p>`;
-
-    elKanban.innerHTML = renderKanban(payload?.kanban);
-
-    const src = payload?.source || "—";
-    const wAt = w?.generatedAt || w?.date || "";
-    const nAt = payload?.news?.generatedAt || payload?.news?.date || "";
-    const bots = payload?.kanban?.by_assignee?.length ?? 0;
-    elFoot.textContent = `source:${src}${wAt ? ` · weather ${wAt}` : ""}${nAt ? ` · news ${nAt}` : ""}${bots ? ` · kanban ${bots}bots` : ""}`;
+    var wAt = payload?.weather?.generatedAt || payload?.weather?.date || payload?.generated_at || "";
+    var nAt = payload?.news?.generatedAt || payload?.news?.date || "";
+    var src = payload?.source || (wAt || nAt ? "ws" : "—");
+    elFoot.textContent =
+      "source:" + src +
+      (wAt ? " · weather " + (typeof wAt === "number" ? new Date(wAt * 1000).toLocaleString() : wAt) : "") +
+      (nAt ? " · news " + (typeof nAt === "number" ? new Date(nAt * 1000).toLocaleString() : nAt) : "");
   }
 
-  async function refresh() {
-    if (loading) return;
-    loading = true;
+  function setLoading(msg) {
+    elWeather.innerHTML = '<p class="dbp__muted">' + escapeHtml(msg || "불러오는 중…") + '</p>';
+    elNews.innerHTML = '<p class="dbp__muted">' + escapeHtml(msg || "불러오는 중…") + '</p>';
+  }
+
+  // ── WebSocket ─────────────────────────────────────────────
+
+  function resolveWsUrl() {
+    var h = location.hostname || "localhost";
+    var port = new URLSearchParams(location.search).get("port") || "8765";
+    return "ws://" + h + ":" + port + "/ws/desk-brief";
+  }
+
+  function connectWs() {
+    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
     try {
-      const data = await loadDeskBrief();
-      render(data);
+      ws = new WebSocket(resolveWsUrl());
     } catch (e) {
-      elWeather.innerHTML = `<p class="desk-brief__muted">로드 실패</p>`;
-      elNews.innerHTML = `<p class="desk-brief__muted">${escapeHtml(e.message || e)}</p>`;
-      elKanban.innerHTML = `<p class="desk-brief__muted">칸반 로드 실패</p>`;
-    } finally {
-      loading = false;
+      setLoading("WebSocket 연결 실패");
+      scheduleWsReconnect();
+      return;
     }
+
+    ws.onopen = function () {
+      if (open) setLoading("데이터 수신 중…");
+    };
+
+    ws.onmessage = function (ev) {
+      try {
+        var msg = JSON.parse(ev.data);
+        if (msg.type === "desk-brief") {
+          render({
+            weather: msg.weather,
+            news: msg.news,
+            generated_at: msg.generated_at,
+            source: "ws",
+          });
+        }
+      } catch (e) {
+        /* ignore malformed */
+      }
+    };
+
+    ws.onclose = function () {
+      ws = null;
+      if (open) scheduleWsReconnect();
+    };
+
+    ws.onerror = function () {
+      try { ws?.close(); } catch (e) {}
+      ws = null;
+      if (open) scheduleWsReconnect();
+    };
   }
 
-  /** Merge WS deskKanban into open panel without full weather reload. */
-  function applyWsKanban(deskKanban) {
-    if (!deskKanban || !open) return;
-    if (!lastPayload) lastPayload = { source: "ws" };
-    lastPayload = { ...lastPayload, kanban: deskKanban };
-    elKanban.innerHTML = renderKanban(deskKanban);
-    const bots = deskKanban?.by_assignee?.length ?? 0;
-    if (elFoot && bots) {
-      const base = elFoot.textContent.replace(/ · kanban \d+bots/, "");
-      elFoot.textContent = `${base} · kanban ${bots}bots`;
-    }
+  function scheduleWsReconnect() {
+    if (wsReconnectTimer) return;
+    wsReconnectTimer = window.setTimeout(function () {
+      wsReconnectTimer = null;
+      if (open) connectWs();
+    }, 5000);
   }
+
+  function disconnectWs() {
+    if (wsReconnectTimer) {
+      window.clearTimeout(wsReconnectTimer);
+      wsReconnectTimer = null;
+    }
+    try { ws?.close(); } catch (e) {}
+    ws = null;
+  }
+
+  // ── open / close ──────────────────────────────────────────
 
   function setOpen(next) {
+    var prev = open;
     open = !!next;
     root.hidden = !open;
     root.setAttribute("aria-hidden", open ? "false" : "true");
     root.classList.toggle("is-open", open);
-    if (open) void refresh();
+
+    if (open && !prev) {
+      setLoading("연결 중…");
+      connectWs();
+    }
+    if (!open) {
+      disconnectWs();
+    }
   }
 
-  elClose.addEventListener("click", (ev) => {
+  elClose.addEventListener("click", function (ev) {
     ev.stopPropagation();
     setOpen(false);
   });
 
-  for (const btn of elTabs) {
-    btn.addEventListener("click", (ev) => {
-      ev.stopPropagation();
-      setTab(btn.getAttribute("data-tab"));
-    });
-  }
+  // ── public API ────────────────────────────────────────────
 
   return {
-    get open() {
-      return open;
-    },
-    get activeTab() {
-      return activeTab;
-    },
-    get lastPayload() {
-      return lastPayload;
-    },
-    show: () => setOpen(true),
-    hide: () => setOpen(false),
-    toggle() {
-      setOpen(!open);
-      return open;
-    },
-    refresh,
-    applyWsKanban,
-    setTab,
-    root,
+    get open() { return open; },
+    get lastPayload() { return lastPayload; },
+    show: function () { setOpen(true); },
+    hide: function () { setOpen(false); },
+    toggle: function () { setOpen(!open); return open; },
+    reconnectWs: function () { disconnectWs(); if (open) connectWs(); },
+    root: root,
   };
 }

@@ -629,6 +629,7 @@ export class OfficeScene extends Phaser.Scene {
     this.ws = null;
     this._wsManualClose = false;
     this.connectWs();
+    this.deskBriefPanel?.reconnectWs?.();
   }
 
   connectWs() {
@@ -664,7 +665,6 @@ export class OfficeScene extends Phaser.Scene {
         this.lastSnapshot = msg;
         this.applySnapshot(msg);
         this.updateKanbanPanel(msg, { live: this.live, mock: !!msg.mock });
-        if (msg.deskKanban) this.deskBriefPanel?.applyWsKanban?.(msg.deskKanban);
         this.publishDebug(url, msg);
       }
     };
@@ -771,20 +771,12 @@ export class OfficeScene extends Phaser.Scene {
       nearCeoDesk: this.nearCeoDesk(),
       deskBriefOpen: !!this.deskBriefPanel?.open,
       deskBrief: this.deskBriefPanel?.lastPayload
-        ? {
-            source: this.deskBriefPanel.lastPayload.source,
-            weatherDate: this.deskBriefPanel.lastPayload.weather?.date,
-            newsDate: this.deskBriefPanel.lastPayload.news?.date,
-            headlineCount: Array.isArray(
-              this.deskBriefPanel.lastPayload.news?.markets?.kr?.items,
-            )
-              ? this.deskBriefPanel.lastPayload.news.markets.kr.items.length
-              : 0,
-            kanbanBots:
-              this.deskBriefPanel.lastPayload.kanban?.by_assignee?.length ?? 0,
-            activeTab: this.deskBriefPanel.activeTab,
-          }
-        : null,
+              ? {
+                  source: this.deskBriefPanel.lastPayload.source,
+                  weatherDate: this.deskBriefPanel.lastPayload.weather?.date,
+                  newsDate: this.deskBriefPanel.lastPayload.news?.date,
+                }
+              : null,
       lighting: this.lightingPreset?.name ?? null,
       effectKinds: Object.fromEntries(
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
