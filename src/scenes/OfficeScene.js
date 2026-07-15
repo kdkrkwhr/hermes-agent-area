@@ -31,7 +31,6 @@ import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
-import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -404,7 +403,6 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow = new LampGlow(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
-    this.coffeeSteam = new CoffeeSteam(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
@@ -432,7 +430,6 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.sync();
     this.dustMotes?.sync();
     this.sunBeams?.sync();
-    this.coffeeSteam?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -852,7 +849,6 @@ export class OfficeScene extends Phaser.Scene {
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
-      steam: this.coffeeSteam?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
