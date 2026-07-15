@@ -1,0 +1,21 @@
+{
+  "name": "hermes-agent-area",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "gen:assets": "python scripts/gen_assets.py",
+    "smoke": "node scripts/smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.61.1",
+    "vite": "^8.1.1"
+  },
+  "dependencies": {
+    "easystarjs": "^0.4.4",
+    "phaser": "^3.88.2"
+  }
+}
