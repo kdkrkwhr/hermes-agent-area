@@ -25,6 +25,12 @@ KANBAN_DB = Path(
     )
 )
 GATEWAY_LOG = HERMES_HOME / "logs" / "gateway.log"
+ATTENDANCE_PWA = Path(
+    os.environ.get("ATTENDANCE_PWA", r"C:\Users\KDK\attendance-pwa")
+)
+CRON_OUTPUT = HERMES_HOME / "cron" / "output"
+WEATHER_CRON_ID = "b7e2c91a4d08"  # company-weather-pwa
+NEWS_CRON_ID = "f1a2b3c94d56"  # daily-news-pwa
 POLL_SECONDS = 5.0
 TICK_SECONDS = 0.05  # 20 Hz position interpolate
 SPEED_PX = 200.0  # px/s @ 32px tiles
@@ -42,18 +48,18 @@ WAYPOINTS = {
         _px(3, 19),
     ],
     "meeting": _px(18, 9),
-    "break": _px(31, 4),
+    "break": _px(18, 16),
     "lounge": [
-        _px(31, 4),
-        _px(32, 5),
-        _px(28, 3),
-        _px(30, 7),
-        _px(33, 5),
-        _px(29, 4),
-        _px(32, 7),
-        _px(28, 7),
-        _px(31, 7),
-        _px(33, 4),
+        _px(18, 16),
+        _px(20, 17),
+        _px(16, 16),
+        _px(21, 16),
+        _px(17, 18),
+        _px(19, 18),
+        _px(22, 16),
+        _px(15, 17),
+        _px(23, 17),
+        _px(18, 18),
     ],
     "sleep": _px(31, 21),
 }
@@ -601,6 +607,57 @@ def api_status():
 @app.get("/api/snapshot")
 def api_snapshot():
     return office.snapshot()
+
+
+def _latest_cron_meta(job_id: str) -> dict[str, Any] | None:
+    folder = CRON_OUTPUT / job_id
+    if not folder.is_dir():
+        return None
+    files = sorted(folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not files:
+        return None
+    p = files[0]
+    head = p.read_text(encoding="utf-8", errors="replace")[:800]
+    return {
+        "job_id": job_id,
+        "path": str(p),
+        "mtime": p.stat().st_mtime,
+        "name": p.name,
+        "header": head.split("## Response", 1)[0].strip()[:400],
+    }
+
+
+def _read_json_file(path: Path) -> Any | None:
+    if not path.is_file():
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+
+
+@app.get("/api/desk-brief")
+def api_desk_brief():
+    """CEO desk panel: attendance-pwa weather/news (cron deliverables) + cron meta."""
+    weather_path = ATTENDANCE_PWA / "data" / "weather" / "latest.json"
+    news_path = ATTENDANCE_PWA / "data" / "news" / "latest.json"
+    weather = _read_json_file(weather_path)
+    news = _read_json_file(news_path)
+    return {
+        "weather": weather,
+        "news": news,
+        "source": "be-pwa" if weather or news else "empty",
+        "paths": {
+            "weather": str(weather_path),
+            "news": str(news_path),
+            "weather_exists": weather_path.is_file(),
+            "news_exists": news_path.is_file(),
+        },
+        "cron": {
+            "company-weather-pwa": _latest_cron_meta(WEATHER_CRON_ID),
+            "daily-news-pwa": _latest_cron_meta(NEWS_CRON_ID),
+        },
+    }
 
 
 @app.websocket("/ws")

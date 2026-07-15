@@ -318,8 +318,68 @@ def make_tileset() -> None:
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL_WARM)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)
 
+    # 29 mahogany executive floor (gid 30)
+    MAHO_FL = (78, 46, 30, 255)
+    MAHO_FL2 = (96, 58, 38, 255)
+    ox, oy = tile_at(5, 3)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, MAHO_FL)
+    for i in range(0, TILE, 4):
+        fill(buf, w, ox, oy + i, ox + TILE, oy + i + 1, MAHO_FL2)
+
+    # 30 mahogany desk + gold trim + monitor (gid 31)
+    MAHO = (86, 48, 28, 255)
+    MAHO_TOP = (118, 70, 42, 255)
+    GOLD = (196, 160, 90, 255)
+    ox, oy = tile_at(6, 3)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox, oy + 8, ox + TILE, oy + TILE, MAHO)
+    fill(buf, w, ox, oy + 6, ox + TILE, oy + 9, MAHO_TOP)
+    fill(buf, w, ox, oy + 6, ox + TILE, oy + 7, GOLD)
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 6, MONITOR)
+    fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 5, (70, 160, 210, 255))
+
+    # 31 tall-back executive chair (gid 32)
+    EXE = (42, 32, 48, 255)
+    EXE2 = (62, 48, 72, 255)
+    ox, oy = tile_at(7, 3)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 3, oy + 1, ox + 13, oy + 10, EXE)   # tall back
+    fill(buf, w, ox + 2, oy + 9, ox + 14, oy + 15, EXE2)  # seat
+    fill(buf, w, ox + 4, oy + 2, ox + 12, oy + 4, GOLD)
+
+    # 32 city window view (gid 33)
+    CITY_SKY = (120, 170, 210, 255)
+    BLD = (40, 52, 72, 255)
+    WIN_LIT = (255, 220, 140, 255)
+    ox, oy = tile_at(0, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, CITY_SKY)
+    fill(buf, w, ox, oy, ox + TILE, oy + 2, (210, 230, 240, 255))  # frame top
+    for bx, bh in [(1, 10), (5, 13), (9, 8), (12, 12)]:
+        fill(buf, w, ox + bx, oy + (TILE - bh), ox + bx + 3, oy + TILE, BLD)
+        if bh > 9:
+            px(buf, w, ox + bx + 1, oy + TILE - bh + 2, WIN_LIT)
+            px(buf, w, ox + bx + 1, oy + TILE - bh + 5, WIN_LIT)
+
+    # 33 bookshelf (gid 34)
+    SHELF = (92, 58, 36, 255)
+    BOOK_COLS = [(160, 60, 50, 255), (50, 90, 140, 255), (200, 170, 80, 255), (70, 120, 80, 255)]
+    ox, oy = tile_at(1, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, SHELF)
+    for row, yy in enumerate((3, 7, 11)):
+        for i, c in enumerate(BOOK_COLS):
+            fill(buf, w, ox + 2 + i * 3, oy + yy, ox + 4 + i * 3, oy + yy + 3, c)
+
+    # 34 flower pot (gid 35)
+    ox, oy = tile_at(2, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 5, oy + 10, ox + 11, oy + 15, (150, 70, 55, 255))
+    fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 11, (200, 80, 120, 255))
+    fill(buf, w, ox + 6, oy + 1, ox + 10, oy + 4, (240, 120, 150, 255))
+    fill(buf, w, ox + 7, oy + 6, ox + 9, oy + 10, (60, 130, 70, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(5, 3), (6, 3), (7, 3), (0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -335,7 +395,8 @@ def make_map_json() -> None:
       작업실1 10×12 NW carpet  — x=1..10, y=1..12
       작업실2 10×12 SW oak     — x=1..10, y=15..26
       회의실   8×8  center     — x=16..23, y=4..11
-      휴게실   8×8  NE         — x=27..34, y=1..8
+      사장실  10×10 NE        — x=25..35 walls, interior 26..34 × 2..11
+      휴게실   open SE         — x=15..23, y=15..18 (no walls)
       수면실   5×5  SE         — x=29..33, y=19..23
       복도     2-wide spine    — x=12..13 (수직) + y=13..14 (수평)
       로비/입구               — y=26..28 center, doors on south wall
@@ -345,7 +406,8 @@ def make_map_json() -> None:
       9 sofa  10 plant  11 glassDoor  12 window  13 courtyard  14 bed  15 board
       16 coffee  17 glass  18 rug  19 poster  20 lamp  21 napFloor  22 concrete
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
-      29 creamWall
+      29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
+      34 bookshelf  35 flowerPot
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -399,13 +461,15 @@ def make_map_json() -> None:
     set_rect(floor, 1, 1, 11, 13, 2)      # work1 carpet
     set_rect(floor, 1, 15, 11, 27, 1)     # work2 oak
     set_rect(floor, 16, 4, 24, 12, 4)     # meeting sage
-    set_rect(floor, 27, 1, 35, 9, 5)      # lounge white
+    set_rect(floor, 25, 1, 36, 12, 30)    # ceo mahogany floor (10×10+)
+    set_rect(floor, 15, 15, 24, 19, 5)    # lounge open SE
     set_rect(floor, 29, 19, 34, 24, 21)   # sleep soft
     set_rect(floor, 12, 1, 14, 27, 22)    # vertical corridor
     set_rect(floor, 1, 13, 38, 15, 22)    # horizontal corridor
     set_rect(floor, 14, 26, 26, 29, 25)   # lobby wood
     set_rect(floor, 14, 15, 29, 26, 22)   # SE open hall/path
-    set_rect(floor, 24, 1, 27, 13, 22)    # NE hall between meet/lounge
+    set_rect(floor, 24, 1, 25, 13, 22)    # slim NE hall west of ceo
+    set_rect(floor, 15, 15, 24, 19, 5)    # re-apply lounge after SE hall
 
     # oak grain noise in work2
     for y in range(15, 27):
@@ -430,17 +494,17 @@ def make_map_json() -> None:
     door(19, 11)
     door(20, 11)
 
-    # lounge cream box 27..34 × 1..8
-    wall_h(27, 35, 1, 29)
-    wall_h(27, 35, 8, 3)
-    wall_v(27, 1, 9)
-    wall_v(34, 1, 9)
-    set_rect(floor, 28, 2, 34, 8, 5)
-    for x in range(28, 34):
-        floor[1][x] = 5
+    # ceo office 10×10+ — walls x=25..35, y=1..12; interior 26..34 × 2..11
+    wall_h(25, 36, 1, 29)
+    wall_h(25, 36, 12, 3)
+    wall_v(25, 1, 13)
+    wall_v(35, 1, 13)
+    set_rect(floor, 26, 2, 35, 12, 30)
+    for x in range(26, 35):
+        floor[1][x] = 30
         coll[1][x] = 0
-    door(27, 4)
-    door(27, 5)
+    door(25, 6)
+    door(25, 7)
 
     # sleep small room 29..33 × 19..23
     wall_h(29, 34, 19)
@@ -526,28 +590,46 @@ def make_map_json() -> None:
     put(18, 10, 18, False)
     put(19, 10, 18, False)
 
-    # lounge: sofa + coffee + round table + wall props
-    put(28, 2, 9)
-    put(29, 2, 9)
-    put(30, 2, 9)
-    put(31, 2, 9)
-    put(33, 3, 16)
-    put(32, 3, 16)
-    put(29, 5, 23)
-    put(30, 5, 23)
-    put(29, 6, 23)
-    put(30, 6, 23)
-    put(28, 5, 7)
-    put(31, 6, 7)
-    put(33, 6, 24)
-    put(33, 7, 20)
-    put(32, 2, 20)         # lamp behind sofa
-    # keep (28,4)/(28,6) clear — lounge doors at (27,4)/(27,5)
-    put(33, 2, 19, False)
-    put(31, 5, 18, False)
-    put(32, 6, 18, False)
-    put(29, 3, 10)         # plant off door path
-    put(30, 3, 10)
+    # ceo office: mahogany desk, executive chair, city windows, shelves, plants
+    for x in range(28, 33):
+        put(x, 5, 18, False)
+        put(x, 6, 18, False)
+    put(28, 4, 31)
+    put(29, 4, 31)
+    put(30, 4, 31)
+    put(31, 4, 31)
+    put(32, 4, 31)
+    put(30, 6, 32)          # executive chair (stand in front at y=7)
+    put(26, 3, 34)
+    put(26, 4, 34)
+    put(26, 8, 34)
+    put(26, 9, 34)
+    put(34, 3, 35)
+    put(34, 9, 10)
+    put(27, 4, 20)
+    put(33, 4, 20)
+    for x in range(27, 34):
+        put(x, 2, 33, False)  # city window strip
+    put(34, 5, 19, False)
+    put(34, 7, 19, False)
+    put(27, 9, 10)
+    put(33, 9, 35)
+
+    # lounge open SE: sofa + coffee + beanbag (idle / mascot)
+    put(16, 15, 9)
+    put(17, 15, 9)
+    put(18, 15, 9)
+    put(19, 15, 9)
+    put(21, 15, 16)
+    put(22, 15, 16)
+    put(17, 17, 23)
+    put(18, 17, 23)
+    put(16, 17, 7)
+    put(19, 17, 24)
+    put(22, 17, 20)
+    put(15, 16, 10)
+    put(23, 16, 10)
+    put(20, 16, 18, False)
 
     # sleep Nap Pod: bed + lamps + rugs
     put(31, 20, 14)
@@ -615,32 +697,35 @@ def make_map_json() -> None:
             {"x": 3, "y": 19},
         ],
         "meeting": {"x": 18, "y": 9},
-        "break": {"x": 31, "y": 4},
+        "break": {"x": 18, "y": 16},
         "lounge": [
-            {"x": 31, "y": 4},
-            {"x": 32, "y": 5},
-            {"x": 28, "y": 3},
-            {"x": 30, "y": 7},
-            {"x": 33, "y": 5},
-            {"x": 29, "y": 4},
-            {"x": 32, "y": 7},
-            {"x": 28, "y": 7},
-            {"x": 31, "y": 7},
-            {"x": 33, "y": 4},
+            {"x": 18, "y": 16},
+            {"x": 20, "y": 17},
+            {"x": 16, "y": 16},
+            {"x": 21, "y": 16},
+            {"x": 17, "y": 18},
+            {"x": 19, "y": 18},
+            {"x": 22, "y": 16},
+            {"x": 15, "y": 17},
+            {"x": 23, "y": 17},
+            {"x": 18, "y": 18},
         ],
+        "ceoDesk": {"x": 30, "y": 7},
+        "ceoOffice": {"xMin": 26, "yMin": 2, "xMax": 34, "yMax": 11},
         "sleep": {"x": 31, "y": 21},
         "entrance": {"x": 20, "y": 27},
+        "lobby": {"xMin": 14, "yMin": 26, "xMax": 25, "yMax": 28},
     }
 
     walk_pts = (
         waypoints["desks"]
         + waypoints["lounge"]
-        + [waypoints[k] for k in ("meeting", "break", "sleep", "entrance")]
+        + [waypoints[k] for k in ("meeting", "break", "sleep", "entrance", "ceoDesk")]
     )
     for p in walk_pts:
         x, y = p["x"], p["y"]
         coll[y][x] = 0
-        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27):
+        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27, 31, 32, 34, 35):
             decor[y][x] = 0
 
     def flat(layer):

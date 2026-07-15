@@ -28,6 +28,7 @@ import { WindowRain } from "../effects/windowRain.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
+import { createDeskBriefPanel } from "../ui/deskBriefPanel.js";
 import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
@@ -102,6 +103,8 @@ export class OfficeScene extends Phaser.Scene {
           sleep: { x: 31, y: 21 },
           entrance: { x: 20, y: 27 },
           lobby: { xMin: 14, yMin: 26, xMax: 25, yMax: 28 },
+          ceoDesk: { x: 30, y: 7 },
+          ceoOffice: { xMin: 26, yMin: 2, xMax: 34, yMax: 11 },
         };
 
     // start empty; first WS/mock snapshot fills from local Hermes profiles (or mock)
@@ -164,7 +167,7 @@ export class OfficeScene extends Phaser.Scene {
       .setScrollFactor(0)
       .setDepth(50);
 
-    // shown only when boss is within proximity of an agent
+    // shown only when boss is near agent or CEO desk
     this.hintLabel = this.add
       .text(40, 64, "E 상세", {
         fontFamily: "Segoe UI, sans-serif",
@@ -184,6 +187,7 @@ export class OfficeScene extends Phaser.Scene {
     this.live = false;
     this.lastSnapshot = null;
     this.kanbanPanel = createKanbanPanel();
+    this.deskBriefPanel = createDeskBriefPanel();
     this.refreshMockKanban();
     this.agents.forEach((agent, i) => {
       agent.idleUntil = this.time.now + 400 + i * 700;
@@ -204,6 +208,23 @@ export class OfficeScene extends Phaser.Scene {
     }
 
     this.initClockOut();
+
+    // click mahogany desk / exec chair → desk brief (when boss nearby)
+    this.input.on("pointerdown", (pointer) => {
+      if (pointer.rightButtonDown?.()) return;
+      const tw = this.map.tileWidth;
+      const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
+      const tx = Math.floor(wp.x / tw);
+      const ty = Math.floor(wp.y / tw);
+      const furn = this.furniture?.getTileAt(tx, ty);
+      const idx = furn?.index ?? 0;
+      if (idx === 31 || idx === 32) {
+        if (this.nearCeoDesk()) {
+          this.deskBriefPanel?.toggle();
+          this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
+        }
+      }
+    });
 
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
@@ -513,20 +534,43 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Hint next to follow glyph — only while boss is near an agent. */
+  /** Hint next to follow glyph — agent detail or CEO desk brief. */
   refreshInteractHud() {
     if (!this.hintLabel) return;
     const nearId = this.boss?.nearAgentId ?? null;
-    this.hintLabel.setVisible(!!nearId);
+    const nearDesk = this.nearCeoDesk();
+    this.hintLabel.setVisible(!!nearId || nearDesk);
+    this.hintLabel.setText(nearDesk && !nearId ? "E 데스크" : "E 상세");
+  }
+
+  nearCeoDesk() {
+    const desk = this.waypoints?.ceoDesk;
+    if (!desk || !this.boss?.sprite) return false;
+    const tw = this.map.tileWidth;
+    const bx = this.boss.sprite.x / tw;
+    const by = this.boss.sprite.y / tw;
+    return Math.hypot(bx - desk.x, by - desk.y) <= 2.25;
+  }
+
+  /** E near CEO desk → toggle weather/news panel. Returns true if handled. */
+  tryToggleDeskBrief() {
+    if (!this.nearCeoDesk()) {
+      if (this.deskBriefPanel?.open) this.deskBriefPanel.hide();
+      return false;
+    }
+    this.deskBriefPanel?.toggle();
+    this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
+    return true;
   }
 
   addZoneLabels() {
     const tw = this.map.tileWidth;
     const zones = [
       { name: "Open Desk", tx: 8, ty: 2 },
-      { name: "Lounge", tx: 31, ty: 2 },
-      { name: "War Room", tx: 25, ty: 7 },
+      { name: "사장실", tx: 30, ty: 2 },
+      { name: "War Room", tx: 19, ty: 5 },
       { name: "Focus", tx: 8, ty: 16 },
+      { name: "Lounge", tx: 18, ty: 14 },
       { name: "Nap Pod", tx: 31, ty: 16 },
       { name: "Lobby", tx: 20, ty: 26 },
     ];
@@ -693,6 +737,20 @@ export class OfficeScene extends Phaser.Scene {
           }
         : null,
       bossNearAgentId: boss?.nearAgentId ?? null,
+      nearCeoDesk: this.nearCeoDesk(),
+      deskBriefOpen: !!this.deskBriefPanel?.open,
+      deskBrief: this.deskBriefPanel?.lastPayload
+        ? {
+            source: this.deskBriefPanel.lastPayload.source,
+            weatherDate: this.deskBriefPanel.lastPayload.weather?.date,
+            newsDate: this.deskBriefPanel.lastPayload.news?.date,
+            headlineCount: Array.isArray(
+              this.deskBriefPanel.lastPayload.news?.markets?.kr?.items,
+            )
+              ? this.deskBriefPanel.lastPayload.news.markets.kr.items.length
+              : 0,
+          }
+        : null,
       lighting: this.lightingPreset?.name ?? null,
       effectKinds: Object.fromEntries(
         this.agents.map((a) => [a.def.id, a.getEffectKind()]),
