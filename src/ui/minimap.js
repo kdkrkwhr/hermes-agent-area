@@ -104,9 +104,12 @@ export class Minimap {
       .setInteractive({ useHandCursor: true });
 
     this.root.add([this.bg, this.dyn, this.hit]);
-    this.hit.on("pointerdown", (_pointer, localX, localY) =>
-      this.onClick(localX, localY),
-    );
+    this.hit.on("pointerdown", (pointer, localX, localY, event) => {
+      // keep desk/agent scene handlers from seeing this click
+      event?.stopPropagation?.();
+      pointer?.event?.stopPropagation?.();
+      this.onClick(localX, localY);
+    });
 
     this.layout();
     scene.scale.on("resize", () => this.layout());
@@ -120,6 +123,17 @@ export class Minimap {
     this.root.setPosition(x, y);
   }
 
+  /** Screen-space hit test (for scene-level pointer handlers). */
+  hitContains(sx, sy) {
+    if (!this.root || !this.enabled) return false;
+    return (
+      sx >= this.root.x &&
+      sx <= this.root.x + this.miniW &&
+      sy >= this.root.y &&
+      sy <= this.root.y + this.miniH
+    );
+  }
+
   /** Map world px → minimap local px. */
   worldToMini(wx, wy) {
     const mapW = this.scene.map.widthInPixels;
@@ -131,7 +145,7 @@ export class Minimap {
   }
 
   onClick(localX, localY) {
-    if (!this.root || this.scene.cameraFollow) return;
+    if (!this.root) return;
     if (localX < 0 || localY < 0 || localX > this.miniW || localY > this.miniH) {
       return;
     }
@@ -139,7 +153,12 @@ export class Minimap {
     const mapH = this.scene.map.heightInPixels;
     const wx = (localX / this.miniW) * mapW;
     const wy = (localY / this.miniH) * mapH;
-    this.scene.cameras.main.centerOn(wx, wy);
+    // follow → drop follow (no auto-resume); overview stretch can't pan, so free-look
+    if (typeof this.scene.panCameraTo === "function") {
+      this.scene.panCameraTo(wx, wy);
+    } else {
+      this.scene.cameras.main.centerOn(wx, wy);
+    }
   }
 
   update() {

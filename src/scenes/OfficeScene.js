@@ -31,6 +31,7 @@ import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
+import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -230,6 +231,8 @@ export class OfficeScene extends Phaser.Scene {
     // click mahogany desk / exec chair → desk brief (when boss nearby)
     this.input.on("pointerdown", (pointer) => {
       if (pointer.rightButtonDown?.()) return;
+      // minimap click is camera pan — don't treat as desk
+      if (this.minimap?.hitContains?.(pointer.x, pointer.y)) return;
       const tw = this.map.tileWidth;
       const wp = this.cameras.main.getWorldPoint(pointer.x, pointer.y);
       const tx = Math.floor(wp.x / tw);
@@ -401,6 +404,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow = new LampGlow(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
+    this.coffeeSteam = new CoffeeSteam(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
@@ -428,6 +432,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.sync();
     this.dustMotes?.sync();
     this.sunBeams?.sync();
+    this.coffeeSteam?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -518,11 +523,40 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   applyCameraMode() {
+    this.cameraFreePan = false;
     if (this.cameraFollow && this.boss?.sprite) {
       this.enableFollowCamera();
     } else {
       this.fitOfficeCamera();
     }
+  }
+
+  /**
+   * Minimap click: drop follow (no auto-resume), free-look zoom 2, centerOn world.
+   * Overview stretch fills the whole map so centerOn alone can't reveal a corner.
+   */
+  panCameraTo(wx, wy) {
+    if (this.cameraFollow) {
+      this.cameraFollow = false;
+      this.refreshFollowHud();
+    }
+    const cam = this.cameras.main;
+    const mapW = this.map.widthInPixels;
+    const mapH = this.map.heightInPixels;
+    cam.stopFollow();
+    cam.setBounds(0, 0, mapW, mapH);
+    cam.roundPixels = true;
+    cam.setZoom(2, 2);
+    // clamp before centerOn so midPoint/worldView match even pre-render
+    const halfW = cam.width / (2 * cam.zoomX);
+    const halfH = cam.height / (2 * cam.zoomY);
+    const cx = Math.min(Math.max(wx, halfW), Math.max(halfW, mapW - halfW));
+    const cy = Math.min(Math.max(wy, halfH), Math.max(halfH, mapH - halfH));
+    cam.centerOn(cx, cy);
+    // refresh matrix so publishDebug/smoke see the panned view immediately
+    if (typeof cam.preRender === "function") cam.preRender(1);
+    this.cameraFreePan = true;
+    this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
   }
 
   /** Boss-centered follow; uniform zoom 2; clamps to map bounds. */
@@ -765,6 +799,16 @@ export class OfficeScene extends Phaser.Scene {
       wsUrl: url,
       cameraZoom: this.cameras.main.zoom,
       cameraFollow: !!this.cameraFollow,
+      cameraFreePan: !!this.cameraFreePan,
+      cameraScroll: {
+        x: Math.round(this.cameras.main.scrollX),
+        y: Math.round(this.cameras.main.scrollY),
+      },
+      cameraCenter: {
+        // midPoint tracks centerOn; worldView can lag a frame
+        x: Math.round(this.cameras.main.midPoint?.x ?? this.cameras.main.worldView.centerX),
+        y: Math.round(this.cameras.main.midPoint?.y ?? this.cameras.main.worldView.centerY),
+      },
       kanbanPanel: this.kanbanPanel?.getState?.() ?? null,
       boss: boss
         ? {
@@ -808,6 +852,7 @@ export class OfficeScene extends Phaser.Scene {
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
+      steam: this.coffeeSteam?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
