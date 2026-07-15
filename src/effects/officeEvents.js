@@ -2,8 +2,18 @@
 
 import Phaser from "phaser";
 
-const RANDOM_KINDS = ["standup", "coffee_rush", "quiet_hours", "rain_shower"];
+const RANDOM_KINDS = [
+  "standup",
+  "coffee_rush",
+  "quiet_hours",
+  "rain_shower",
+  "lunch_rush",
+];
 const COFFEE_GID = 16;
+/** lunch hours local: higher pick weight for lunch_rush */
+const LUNCH_HOUR_START = 11;
+const LUNCH_HOUR_END = 14;
+const LUNCH_WEIGHT = 4;
 
 function parseEventsMode() {
   try {
@@ -82,6 +92,7 @@ export class OfficeEvents {
     this._toastTimer = null;
     this._shipCooldownUntil = 0;
     this.standupGathered = 0;
+    this.lunchGathered = 0;
   }
 
   start() {
@@ -134,7 +145,16 @@ export class OfficeEvents {
   fireRandom() {
     if (!this.enabled) return;
     const night = this.scene.lightingPreset?.name === "night";
-    const pool = RANDOM_KINDS.filter((k) => k !== "quiet_hours" || night);
+    const hour = new Date().getHours();
+    const lunchWindow =
+      hour >= LUNCH_HOUR_START && hour < LUNCH_HOUR_END;
+    const pool = [];
+    for (const k of RANDOM_KINDS) {
+      if (k === "quiet_hours" && !night) continue;
+      const weight =
+        k === "lunch_rush" && lunchWindow ? LUNCH_WEIGHT : 1;
+      for (let i = 0; i < weight; i++) pool.push(k);
+    }
     if (!pool.length) return;
     const kind = pool[Math.floor(Math.random() * pool.length)];
     this.fire(kind);
@@ -163,6 +183,7 @@ export class OfficeEvents {
     else if (kind === "ship_it") this.runShipIt(agent);
     else if (kind === "quiet_hours") this.runQuietHours();
     else if (kind === "rain_shower") this.runRainShower();
+    else if (kind === "lunch_rush") this.runLunchRush();
 
     this.publish();
   }
@@ -255,7 +276,20 @@ export class OfficeEvents {
   runCoffeeRush() {
     this.showToast("커피 러시");
     const { x, y } = findCoffeeTile(this.scene);
-    const emitter = this.scene.add.particles(x, y - 8, "fx-steam", {
+    this.spawnSteamBurst(x, y - 8, 3000);
+  }
+
+  /** toast + lounge steam + idle ≤3 → break/lounge 3–5s → wander. */
+  runLunchRush() {
+    this.showToast("점심 타임");
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    this.spawnSteamBurst(x, y - 8, 4000);
+    void this.gatherIdleToLounge();
+  }
+
+  spawnSteamBurst(x, y, ms = 3000) {
+    const emitter = this.scene.add.particles(x, y, "fx-steam", {
       speedX: { min: -18, max: 18 },
       speedY: { min: -48, max: -20 },
       scale: { start: 0.9, end: 0.1 },
@@ -266,7 +300,7 @@ export class OfficeEvents {
       tint: 0xeeeeee,
     });
     emitter.setDepth(11);
-    const stop = this.scene.time.delayedCall(3000, () => {
+    const stop = this.scene.time.delayedCall(ms, () => {
       emitter.stop();
       this.scene.time.delayedCall(900, () => emitter.destroy());
     });
@@ -274,6 +308,74 @@ export class OfficeEvents {
       stop.remove(false);
       emitter.destroy();
     });
+  }
+
+  /** Idle/break ≤3 → lounge spots; 3–5s 후 lounge wander 복귀. */
+  async gatherIdleToLounge() {
+    const agents = this.scene.agents || [];
+    const candidates = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    ).slice(0, 3);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const holdMs = 3000 + Math.floor(Math.random() * 2001);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      if (!isStandupGatherable(agent)) continue;
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + holdMs + 400;
+    }
+
+    this.lunchGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(holdMs, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
   }
 
   runShipIt(agent) {
@@ -387,6 +489,7 @@ export class OfficeEvents {
       lastEvent: this.lastEvent,
       lastAt: this.lastAt,
       standupGathered: this.standupGathered,
+      lunchGathered: this.lunchGathered,
     };
   }
 
