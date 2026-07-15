@@ -91,27 +91,19 @@ export class OfficeScene extends Phaser.Scene {
     this.fitOfficeCamera();
     this.scale.on("resize", () => this.fitOfficeCamera());
 
+    // connection status — DOM toolbar handles branding/hints
     this.hudLabel = this.add
-      .text(8, 8, "Hermes Agent Area · connecting…", {
+      .text(8, 8, "connecting…", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "10px",
-        color: "#f0c56d",
-        stroke: "#1a120c",
+        fontSize: "9px",
+        color: "#5ee0c8",
+        stroke: "#0b1016",
         strokeThickness: 3,
       })
       .setScrollFactor(0)
       .setDepth(50);
 
-    this.hintLabel = this.add
-      .text(8, 22, "WASD 대장님 이동", {
-        fontFamily: "Segoe UI, sans-serif",
-        fontSize: "9px",
-        color: "#c8b89a",
-        stroke: "#1a120c",
-        strokeThickness: 2,
-      })
-      .setScrollFactor(0)
-      .setDepth(50);
+    this.hintLabel = null;
 
     this.live = false;
     this.lastSnapshot = null;
@@ -222,16 +214,13 @@ export class OfficeScene extends Phaser.Scene {
     return panelState;
   }
 
-  /** Zoom/center so the full office fits the viewport. Integer zoom only (pixel-art). */
+  /** Canvas size == map size; keep zoom 1 so FIT shows the whole office. */
   fitOfficeCamera() {
     const cam = this.cameras.main;
     const mapW = this.map.widthInPixels;
     const mapH = this.map.heightInPixels;
-    const viewW = cam.width || this.scale.width;
-    const viewH = cam.height || this.scale.height;
-    const z = Math.max(1, Math.floor(Math.min(viewW / mapW, viewH / mapH)));
     cam.stopFollow();
-    cam.setZoom(z);
+    cam.setZoom(1);
     cam.centerOn(mapW / 2, mapH / 2);
     cam.setBounds(0, 0, mapW, mapH);
   }
@@ -251,14 +240,14 @@ export class OfficeScene extends Phaser.Scene {
         .text(z.tx * tw + tw / 2, z.ty * tw + 2, z.name, {
           fontFamily: "Segoe UI, sans-serif",
           fontSize: "8px",
-          color: "#ffe8c8",
-          stroke: "#2a1c12",
+          color: "#9fd6e8",
+          stroke: "#0b1016",
           strokeThickness: 3,
           resolution: 2,
         })
         .setOrigin(0.5, 0)
         .setDepth(5)
-        .setAlpha(0.85);
+        .setAlpha(0.8);
     }
   }
 
@@ -266,8 +255,7 @@ export class OfficeScene extends Phaser.Scene {
     const url = resolveWsUrl();
     // Pages(HTTPS) + ws://localhost = 브라우저가 차단 → 가짜 휴식만 보임
     if (isPagesLocalWsBlocked()) {
-      this.hudLabel.setText("⚠ Pages→localhost WS 막힘 · npm run dev 쓰셈");
-      this.hintLabel?.setText("실시간 상태: 로컬 FE 또는 ?ws=wss://터널/ws");
+      this.hudLabel.setText("⚠ Pages→localhost WS 막힘 · npm run dev / ?ws=wss://…");
       this.refreshMockKanban({ disconnected: true });
       return;
     }
@@ -275,14 +263,13 @@ export class OfficeScene extends Phaser.Scene {
     try {
       ws = new WebSocket(url);
     } catch (e) {
-      this.hudLabel.setText("Hermes Agent Area · WS fail → mock");
+      this.hudLabel.setText("WS fail → mock");
       this.refreshMockKanban();
       return;
     }
     this.ws = ws;
     ws.onopen = () => {
-      this.hudLabel.setText("Hermes Agent Area · live");
-      this.hintLabel?.setText("WASD 대장님 이동");
+      this.hudLabel.setText("live");
       this.setLive(true);
     };
     ws.onmessage = (ev) => {
@@ -301,12 +288,12 @@ export class OfficeScene extends Phaser.Scene {
       }
     };
     ws.onerror = () => {
-      this.hudLabel.setText("Hermes Agent Area · WS error → mock");
+      this.hudLabel.setText("WS error → mock");
       if (!this.lastSnapshot?.mock) this.refreshMockKanban();
     };
     ws.onclose = () => {
       this.setLive(false);
-      this.hudLabel.setText("Hermes Agent Area · offline mock");
+      this.hudLabel.setText("offline mock");
       if (!this.lastSnapshot?.mock) this.refreshMockKanban();
       this.time.delayedCall(3000, () => this.connectWs());
     };

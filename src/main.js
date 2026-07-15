@@ -2,11 +2,22 @@ import "./style.css";
 import Phaser from "phaser";
 import { OfficeScene } from "./scenes/OfficeScene.js";
 
-const hud = document.createElement("div");
-hud.className = "hud";
-hud.innerHTML =
-  "<strong>Hermes Agent Area</strong><br />WASD로 대장님 이동 · 에이전트 근처 말풍선";
-document.body.appendChild(hud);
+/** Map is 40×30 tiles @ 16px — canvas must match or FIT crops the office. */
+const MAP_W = 40 * 16;
+const MAP_H = 30 * 16;
+
+const toolbar = document.createElement("div");
+toolbar.className = "toolbar";
+toolbar.innerHTML = `
+  <div class="toolbar__brand">
+    <strong>Hermes Agent Area</strong>
+    <span class="toolbar__hint">WASD 이동 · 클릭=칸반 상세</span>
+  </div>
+  <div class="toolbar__actions">
+    <button type="button" class="toolbar__btn" data-role="toggle-kanban" aria-pressed="true">칸반</button>
+  </div>
+`;
+document.body.appendChild(toolbar);
 
 const parent = document.getElementById("app");
 
@@ -16,9 +27,9 @@ const preferCanvas =
 const game = new Phaser.Game({
   type: preferCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent,
-  width: 24 * 16,
-  height: 18 * 16,
-  backgroundColor: "#1a1714",
+  width: MAP_W,
+  height: MAP_H,
+  backgroundColor: "#0f1419",
   pixelArt: true,
   roundPixels: true,
   antialias: false,
@@ -26,8 +37,8 @@ const game = new Phaser.Game({
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
-    width: 24 * 16,
-    height: 18 * 16,
+    width: MAP_W,
+    height: MAP_H,
   },
   callbacks: {
     postBoot: (g) => {
@@ -42,3 +53,12 @@ const game = new Phaser.Game({
 });
 
 window.__HERMES_GAME__ = game;
+
+toolbar.querySelector('[data-role="toggle-kanban"]')?.addEventListener("click", (ev) => {
+  const btn = ev.currentTarget;
+  const panel = document.querySelector(".kanban-panel");
+  if (!panel) return;
+  const collapsed = panel.classList.toggle("is-collapsed");
+  btn.setAttribute("aria-pressed", collapsed ? "false" : "true");
+  btn.classList.toggle("is-off", collapsed);
+});

@@ -19,12 +19,12 @@ export class Boss {
     this.sprite.setOrigin(0.5, 0.85);
 
     this.nameLabel = scene.add
-      .text(px, py - 22, "대장님", {
+      .text(px, py - 20, "대장님", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "9px",
-        color: "#ffe8a0",
+        fontSize: "8px",
+        color: "#7dffb2",
         align: "center",
-        stroke: "#1a120c",
+        stroke: "#0b1016",
         strokeThickness: 3,
         resolution: 2,
       })
@@ -33,12 +33,12 @@ export class Boss {
 
     this.bubbleBg = scene.add.graphics().setDepth(21);
     this.bubbleText = scene.add
-      .text(px, py - 28, "", {
+      .text(px, py - 26, "", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "7px",
-        color: "#222",
+        fontSize: "6px",
+        color: "#0e1620",
         align: "center",
-        wordWrap: { width: 64 },
+        wordWrap: { width: 48 },
         resolution: 2,
       })
       .setOrigin(0.5, 1)
@@ -202,9 +202,9 @@ export class Boss {
     const x = this.sprite.x - w / 2;
     const y = this.sprite.y - 38 - h;
     this.bubbleBg.clear();
-    this.bubbleBg.fillStyle(0xfff6e4, 0.92);
+    this.bubbleBg.fillStyle(0xd8f4f0, 0.94);
     this.bubbleBg.fillRoundedRect(x, y, w, h, 2);
-    this.bubbleBg.lineStyle(1, 0x5a4a38, 1);
+    this.bubbleBg.lineStyle(1, 0x2a4a56, 1);
     this.bubbleBg.strokeRoundedRect(x, y, w, h, 2);
     this.bubbleBg.fillTriangle(
       this.sprite.x - 2,

@@ -46,40 +46,40 @@ def rect(buf: bytearray, w: int, x0: int, y0: int, x1: int, y1: int, color: tupl
         px(buf, w, x1 - 1, y, color)
 
 
-# Warm office palette
-FLOOR = (222, 198, 168, 255)
-FLOOR2 = (208, 184, 154, 255)
-FLOOR_WOOD = (196, 158, 118, 255)
-WALL = (118, 92, 74, 255)
-WALL_TOP = (148, 118, 96, 255)
-WALL_WARM = (140, 108, 88, 255)
-CARPET = (168, 118, 90, 255)  # warm terracotta meeting rug
-CARPET2 = (150, 100, 76, 255)
-BREAK_FLOOR = (236, 214, 178, 255)
-SLEEP_FLOOR = (120, 130, 150, 255)  # cool quiet
-SLEEP_FLOOR2 = (100, 110, 132, 255)
-DESK = (140, 96, 60, 255)
-DESK_TOP = (186, 142, 96, 255)
-CHAIR = (70, 90, 120, 255)
-MONITOR = (50, 55, 65, 255)
-SCREEN = (120, 200, 160, 255)
-SOFA = (180, 90, 70, 255)
-TABLE = (160, 120, 80, 255)
-DOOR = (160, 110, 70, 255)
-WINDOW = (190, 220, 235, 255)
-PLANT = (60, 130, 70, 255)
-POT = (140, 90, 50, 255)
-BED = (90, 110, 150, 255)
-BED_SHEET = (230, 235, 245, 255)
-CANVAS = (245, 240, 230, 255)
-CANVAS_FRAME = (120, 90, 60, 255)
-COFFEE = (70, 70, 75, 255)
-COFFEE_ACCENT = (200, 150, 80, 255)
-BOARD = (240, 242, 245, 255)
-BOARD_FRAME = (90, 80, 70, 255)
-RUG = (170, 70, 60, 255)
-FRAME_ART = (210, 170, 120, 255)
-LAMP = (255, 230, 160, 255)
+# Cool trendy office palette (slate / teal / soft cyan — not warm wood)
+FLOOR = (48, 58, 72, 255)
+FLOOR2 = (58, 70, 86, 255)
+FLOOR_WOOD = (64, 78, 96, 255)  # cool concrete strip
+WALL = (36, 44, 56, 255)
+WALL_TOP = (72, 88, 108, 255)
+WALL_WARM = (52, 62, 78, 255)  # kept name; cool slate alt
+CARPET = (46, 92, 110, 255)  # teal meeting rug
+CARPET2 = (36, 78, 96, 255)
+BREAK_FLOOR = (56, 72, 88, 255)
+SLEEP_FLOOR = (42, 48, 68, 255)
+SLEEP_FLOOR2 = (34, 40, 58, 255)
+DESK = (70, 82, 98, 255)
+DESK_TOP = (96, 112, 132, 255)
+CHAIR = (58, 98, 120, 255)
+MONITOR = (28, 34, 44, 255)
+SCREEN = (80, 220, 200, 255)
+SOFA = (72, 110, 140, 255)
+TABLE = (86, 100, 118, 255)
+DOOR = (78, 98, 120, 255)
+WINDOW = (160, 210, 230, 255)
+PLANT = (64, 168, 130, 255)
+POT = (70, 82, 96, 255)
+BED = (70, 88, 120, 255)
+BED_SHEET = (210, 220, 235, 255)
+CANVAS = (230, 236, 244, 255)
+CANVAS_FRAME = (70, 84, 100, 255)
+COFFEE = (52, 60, 72, 255)
+COFFEE_ACCENT = (90, 200, 190, 255)
+BOARD = (236, 242, 248, 255)
+BOARD_FRAME = (60, 72, 88, 255)
+RUG = (48, 120, 140, 255)
+FRAME_ART = (120, 170, 190, 255)
+LAMP = (180, 230, 240, 255)
 TRANS = (0, 0, 0, 0)
 
 
@@ -92,7 +92,7 @@ def make_tileset() -> None:
     def tile_at(ti: int, tj: int) -> tuple[int, int]:
         return ti * TILE, tj * TILE
 
-    # 0 floor warm wood-grain dots
+    # 0 cool slate floor grain
     ox, oy = tile_at(0, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
     for i in range(0, TILE, 4):
@@ -111,17 +111,17 @@ def make_tileset() -> None:
     for x in range(0, TILE, 4):
         px(buf, w, ox + x, oy + 8, WALL_WARM)
 
-    # 3 carpet meeting (warm terracotta)
+    # 3 carpet meeting (teal)
     ox, oy = tile_at(3, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, CARPET)
     for i in range(0, TILE, 2):
         px(buf, w, ox + i, oy + 7, CARPET2)
 
-    # 4 break room floor (sunny warm)
+    # 4 break room floor (cool lounge)
     ox, oy = tile_at(4, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
-    px(buf, w, ox + 3, oy + 4, (250, 230, 190, 255))
-    px(buf, w, ox + 11, oy + 10, (250, 230, 190, 255))
+    px(buf, w, ox + 3, oy + 4, (100, 180, 190, 255))
+    px(buf, w, ox + 11, oy + 10, (100, 180, 190, 255))
 
     # 5 desk + monitor (code)
     ox, oy = tile_at(5, 0)
@@ -160,7 +160,7 @@ def make_tileset() -> None:
     ox, oy = tile_at(2, 1)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
     fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 15, DOOR)
-    px(buf, w, ox + 11, oy + 8, (220, 200, 80, 255))
+    px(buf, w, ox + 11, oy + 8, (120, 230, 210, 255))
 
     # 11 window (bright)
     ox, oy = tile_at(3, 1)
@@ -172,7 +172,7 @@ def make_tileset() -> None:
 
     # 12 void dark
     ox, oy = tile_at(4, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (40, 35, 30, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (18, 24, 34, 255))
 
     # 13 bed
     ox, oy = tile_at(5, 1)
@@ -187,8 +187,8 @@ def make_tileset() -> None:
     fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 12, CANVAS_FRAME)
     fill(buf, w, ox + 4, oy + 3, ox + 12, oy + 11, CANVAS)
     # simple "art"
-    fill(buf, w, ox + 5, oy + 5, ox + 11, oy + 8, (180, 140, 100, 255))
-    px(buf, w, ox + 7, oy + 6, (90, 140, 180, 255))
+    fill(buf, w, ox + 5, oy + 5, ox + 11, oy + 8, (90, 140, 170, 255))
+    px(buf, w, ox + 7, oy + 6, (110, 210, 200, 255))
     # easel legs
     fill(buf, w, ox + 5, oy + 12, ox + 7, oy + 15, CANVAS_FRAME)
     fill(buf, w, ox + 9, oy + 12, ox + 11, oy + 15, CANVAS_FRAME)
@@ -199,7 +199,7 @@ def make_tileset() -> None:
     fill(buf, w, ox + 4, oy + 4, ox + 12, oy + 14, COFFEE)
     fill(buf, w, ox + 5, oy + 5, ox + 11, oy + 8, COFFEE_ACCENT)
     fill(buf, w, ox + 6, oy + 9, ox + 10, oy + 12, (40, 40, 45, 255))
-    px(buf, w, ox + 8, oy + 6, (255, 240, 200, 255))  # light
+    px(buf, w, ox + 8, oy + 6, (160, 240, 230, 255))  # light
 
     # 16 whiteboard
     ox, oy = tile_at(0, 2)
@@ -209,33 +209,33 @@ def make_tileset() -> None:
     # scribbles
     for x in range(4, 12, 2):
         px(buf, w, ox + x, oy + 6, (60, 90, 140, 255))
-    fill(buf, w, ox + 4, oy + 9, ox + 11, oy + 10, (200, 80, 70, 255))
+    fill(buf, w, ox + 4, oy + 9, ox + 11, oy + 10, (70, 160, 190, 255))
 
     # 17 rug / carpet piece
     ox, oy = tile_at(1, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
     fill(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, RUG)
-    rect(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, (120, 50, 45, 255))
-    fill(buf, w, ox + 4, oy + 5, ox + 12, oy + 11, (190, 90, 75, 255))
+    rect(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, (36, 90, 108, 255))
+    fill(buf, w, ox + 4, oy + 5, ox + 12, oy + 11, (64, 150, 170, 255))
 
     # 18 wall picture frame
     ox, oy = tile_at(2, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)
-    fill(buf, w, ox + 3, oy + 4, ox + 13, oy + 13, (90, 70, 50, 255))
+    fill(buf, w, ox + 3, oy + 4, ox + 13, oy + 13, (50, 64, 80, 255))
     fill(buf, w, ox + 4, oy + 5, ox + 12, oy + 12, FRAME_ART)
-    px(buf, w, ox + 7, oy + 8, (80, 120, 90, 255))
+    px(buf, w, ox + 7, oy + 8, (90, 200, 170, 255))
 
     # 19 floor lamp glow tile
     ox, oy = tile_at(3, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 7, oy + 2, ox + 9, oy + 14, (90, 80, 70, 255))
+    fill(buf, w, ox + 7, oy + 2, ox + 9, oy + 14, (70, 84, 100, 255))
     fill(buf, w, ox + 5, oy + 1, ox + 11, oy + 5, LAMP)
-    # soft glow
+    # soft cool glow
     for dy in range(5, 12):
         for dx in range(4, 12):
             if (dx - 8) ** 2 + (dy - 8) ** 2 < 20:
-                px(buf, w, ox + dx, oy + dy, (255, 240, 200, 60))
+                px(buf, w, ox + dx, oy + dy, (160, 230, 240, 60))
 
     # 20 sleep floor
     ox, oy = tile_at(4, 2)
@@ -243,11 +243,11 @@ def make_tileset() -> None:
     for i in range(0, TILE, 3):
         px(buf, w, ox + i, oy + (i * 2) % TILE, SLEEP_FLOOR2)
 
-    # 21 corridor runner (warm strip)
+    # 21 corridor runner (cool strip)
     ox, oy = tile_at(5, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR_WOOD)
-    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (180, 140, 100, 255))
-    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (150, 110, 75, 255))
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (70, 100, 120, 255))
+    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (50, 78, 98, 255))
 
     # 22 round meeting table center piece
     ox, oy = tile_at(6, 2)
@@ -262,7 +262,7 @@ def make_tileset() -> None:
     ox, oy = tile_at(7, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
     fill(buf, w, ox + 3, oy + 6, ox + 13, oy + 13, TABLE)
-    fill(buf, w, ox + 5, oy + 4, ox + 11, oy + 7, (230, 220, 200, 255))  # cups
+    fill(buf, w, ox + 5, oy + 4, ox + 11, oy + 7, (190, 220, 230, 255))  # cups
 
     # 24 wood floor bright (entry)
     ox, oy = tile_at(0, 3)
@@ -292,7 +292,7 @@ def make_tileset() -> None:
     fill(buf, w, ox + 2, oy + 4, ox + 14, oy + 12, (80, 90, 120, 255))
     rect(buf, w, ox + 2, oy + 4, ox + 14, oy + 12, (60, 70, 100, 255))
 
-    # rest of tiles stay transparent/unused — fill warm wall alt
+    # rest of tiles — cool wall alt
     ox, oy = tile_at(4, 3)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL_WARM)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)

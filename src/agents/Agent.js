@@ -3,7 +3,7 @@ import { pickStatus } from "../mock.js";
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 100; // match BE 100px/s
 
-function truncateBubble(text, maxChars = 56) {
+function truncateBubble(text, maxChars = 28) {
   const raw = String(text ?? "").replace(/\s+/g, " ").trim();
   if (raw.length <= maxChars) return raw;
   return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
@@ -37,12 +37,12 @@ export class Agent {
     });
 
     this.nameLabel = scene.add
-      .text(px, py - 22, `${def.displayName}\n(${def.profile})`, {
+      .text(px, py - 20, def.displayName, {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "9px",
-        color: "#fff8e8",
+        fontSize: "8px",
+        color: "#c8e8f4",
         align: "center",
-        stroke: "#1a120c",
+        stroke: "#0b1016",
         strokeThickness: 3,
         resolution: 2,
       })
@@ -51,12 +51,12 @@ export class Agent {
 
     this.bubbleBg = scene.add.graphics().setDepth(21);
     this.bubbleText = scene.add
-      .text(px, py - 28, "", {
+      .text(px, py - 26, "", {
         fontFamily: "Segoe UI, sans-serif",
-        fontSize: "7px",
-        color: "#222",
+        fontSize: "6px",
+        color: "#0e1620",
         align: "center",
-        wordWrap: { width: 64 },
+        wordWrap: { width: 48 },
         resolution: 2,
       })
       .setOrigin(0.5, 1)
@@ -107,7 +107,7 @@ export class Agent {
   setStatus(text) {
     this.statusText = text;
     // long live-WS lines must not bury the sprite — keep short display
-    const shown = truncateBubble(text, 56);
+    const shown = truncateBubble(text, 28);
     this.bubbleText.setText(shown);
     this.drawBubble();
   }
@@ -134,11 +134,11 @@ export class Agent {
     const y = this.sprite.y - 38 - h;
 
     this.bubbleBg.clear();
-    this.bubbleBg.fillStyle(0xfff6e4, 0.92);
+    this.bubbleBg.fillStyle(0xd8f4f0, 0.94);
     this.bubbleBg.fillRoundedRect(x, y, w, h, 2);
-    this.bubbleBg.lineStyle(1, 0x5a4a38, 1);
+    this.bubbleBg.lineStyle(1, 0x2a4a56, 1);
     this.bubbleBg.strokeRoundedRect(x, y, w, h, 2);
-    this.bubbleBg.fillStyle(0xfff6e4, 0.92);
+    this.bubbleBg.fillStyle(0xd8f4f0, 0.94);
     this.bubbleBg.fillTriangle(
       this.sprite.x - 2,
       y + h,
