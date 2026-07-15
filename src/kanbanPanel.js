@@ -41,7 +41,7 @@ function statusClass(status) {
   return "kb-idle";
 }
 
-export function createKanbanPanel() {
+export function createKanbanPanel({ onLocate } = {}) {
   const root = document.createElement("aside");
   root.className = "kanban-panel";
   root.innerHTML = `
@@ -66,6 +66,11 @@ export function createKanbanPanel() {
   let selectedId = null;
   let lastAgents = [];
 
+  function emitLocate(id) {
+    if (!id || typeof onLocate !== "function") return;
+    onLocate(id);
+  }
+
   function renderDetail(agent) {
     if (!agent) {
       elDetail.hidden = true;
@@ -85,6 +90,7 @@ export function createKanbanPanel() {
         <dt>게이트웨이</dt><dd>${escapeHtml(agent.gateway || "—")}</dd>
         <dt>프로필</dt><dd><code>${escapeHtml(agent.profile || "—")}</code></dd>
       </dl>
+      <button type="button" class="kanban-panel__locate" data-role="locate">찾아가기</button>
     `;
   }
 
@@ -101,6 +107,15 @@ export function createKanbanPanel() {
         <span class="kanban-panel__task" title="${escapeAttr(title)}">${escapeHtml(title)}</span>
       `;
       li.addEventListener("click", () => toggleAgent(a.id));
+      li.addEventListener("dblclick", (e) => {
+        e.preventDefault();
+        selectedId = a.id;
+        renderDetail(a);
+        renderList(lastAgents);
+        lastPanelState = { ...lastPanelState, selectedId };
+        lastSnapshotKey = "";
+        emitLocate(a.id);
+      });
       elList.appendChild(li);
     }
   }
@@ -126,6 +141,13 @@ export function createKanbanPanel() {
     renderList(lastAgents);
     lastPanelState = { ...lastPanelState, selectedId: null };
     lastSnapshotKey = "";
+  });
+
+  elDetail.addEventListener("click", (e) => {
+    const btn = e.target.closest?.('[data-role="locate"]');
+    if (!btn || !selectedId) return;
+    e.preventDefault();
+    emitLocate(selectedId);
   });
 
   let lastPanelState = { stats: { running: 0, blocked: 0 }, selectedId: null, agentCount: 0, mode: "offline" };

@@ -10,6 +10,7 @@
     "gen:assets": "python scripts/gen_assets.py",
     "smoke": "node scripts/smoke.mjs",
     "smoke:kanban": "node scripts/smoke-kanban.mjs",
+    "smoke:locate": "node scripts/smoke-locate.mjs",
     "smoke:clockout": "node scripts/smoke-clockout.mjs",
     "smoke:room": "node scripts/smoke-room.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"

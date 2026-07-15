@@ -31,6 +31,12 @@ import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
+import {
+  burstTaskCelebrate,
+  celebrateEnabledFromQuery,
+  isTaskCompleteTransition,
+  maybeForceCelebrate,
+} from "../effects/taskCelebrate.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -202,7 +208,10 @@ export class OfficeScene extends Phaser.Scene {
 
     this.live = false;
     this.lastSnapshot = null;
-    this.kanbanPanel = createKanbanPanel();
+    this.locateEnabled = this.parseLocateEnabled();
+    this.kanbanPanel = createKanbanPanel({
+      onLocate: (agentId) => this.locateAgent(agentId),
+    });
     this.deskBriefPanel = createDeskBriefPanel({
       onPayload: (payload) => this.weatherFx?.onDeskBriefPayload(payload),
     });
@@ -404,8 +413,10 @@ export class OfficeScene extends Phaser.Scene {
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
+    this.celebrateEnabled = celebrateEnabledFromQuery();
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
+    maybeForceCelebrate(this, this.agents);
 
     this.input.keyboard?.on("keydown-L", () => {
       this.devTimeIndex =
@@ -440,6 +451,11 @@ export class OfficeScene extends Phaser.Scene {
 
     this.officeAudio?.playStatusSfx(kind, prev);
     this.officeEvents?.onStatusTransition(prev, kind, agent);
+
+    // running|chatting → idle (effect kind collapses chatting→running)
+    if (this.celebrateEnabled && isTaskCompleteTransition(prev, kind)) {
+      burstTaskCelebrate(this, agent);
+    }
 
     // live only: running → idle = 칸반 작업 끝 → PWA/Chrome 알림
     if (this.live && prev === "running" && kind === "idle") {
@@ -511,6 +527,70 @@ export class OfficeScene extends Phaser.Scene {
   parseFollowDefault() {
     const q = new URLSearchParams(location.search).get("follow");
     return q === "1" || q === "true";
+  }
+
+  /** `?locate=0` disables kanban → camera fly-to. */
+  parseLocateEnabled() {
+    const q = new URLSearchParams(location.search).get("locate");
+    return !(q === "0" || q === "false");
+  }
+
+  /**
+   * Kanban locate: unfollow if needed, free-look zoom 2, pan to agent sprite (Power2).
+   * Missing agent → toast. `?locate=0` → no-op.
+   */
+  locateAgent(agentId) {
+    if (!this.locateEnabled) return { ok: false, reason: "locate-off" };
+    const id = String(agentId || "");
+    const agent = this.agentsById[id] || this.agentsByProfile[id];
+    if (!agent?.sprite) {
+      this.showOfficeToast("오프라인 / 미접속");
+      return { ok: false, reason: "missing" };
+    }
+
+    if (this.cameraFollow) {
+      this.cameraFollow = false;
+      this.refreshFollowHud();
+    }
+
+    const cam = this.cameras.main;
+    const mapW = this.map.widthInPixels;
+    const mapH = this.map.heightInPixels;
+    cam.stopFollow();
+    cam.setBounds(0, 0, mapW, mapH);
+    cam.roundPixels = true;
+    cam.setZoom(2, 2);
+
+    const wx = agent.sprite.x;
+    const wy = agent.sprite.y;
+    const halfW = cam.width / (2 * cam.zoomX);
+    const halfH = cam.height / (2 * cam.zoomY);
+    const cx = Math.min(Math.max(wx, halfW), Math.max(halfW, mapW - halfW));
+    const cy = Math.min(Math.max(wy, halfH), Math.max(halfH, mapH - halfH));
+
+    this.cameraFreePan = true;
+    cam.pan(cx, cy, 400, "Power2");
+    this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
+    return { ok: true, x: cx, y: cy, agentId: agent.def?.id || id };
+  }
+
+  showOfficeToast(text) {
+    let el = document.getElementById("office-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "office-toast";
+      el.className = "office-toast";
+      el.setAttribute("role", "status");
+      document.body.appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.add("is-visible");
+    el.classList.remove("is-out");
+    if (this._locateToastTimer) clearTimeout(this._locateToastTimer);
+    this._locateToastTimer = setTimeout(() => {
+      el.classList.add("is-out");
+      el.classList.remove("is-visible");
+    }, 2600);
   }
 
   toggleCameraFollow() {
@@ -797,6 +877,7 @@ export class OfficeScene extends Phaser.Scene {
       cameraZoom: this.cameras.main.zoom,
       cameraFollow: !!this.cameraFollow,
       cameraFreePan: !!this.cameraFreePan,
+      locateEnabled: this.locateEnabled !== false,
       cameraScroll: {
         x: Math.round(this.cameras.main.scrollX),
         y: Math.round(this.cameras.main.scrollY),

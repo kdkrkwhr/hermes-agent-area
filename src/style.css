@@ -237,6 +237,24 @@ body,
   color: var(--accent);
 }
 
+.kanban-panel__locate {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: rgba(94, 224, 200, 0.12);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.kanban-panel__locate:hover {
+  background: rgba(94, 224, 200, 0.22);
+}
+
 .kanban-detail__name {
   font-weight: 700;
   color: var(--accent);
