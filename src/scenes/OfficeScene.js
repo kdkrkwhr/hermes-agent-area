@@ -316,27 +316,28 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  /** Boss-centered follow; integer zoom 2; clamps to map bounds. */
+  /** Boss-centered follow; uniform zoom 2; clamps to map bounds. */
   enableFollowCamera() {
     const cam = this.cameras.main;
     const mapW = this.map.widthInPixels;
     const mapH = this.map.heightInPixels;
     cam.setBounds(0, 0, mapW, mapH);
     cam.roundPixels = true;
-    cam.setZoom(2);
+    cam.setZoom(2, 2); // reset stretch from overview
     cam.startFollow(this.boss.sprite, true, 0.12, 0.12);
   }
 
-  /** COVER viewport: no side bars on wide PC (may crop a little on aspect mismatch). */
+  /** Stretch office to fill viewport (no letterbox, no crop). Slight squash on bad aspect OK. */
   fitOfficeCamera() {
     const cam = this.cameras.main;
     const mapW = this.map.widthInPixels;
     const mapH = this.map.heightInPixels;
     cam.stopFollow();
     cam.setBounds(0, 0, mapW, mapH);
-    // Math.max = cover (fill). Math.min left letterbox + setBounds clamped scroll to one side.
-    const zoom = Math.max(cam.width / mapW, cam.height / mapH) || 1;
-    cam.setZoom(zoom);
+    // Independent zoomX/Y = exact stretch. Uniform FIT/COVER left empty sides or cut the bottom.
+    const zx = cam.width / mapW || 1;
+    const zy = cam.height / mapH || 1;
+    cam.setZoom(zx, zy);
     cam.centerOn(mapW / 2, mapH / 2);
   }
 
