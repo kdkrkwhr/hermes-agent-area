@@ -1,12 +1,16 @@
 import { chromium } from "playwright";
 
+const base =
+  process.env.SMOKE_BASE || "http://localhost:5173/hermes-agent-area/";
+const url = `${base.replace(/\/?$/, "/")}?events=0`;
+
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 
 // events=0 so random fire doesn't race the test
-await page.goto("http://127.0.0.1:5173/?events=0", {
+await page.goto(url, {
   waitUntil: "networkidle",
   timeout: 30000,
 });
@@ -14,8 +18,17 @@ await page.goto("http://127.0.0.1:5173/?events=0", {
 await page.waitForFunction(() => window.__HERMES_AREA__?.ready === true, null, {
   timeout: 15000,
 });
+// postBoot sets ready before OfficeScene.create finishes — wait for events
+await page.waitForFunction(
+  () => {
+    const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+    return !!(sc?.officeEvents && (sc.agents?.length ?? 0) >= 2);
+  },
+  null,
+  { timeout: 15000 },
+);
 
-const result = await page.evaluate(async () => {
+await page.evaluate(() => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
   const oe = sc.officeEvents;
   oe.enabled = true;
@@ -37,8 +50,19 @@ const result = await page.evaluate(async () => {
   }
 
   oe.fire("standup");
-  await new Promise((r) => setTimeout(r, 1000));
+});
 
+// sequential pathfinds — wait until ≥1 idle arrived at meeting
+await page.waitForFunction(
+  () => (window.__HERMES_AREA__?.events?.standupGathered ?? 0) >= 1,
+  null,
+  { timeout: 20000 },
+);
+
+const result = await page.evaluate(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const oe = sc.officeEvents;
+  const agents = sc.agents || [];
   const meet = sc.waypoints?.meeting || { x: 18, y: 9 };
   return {
     agentCount: agents.length,
