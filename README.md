@@ -20,6 +20,7 @@ Hermes 멀티 에이전트를 **ZEP 스타일 2D 가상 사무실**에서 실시
 | **구역** | Open Desk · Lounge · War Room · Focus · Nap Pod · Lobby |
 | **오프라인 미리보기** | BE 없이도 mock으로 맵·UI 확인 가능 (GitHub Pages) |
 | **PWA 설치** | Chrome에서「앱으로 설치」→ 독립 창. Pages·로컬 둘 다 가능 |
+| **작업 완료 알림** | 툴바 **알림** 허용 후, live에서 running→idle이면 Chrome/앱 알림 |
 
 ## 구조
 
@@ -66,6 +67,13 @@ npm install && npm run dev
 3. 독립 창으로 실행됨 (탭 없이). 오프라인에서도 마지막 캐시된 맵 표시
 
 실시간 연동은 여전히 **로컬 BE**가 떠 있어야 함. Pages에서 설치한 PWA는 HTTPS라 `ws://localhost`가 막히므로, live 쓰려면 로컬 FE에서 설치하거나 cloudflare 터널 `?ws=`를 쓰세요.
+
+### 작업 완료 알림
+
+1. 툴바 **알림** 클릭 → 브라우저 알림 권한 허용
+2. live 연결 상태에서 에이전트가 **running → idle**(칸반 작업 끝)이면 알림
+3. 다시 **알림** 누르면 on/off 토글 (권한은 유지)
+4. 앱을 최소화해도 SW가 `showNotification`으로 띄움 · 클릭 시 Area 창 포커스
 
 ## 에이전트 이름 (Hermes 프로필)
 

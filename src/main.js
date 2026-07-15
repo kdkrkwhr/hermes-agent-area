@@ -3,6 +3,13 @@ import Phaser from "phaser";
 import { OfficeScene } from "./scenes/OfficeScene.js";
 import { MAP_W, MAP_H } from "./constants.js";
 import { mountConnectPanel } from "./connectPanel.js";
+import {
+  notifyEnabled,
+  notifyToolbarLabel,
+  requestNotifyPermission,
+  sendNotify,
+  setNotifyEnabled,
+} from "./notify.js";
 
 // PWA: Chrome「앱으로 설치」/ 독립 창
 if ("serviceWorker" in navigator) {
@@ -21,11 +28,22 @@ toolbar.innerHTML = `
   </div>
   <div class="toolbar__actions">
     <button type="button" class="toolbar__btn" data-role="toggle-connect">연결</button>
+    <button type="button" class="toolbar__btn" data-role="toggle-notify">알림</button>
     <button type="button" class="toolbar__btn is-off" data-role="toggle-follow" aria-pressed="false">팔로우</button>
     <button type="button" class="toolbar__btn" data-role="toggle-kanban" aria-pressed="true">칸반</button>
   </div>
 `;
 document.body.appendChild(toolbar);
+
+function refreshNotifyBtn() {
+  const btn = toolbar.querySelector('[data-role="toggle-notify"]');
+  if (!btn) return;
+  btn.textContent = notifyToolbarLabel();
+  const on = notifyEnabled();
+  btn.classList.toggle("is-off", !on);
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+}
+refreshNotifyBtn();
 
 const connectPanel = mountConnectPanel({
   onReconnect: () => {
@@ -71,6 +89,27 @@ window.__HERMES_GAME__ = game;
 
 toolbar.querySelector('[data-role="toggle-connect"]')?.addEventListener("click", () => {
   connectPanel.open();
+});
+
+toolbar.querySelector('[data-role="toggle-notify"]')?.addEventListener("click", async () => {
+  if (typeof Notification === "undefined") return;
+  if (Notification.permission === "denied") {
+    refreshNotifyBtn();
+    return;
+  }
+  if (Notification.permission !== "granted") {
+    const perm = await requestNotifyPermission();
+    if (perm === "granted") {
+      sendNotify("알림 켜짐", "에이전트 작업 완료 시 알려줄게", "notify-on");
+    }
+    refreshNotifyBtn();
+    return;
+  }
+  // already granted — toggle on/off
+  const next = !notifyEnabled();
+  setNotifyEnabled(next);
+  if (next) sendNotify("알림 켜짐", "에이전트 작업 완료 시 알려줄게", "notify-on");
+  refreshNotifyBtn();
 });
 
 toolbar.querySelector('[data-role="toggle-follow"]')?.addEventListener("click", () => {

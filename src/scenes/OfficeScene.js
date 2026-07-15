@@ -24,6 +24,7 @@ import { deskFxEnabledFromQuery } from "../effects/deskGlow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { Minimap } from "../ui/minimap.js";
+import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
 export class OfficeScene extends Phaser.Scene {
@@ -217,6 +218,11 @@ export class OfficeScene extends Phaser.Scene {
 
     this.officeAudio?.playStatusSfx(kind, prev);
     this.officeEvents?.onStatusTransition(prev, kind, agent);
+
+    // live only: running → idle = 칸반 작업 끝 → PWA/Chrome 알림
+    if (this.live && prev === "running" && kind === "idle") {
+      notifyAgentDone(agent);
+    }
 
     const old = this.agentEmitters.get(agent.def.id);
     if (old) {
