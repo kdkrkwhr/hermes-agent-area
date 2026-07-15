@@ -38,6 +38,15 @@ export function registerEffectTextures(scene) {
   q.fillRect(3, 3, 2, 4);
   q.generateTexture("fx-question", 8, 8);
   q.destroy();
+
+  // soft rising "Z" for Nap Pod / offline (recolored fx-question silhouette)
+  const z = scene.make.graphics({ add: false });
+  z.fillStyle(0xb8c8e8, 1);
+  z.fillRect(1, 1, 6, 2);
+  z.fillRect(4, 3, 2, 2);
+  z.fillRect(1, 5, 6, 2);
+  z.generateTexture("fx-zzz", 8, 8);
+  z.destroy();
 }
 
 function sparkConfig(follow) {
@@ -86,15 +95,34 @@ function questionConfig(follow) {
   };
 }
 
+function zzzConfig(follow) {
+  return {
+    follow,
+    followOffset: { x: 2, y: -24 },
+    speedX: { min: -3, max: 8 },
+    speedY: { min: -14, max: -6 },
+    scale: { start: 0.9, end: 0.25 },
+    alpha: { start: 0.7, end: 0 },
+    lifespan: { min: 900, max: 1400 },
+    frequency: 520,
+    quantity: 1,
+    tint: [0xb8c8e8, 0xd0d8f0, 0x9aacc8],
+    rotate: { min: -8, max: 12 },
+  };
+}
+
 export function createStatusEmitter(scene, kind, follow) {
-  if (kind === "offline" || kind === "away") return null;
+  if (kind === "away") return null;
   if (kind === "running") {
     return scene.add.particles(0, 0, "fx-spark", sparkConfig(follow));
   }
   if (kind === "blocked") {
     return scene.add.particles(0, 0, "fx-question", questionConfig(follow));
   }
-  // idle / break / sleep mock
+  if (kind === "sleep" || kind === "offline") {
+    return scene.add.particles(0, 0, "fx-zzz", zzzConfig(follow));
+  }
+  // idle / break lounge steam
   return scene.add.particles(0, 0, "fx-steam", steamConfig(follow));
 }
 

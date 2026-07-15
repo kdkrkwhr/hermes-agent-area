@@ -119,12 +119,15 @@ export class Agent {
   /** Particle/lighting hook: live server status or mock room kind. */
   getEffectKind() {
     if (this.live && this.serverStatus) {
-      // chatting uses same desk FX as running
-      return this.serverStatus === "chatting" ? "running" : this.serverStatus;
+      if (this.serverStatus === "chatting") return "running";
+      // offline → Nap Pod Zzz (not desk absence / no spark)
+      if (this.serverStatus === "offline") return "sleep";
+      return this.serverStatus;
     }
     if (this.currentKind === "desk") return "running";
     if (this.currentKind === "meeting") return "blocked";
-    if (this.currentKind === "break" || this.currentKind === "sleep") return "idle";
+    if (this.currentKind === "sleep") return "sleep";
+    if (this.currentKind === "break") return "idle";
     return "idle";
   }
 
@@ -237,6 +240,34 @@ export class Agent {
     return { ...dest, kind: "break" };
   }
 
+  /** Pathfind to tile; empty/fail → false, no throw. */
+  async moveToTile(tx, ty) {
+    if (this.busy) return false;
+    this.busy = true;
+    try {
+      const from = this.tilePos();
+      if (from.x === tx && from.y === ty) {
+        this.path = [];
+        this.pathIndex = 0;
+        return true;
+      }
+      const path = await this.scene.pathfinder.findPath(
+        from.x,
+        from.y,
+        tx,
+        ty,
+      );
+      if (!path.length) return false;
+      this.path = path.slice(1);
+      this.pathIndex = 0;
+      return true;
+    } catch {
+      return false;
+    } finally {
+      this.busy = false;
+    }
+  }
+
   async wanderLounge() {
     if (this.busy) return;
     // live+idle: stroll lounge; mock: same path when break-biased
@@ -307,6 +338,19 @@ export class Agent {
     const destY = agentMsg.dest_y ?? agentMsg.y;
     if (destX == null || destY == null) return;
 
+    // zone hint for FX (sleep = Nap Pod Zzz; break = lounge steam)
+    if (agentMsg.zone === "sleep" || agentMsg.status === "offline") {
+      this.currentKind = "sleep";
+    } else if (agentMsg.zone === "meeting" || agentMsg.status === "blocked") {
+      this.currentKind = "meeting";
+    } else if (
+      agentMsg.zone === "desk" ||
+      agentMsg.status === "running" ||
+      agentMsg.status === "chatting"
+    ) {
+      this.currentKind = "desk";
+    }
+
     // idle: stroll lounge locally — don't yank back to BE dest every poll
     if (agentMsg.status === "idle") {
       this.currentKind = "break";
@@ -362,7 +406,10 @@ export class Agent {
         this.sprite.anims.play(idleKey, true);
       }
       if (!this.busy && time >= this.idleUntil) {
-        if (this.live && this.serverStatus === "idle") {
+        if (this.serverStatus === "offline" || this.currentKind === "sleep") {
+          // Nap Pod — stay put (no lounge wander / mock roam)
+          this.idleUntil = time + 999999;
+        } else if (this.live && this.serverStatus === "idle") {
           this.idleUntil = time + 2200 + Math.random() * 3800;
           this.wanderLounge();
         } else if (!this.live) {

@@ -89,7 +89,8 @@ def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
     if status == "blocked":
         return "meeting", WAYPOINTS["meeting"]
     if status == "offline":
-        return "away", desk
+        # gateway cold/disconnected → Nap Pod (not desk away)
+        return "sleep", WAYPOINTS["sleep"]
     if status == "idle":
         return "break", _idle_lounge_dest(home_desk)
     return "break", WAYPOINTS["break"]
