@@ -327,14 +327,15 @@ export class OfficeScene extends Phaser.Scene {
     cam.startFollow(this.boss.sprite, true, 0.12, 0.12);
   }
 
-  /** Fill viewport; zoom so the whole office is visible (no side letterbox on wide PC). */
+  /** COVER viewport: no side bars on wide PC (may crop a little on aspect mismatch). */
   fitOfficeCamera() {
     const cam = this.cameras.main;
     const mapW = this.map.widthInPixels;
     const mapH = this.map.heightInPixels;
     cam.stopFollow();
     cam.setBounds(0, 0, mapW, mapH);
-    const zoom = Math.min(cam.width / mapW, cam.height / mapH) || 1;
+    // Math.max = cover (fill). Math.min left letterbox + setBounds clamped scroll to one side.
+    const zoom = Math.max(cam.width / mapW, cam.height / mapH) || 1;
     cam.setZoom(zoom);
     cam.centerOn(mapW / 2, mapH / 2);
   }
