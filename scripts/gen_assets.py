@@ -855,7 +855,8 @@ def draw_cat_frame(
     FUR = (230, 150, 70, 255)
     FUR_DK = (190, 110, 50, 255)
     BELLY = (245, 220, 180, 255)
-    EYE = (30, 28, 26, 255)
+    EYE_A = (80, 190, 90, 255)  # amber-green iris
+    PUPIL = (20, 18, 16, 255)
     NOSE = (220, 100, 110, 255)
     WHISK = (40, 35, 30, 200)
 
@@ -885,8 +886,10 @@ def draw_cat_frame(
         fill(buf, sheet_w, ox + 12, oy + 14 + bob, ox + 15, oy + 16 + bob - leg, FUR_DK)
 
     if facing == "down":
-        px(buf, sheet_w, ox + 6, oy + 8 + bob, EYE)
-        px(buf, sheet_w, ox + 9, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 6, oy + 8 + bob, EYE_A)
+        px(buf, sheet_w, ox + 9, oy + 8 + bob, EYE_A)
+        px(buf, sheet_w, ox + 6, oy + 9 + bob, PUPIL)
+        px(buf, sheet_w, ox + 9, oy + 9 + bob, PUPIL)
         px(buf, sheet_w, ox + 7, oy + 10 + bob, NOSE)
         px(buf, sheet_w, ox + 8, oy + 10 + bob, NOSE)
         px(buf, sheet_w, ox + 3, oy + 10 + bob, WHISK)
@@ -894,11 +897,13 @@ def draw_cat_frame(
     elif facing == "up":
         fill(buf, sheet_w, ox + 5, oy + 4 + bob, ox + 11, oy + 7 + bob, FUR_DK)
     elif facing == "left":
-        px(buf, sheet_w, ox + 5, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 5, oy + 8 + bob, EYE_A)
+        px(buf, sheet_w, ox + 5, oy + 9 + bob, PUPIL)
         px(buf, sheet_w, ox + 5, oy + 10 + bob, NOSE)
         px(buf, sheet_w, ox + 2, oy + 10 + bob, WHISK)
     else:
-        px(buf, sheet_w, ox + 10, oy + 8 + bob, EYE)
+        px(buf, sheet_w, ox + 10, oy + 8 + bob, EYE_A)
+        px(buf, sheet_w, ox + 10, oy + 9 + bob, PUPIL)
         px(buf, sheet_w, ox + 10, oy + 10 + bob, NOSE)
         px(buf, sheet_w, ox + 13, oy + 10 + bob, WHISK)
 

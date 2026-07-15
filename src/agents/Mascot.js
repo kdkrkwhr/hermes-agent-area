@@ -1,7 +1,7 @@
 /** Ambient lounge/corridor cat — no click, no chat. `?mascot=0` disables. */
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
-const SPEED = 70; // keep clear of agent paths
+const SPEED = 52; // lazy lounge pace (agents ~200)
 const SHEET = "char-mascot";
 const ID = "mascot";
 
@@ -47,7 +47,7 @@ export class Mascot {
           frames: scene.anims.generateFrameNumbers(SHEET, {
             frames: [row * 3, row * 3 + 1, row * 3 + 2, row * 3 + 1],
           }),
-          frameRate: 6,
+          frameRate: 5,
           repeat: -1,
         });
       }
@@ -121,7 +121,7 @@ export class Mascot {
       }
       if (!this.busy && time >= this.idleUntil) {
         // long pauses so we don't clog agent pathfinding
-        this.idleUntil = time + 2800 + Math.random() * 5200;
+        this.idleUntil = time + 3500 + Math.random() * 6500;
         this.wander();
       }
       return;
@@ -141,7 +141,7 @@ export class Mascot {
       if (this.pathIndex >= this.path.length) {
         this.path = [];
         this.pathIndex = 0;
-        this.idleUntil = time + 2200 + Math.random() * 4500;
+        this.idleUntil = time + 3000 + Math.random() * 5500;
       }
     } else {
       this.sprite.x += (dx / dist) * step;
