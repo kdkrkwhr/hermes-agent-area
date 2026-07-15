@@ -1,4 +1,4 @@
-﻿"""Generate office tileset + 16-bit style character sheets (procedural, no external deps)."""
+"""Generate Silicon Valley open-office tileset + map + character sheets."""
 from __future__ import annotations
 
 import json
@@ -12,14 +12,13 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "public" / "assets"
 OUT.mkdir(parents=True, exist_ok=True)
 
-DRAW_TILE = 16  # procedural draw unit
-EXPORT_TILE = 32  # shipped tile / map size (2×)
+DRAW_TILE = 16
+EXPORT_TILE = 32
 ASSET_SCALE = EXPORT_TILE // DRAW_TILE
-TILE = DRAW_TILE  # drawing helpers use 16px grid
+TILE = DRAW_TILE
 
 
 def upscale_rgba(rgba: bytes, w: int, h: int, factor: int) -> tuple[bytes, int, int]:
-    """Nearest-neighbor upscale for pixel-art PNGs."""
     if factor <= 1:
         return rgba, w, h
     nw, nh = w * factor, h * factor
@@ -37,6 +36,7 @@ def upscale_rgba(rgba: bytes, w: int, h: int, factor: int) -> tuple[bytes, int, 
 def write_png(path: Path, w: int, h: int, rgba: bytes, scale: int = 1) -> None:
     if scale > 1:
         rgba, w, h = upscale_rgba(rgba, w, h, scale)
+
     def chunk(tag: bytes, data: bytes) -> bytes:
         return struct.pack(">I", len(data)) + tag + data + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
 
@@ -69,45 +69,48 @@ def rect(buf: bytearray, w: int, x0: int, y0: int, x1: int, y1: int, color: tupl
         px(buf, w, x1 - 1, y, color)
 
 
-# Cool trendy office palette (slate / teal / soft cyan — not warm wood)
-FLOOR = (48, 58, 72, 255)
-FLOOR2 = (58, 70, 86, 255)
-FLOOR_WOOD = (64, 78, 96, 255)  # cool concrete strip
-WALL = (36, 44, 56, 255)
-WALL_TOP = (72, 88, 108, 255)
-WALL_WARM = (52, 62, 78, 255)  # kept name; cool slate alt
-CARPET = (46, 92, 110, 255)  # teal meeting rug
-CARPET2 = (36, 78, 96, 255)
-BREAK_FLOOR = (56, 72, 88, 255)
-SLEEP_FLOOR = (42, 48, 68, 255)
-SLEEP_FLOOR2 = (34, 40, 58, 255)
-DESK = (70, 82, 98, 255)
-DESK_TOP = (96, 112, 132, 255)
-CHAIR = (58, 98, 120, 255)
-MONITOR = (28, 34, 44, 255)
-SCREEN = (80, 220, 200, 255)
-SOFA = (72, 110, 140, 255)
-TABLE = (86, 100, 118, 255)
-DOOR = (78, 98, 120, 255)
-WINDOW = (160, 210, 230, 255)
-PLANT = (64, 168, 130, 255)
-POT = (70, 82, 96, 255)
-BED = (70, 88, 120, 255)
-BED_SHEET = (210, 220, 235, 255)
-CANVAS = (230, 236, 244, 255)
-CANVAS_FRAME = (70, 84, 100, 255)
-COFFEE = (52, 60, 72, 255)
-COFFEE_ACCENT = (90, 200, 190, 255)
-BOARD = (236, 242, 248, 255)
-BOARD_FRAME = (60, 72, 88, 255)
-RUG = (48, 120, 140, 255)
-FRAME_ART = (120, 170, 190, 255)
-LAMP = (180, 230, 240, 255)
+# Silicon Valley loft — bright wood, glass, sage, soft cream (not dungeon navy)
+FLOOR = (232, 220, 196, 255)  # light oak
+FLOOR2 = (214, 224, 230, 255)  # soft gray carpet
+FLOOR_WOOD = (210, 186, 150, 255)
+WALL = (244, 240, 234, 255)  # plaster
+WALL_TOP = (198, 210, 218, 255)
+WALL_WARM = (236, 230, 220, 255)
+CARPET = (186, 214, 198, 255)  # sage meeting
+CARPET2 = (160, 196, 178, 255)
+BREAK_FLOOR = (248, 246, 242, 255)  # white terrazzo
+SLEEP_FLOOR = (226, 232, 242, 255)
+SLEEP_FLOOR2 = (210, 218, 232, 255)
+DESK = (120, 92, 68, 255)
+DESK_TOP = (176, 140, 102, 255)
+CHAIR = (72, 120, 132, 255)
+MONITOR = (36, 42, 52, 255)
+SCREEN = (120, 210, 230, 255)
+SOFA = (90, 140, 150, 255)
+TABLE = (168, 140, 108, 255)
+DOOR = (180, 210, 220, 255)
+WINDOW = (170, 210, 235, 255)
+SKY = (210, 230, 245, 255)
+PLANT = (72, 168, 110, 255)
+POT = (150, 120, 90, 255)
+BED = (160, 180, 210, 255)
+BED_SHEET = (248, 250, 252, 255)
+CANVAS = (250, 248, 242, 255)
+CANVAS_FRAME = (120, 100, 80, 255)
+COFFEE = (70, 74, 82, 255)
+COFFEE_ACCENT = (90, 190, 170, 255)
+BOARD = (252, 252, 250, 255)
+BOARD_FRAME = (140, 150, 160, 255)
+RUG = (120, 170, 160, 255)
+FRAME_ART = (110, 180, 170, 255)
+LAMP = (255, 236, 180, 255)
+BEAN = (230, 140, 110, 255)
+GLASS = (200, 220, 230, 180)
 TRANS = (0, 0, 0, 0)
 
 
 def make_tileset() -> None:
-    # 8 cols x 6 rows = 48 tiles
+    """Chunky furniture on transparent/minimal bg — readable on big open map."""
     cols, rows = 8, 6
     w, h = cols * TILE, rows * TILE
     buf = bytearray(w * h * 4)
@@ -115,214 +118,454 @@ def make_tileset() -> None:
     def tile_at(ti: int, tj: int) -> tuple[int, int]:
         return ti * TILE, tj * TILE
 
-    # 0 cool slate floor grain
+    # 0 light oak
     ox, oy = tile_at(0, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
     for i in range(0, TILE, 4):
-        px(buf, w, ox + i, oy + (i * 3) % TILE, FLOOR2)
+        fill(buf, w, ox, oy + i, ox + TILE, oy + i + 1, (220, 206, 178, 255))
 
-    # 1 floor alt
+    # 1 soft carpet
     ox, oy = tile_at(1, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
-    for i in range(2, TILE, 5):
-        px(buf, w, ox + i, oy + 8, FLOOR_WOOD)
+    for i in range(0, TILE, 5):
+        px(buf, w, ox + i, oy + (i * 2) % TILE, (200, 212, 220, 255))
 
-    # 2 wall
+    # 2 soft plaster wall
     ox, oy = tile_at(2, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)
-    for x in range(0, TILE, 4):
-        px(buf, w, ox + x, oy + 8, WALL_WARM)
+    fill(buf, w, ox, oy + TILE - 2, ox + TILE, oy + TILE, (220, 214, 204, 255))
 
-    # 3 carpet meeting (teal)
+    # 3 sage zone carpet
     ox, oy = tile_at(3, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, CARPET)
-    for i in range(0, TILE, 2):
-        px(buf, w, ox + i, oy + 7, CARPET2)
+    rect(buf, w, ox, oy, ox + TILE, oy + TILE, CARPET2)
 
-    # 4 break room floor (cool lounge)
+    # 4 lounge / kitchen white
     ox, oy = tile_at(4, 0)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
-    px(buf, w, ox + 3, oy + 4, (100, 180, 190, 255))
-    px(buf, w, ox + 11, oy + 10, (100, 180, 190, 255))
+    for i in range(2, TILE, 6):
+        px(buf, w, ox + i, oy + 6, (230, 228, 224, 255))
 
-    # 5 desk + monitor (code)
+    # 5 BIG desk + monitor (fills tile)
     ox, oy = tile_at(5, 0)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 1, oy + 6, ox + 15, oy + 14, DESK)
-    fill(buf, w, ox + 2, oy + 4, ox + 14, oy + 8, DESK_TOP)
-    fill(buf, w, ox + 5, oy + 2, ox + 11, oy + 6, MONITOR)
-    fill(buf, w, ox + 6, oy + 3, ox + 10, oy + 5, SCREEN)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox, oy + 7, ox + TILE, oy + TILE, DESK)
+    fill(buf, w, ox, oy + 5, ox + TILE, oy + 8, DESK_TOP)
+    fill(buf, w, ox + 3, oy + 1, ox + 13, oy + 6, MONITOR)
+    fill(buf, w, ox + 4, oy + 2, ox + 12, oy + 5, SCREEN)
 
-    # 6 chair
+    # 6 BIG chair
     ox, oy = tile_at(6, 0)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 4, oy + 6, ox + 12, oy + 13, CHAIR)
-    fill(buf, w, ox + 5, oy + 3, ox + 11, oy + 7, CHAIR)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 2, oy + 5, ox + 14, oy + 15, CHAIR)
+    fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 8, CHAIR)
+    fill(buf, w, ox + 4, oy + 1, ox + 12, oy + 3, (90, 150, 160, 255))
 
-    # 7 meeting table
+    # 7 meeting table leaf
     ox, oy = tile_at(7, 0)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, CARPET)
-    fill(buf, w, ox + 1, oy + 4, ox + 15, oy + 12, TABLE)
-    rect(buf, w, ox + 1, oy + 4, ox + 15, oy + 12, DESK)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 3, ox + 15, oy + 13, TABLE)
+    rect(buf, w, ox + 1, oy + 3, ox + 15, oy + 13, DESK)
 
-    # 8 sofa
+    # 8 BIG sofa segment
     ox, oy = tile_at(0, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
-    fill(buf, w, ox + 1, oy + 5, ox + 15, oy + 13, SOFA)
-    fill(buf, w, ox + 1, oy + 3, ox + 15, oy + 7, SOFA)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox, oy + 4, ox + TILE, oy + 15, SOFA)
+    fill(buf, w, ox, oy + 2, ox + TILE, oy + 7, (110, 160, 168, 255))
+    fill(buf, w, ox + 1, oy + 1, ox + 5, oy + 5, (120, 170, 175, 255))  # cushion
 
-    # 9 plant
+    # 9 BIG plant (fills tile)
     ox, oy = tile_at(1, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 6, oy + 10, ox + 10, oy + 14, POT)
-    fill(buf, w, ox + 5, oy + 3, ox + 11, oy + 11, PLANT)
-    px(buf, w, ox + 8, oy + 2, PLANT)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 5, oy + 11, ox + 11, oy + 16, POT)
+    fill(buf, w, ox + 2, oy + 2, ox + 14, oy + 12, PLANT)
+    fill(buf, w, ox + 4, oy + 0, ox + 12, oy + 4, (56, 150, 96, 255))
+    px(buf, w, ox + 8, oy + 1, (40, 120, 70, 255))
 
-    # 10 door
+    # 10 glass door
     ox, oy = tile_at(2, 1)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
-    fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 15, DOOR)
-    px(buf, w, ox + 11, oy + 8, (120, 230, 210, 255))
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, DOOR)
+    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, WALL_TOP)
+    px(buf, w, ox + 12, oy + 8, (80, 200, 180, 255))
 
-    # 11 window (bright)
+    # 11 bright window + sky
     ox, oy = tile_at(3, 1)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
-    fill(buf, w, ox + 2, oy + 3, ox + 14, oy + 12, WINDOW)
-    rect(buf, w, ox + 2, oy + 3, ox + 14, oy + 12, WALL_TOP)
-    # light glow
-    fill(buf, w, ox + 4, oy + 5, ox + 12, oy + 10, (220, 235, 245, 255))
+    fill(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, WINDOW)
+    fill(buf, w, ox + 2, oy + 3, ox + 14, oy + 12, SKY)
+    fill(buf, w, ox + 3, oy + 9, ox + 13, oy + 12, (190, 215, 180, 255))  # hills
+    rect(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, WALL_TOP)
 
-    # 12 void dark
+    # 12 outdoor / void (light courtyard hint)
     ox, oy = tile_at(4, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (18, 24, 34, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (180, 200, 160, 255))
+    for i in range(0, TILE, 3):
+        px(buf, w, ox + i, oy + 10, (150, 180, 120, 255))
 
-    # 13 bed
+    # 13 nap pod / bed BIG
     ox, oy = tile_at(5, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, SLEEP_FLOOR)
-    fill(buf, w, ox + 1, oy + 4, ox + 15, oy + 14, BED)
-    fill(buf, w, ox + 2, oy + 5, ox + 14, oy + 12, BED_SHEET)
-    fill(buf, w, ox + 2, oy + 5, ox + 6, oy + 9, (250, 248, 245, 255))  # pillow
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox, oy + 3, ox + TILE, oy + 15, BED)
+    fill(buf, w, ox + 1, oy + 4, ox + 15, oy + 13, BED_SHEET)
+    fill(buf, w, ox + 1, oy + 4, ox + 7, oy + 9, (255, 255, 255, 255))
 
-    # 14 canvas / easel
+    # 14 whiteboard / standup board BIG
     ox, oy = tile_at(6, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 12, CANVAS_FRAME)
-    fill(buf, w, ox + 4, oy + 3, ox + 12, oy + 11, CANVAS)
-    # simple "art"
-    fill(buf, w, ox + 5, oy + 5, ox + 11, oy + 8, (90, 140, 170, 255))
-    px(buf, w, ox + 7, oy + 6, (110, 210, 200, 255))
-    # easel legs
-    fill(buf, w, ox + 5, oy + 12, ox + 7, oy + 15, CANVAS_FRAME)
-    fill(buf, w, ox + 9, oy + 12, ox + 11, oy + 15, CANVAS_FRAME)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 14, BOARD_FRAME)
+    fill(buf, w, ox + 2, oy + 2, ox + 14, oy + 13, BOARD)
+    fill(buf, w, ox + 3, oy + 5, ox + 12, oy + 6, (80, 160, 190, 255))
+    fill(buf, w, ox + 4, oy + 8, ox + 10, oy + 9, (60, 120, 140, 255))
 
-    # 15 coffee machine
+    # 15 coffee bar / island
     ox, oy = tile_at(7, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
-    fill(buf, w, ox + 4, oy + 4, ox + 12, oy + 14, COFFEE)
-    fill(buf, w, ox + 5, oy + 5, ox + 11, oy + 8, COFFEE_ACCENT)
-    fill(buf, w, ox + 6, oy + 9, ox + 10, oy + 12, (40, 40, 45, 255))
-    px(buf, w, ox + 8, oy + 6, (160, 240, 230, 255))  # light
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox, oy + 6, ox + TILE, oy + 15, (190, 170, 140, 255))
+    fill(buf, w, ox + 2, oy + 3, ox + 14, oy + 12, COFFEE)
+    fill(buf, w, ox + 4, oy + 4, ox + 12, oy + 7, COFFEE_ACCENT)
+    fill(buf, w, ox + 6, oy + 8, ox + 10, oy + 11, (40, 40, 45, 255))
 
-    # 16 whiteboard
+    # 16 glass partition
     ox, oy = tile_at(0, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, CARPET)
-    fill(buf, w, ox + 1, oy + 2, ox + 15, oy + 13, BOARD_FRAME)
-    fill(buf, w, ox + 2, oy + 3, ox + 14, oy + 12, BOARD)
-    # scribbles
-    for x in range(4, 12, 2):
-        px(buf, w, ox + x, oy + 6, (60, 90, 140, 255))
-    fill(buf, w, ox + 4, oy + 9, ox + 11, oy + 10, (70, 160, 190, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, GLASS)
+    rect(buf, w, ox, oy, ox + TILE, oy + TILE, (160, 190, 205, 255))
+    fill(buf, w, ox + 7, oy, ox + 9, oy + TILE, (170, 200, 215, 200))
 
-    # 17 rug / carpet piece
+    # 17 rug leaf BIG
     ox, oy = tile_at(1, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, RUG)
-    rect(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, (36, 90, 108, 255))
-    fill(buf, w, ox + 4, oy + 5, ox + 12, oy + 11, (64, 150, 170, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, RUG)
+    rect(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, (90, 140, 130, 255))
+    fill(buf, w, ox + 4, oy + 4, ox + 12, oy + 12, (140, 190, 175, 255))
 
-    # 18 wall picture frame
+    # 18 wall poster / art
     ox, oy = tile_at(2, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)
-    fill(buf, w, ox + 3, oy + 4, ox + 13, oy + 13, (50, 64, 80, 255))
-    fill(buf, w, ox + 4, oy + 5, ox + 12, oy + 12, FRAME_ART)
-    px(buf, w, ox + 7, oy + 8, (90, 200, 170, 255))
+    fill(buf, w, ox + 2, oy + 3, ox + 14, oy + 14, (80, 90, 100, 255))
+    fill(buf, w, ox + 3, oy + 4, ox + 13, oy + 13, FRAME_ART)
+    fill(buf, w, ox + 5, oy + 6, ox + 11, oy + 10, (255, 200, 120, 255))
 
-    # 19 floor lamp glow tile
+    # 19 floor lamp BIG
     ox, oy = tile_at(3, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 7, oy + 2, ox + 9, oy + 14, (70, 84, 100, 255))
-    fill(buf, w, ox + 5, oy + 1, ox + 11, oy + 5, LAMP)
-    # soft cool glow
-    for dy in range(5, 12):
-        for dx in range(4, 12):
-            if (dx - 8) ** 2 + (dy - 8) ** 2 < 20:
-                px(buf, w, ox + dx, oy + dy, (160, 230, 240, 60))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 7, oy + 4, ox + 9, oy + 15, (120, 110, 95, 255))
+    fill(buf, w, ox + 4, oy + 1, ox + 12, oy + 6, LAMP)
+    fill(buf, w, ox + 5, oy + 2, ox + 11, oy + 5, (255, 248, 210, 255))
 
-    # 20 sleep floor
+    # 20 nap soft floor
     ox, oy = tile_at(4, 2)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, SLEEP_FLOOR)
-    for i in range(0, TILE, 3):
+    for i in range(0, TILE, 4):
         px(buf, w, ox + i, oy + (i * 2) % TILE, SLEEP_FLOOR2)
 
-    # 21 corridor runner (cool strip)
+    # 21 polished concrete path
     ox, oy = tile_at(5, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR_WOOD)
-    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (70, 100, 120, 255))
-    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (50, 78, 98, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (200, 204, 210, 255))
+    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, (188, 194, 202, 255))
 
-    # 22 round meeting table center piece
+    # 22 round table center BIG
     ox, oy = tile_at(6, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, CARPET)
-    for row in range(2, 14):
-        t = abs((row - 8) / 6.0)
-        half = int(6 - t * 5)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    for row in range(1, 15):
+        t = abs((row - 8) / 7.0)
+        half = int(7 - t * 6)
         fill(buf, w, ox + 8 - half, oy + row, ox + 8 + half + 1, oy + row + 1, TABLE)
-    rect(buf, w, ox + 3, oy + 3, ox + 13, oy + 13, DESK)
+    rect(buf, w, ox + 2, oy + 2, ox + 14, oy + 14, DESK)
 
-    # 23 side table (break)
+    # 23 beanbag / pouf BIG
     ox, oy = tile_at(7, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
-    fill(buf, w, ox + 3, oy + 6, ox + 13, oy + 13, TABLE)
-    fill(buf, w, ox + 5, oy + 4, ox + 11, oy + 7, (190, 220, 230, 255))  # cups
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    for row in range(3, 15):
+        t = abs((row - 9) / 6.0)
+        half = int(6 - t * 4)
+        fill(buf, w, ox + 8 - half, oy + row, ox + 8 + half + 1, oy + row + 1, BEAN)
+    fill(buf, w, ox + 5, oy + 5, ox + 11, oy + 8, (240, 160, 130, 255))
 
-    # 24 wood floor bright (entry)
+    # 24 lobby bright wood
     ox, oy = tile_at(0, 3)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR_WOOD)
-    for i in range(0, TILE, 2):
-        px(buf, w, ox + i, oy + 4, DESK_TOP)
-        px(buf, w, ox + i, oy + 10, DESK)
+    for i in range(0, TILE, 3):
+        fill(buf, w, ox, oy + i, ox + TILE, oy + i + 1, (195, 168, 130, 255))
 
-    # 25 dual monitor desk (code work denser)
+    # 25 dual-monitor workbench BIG
     ox, oy = tile_at(1, 3)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR)
-    fill(buf, w, ox + 1, oy + 7, ox + 15, oy + 14, DESK)
-    fill(buf, w, ox + 2, oy + 2, ox + 7, oy + 7, MONITOR)
-    fill(buf, w, ox + 3, oy + 3, ox + 6, oy + 6, SCREEN)
-    fill(buf, w, ox + 9, oy + 2, ox + 14, oy + 7, MONITOR)
-    fill(buf, w, ox + 10, oy + 3, ox + 13, oy + 6, (100, 180, 220, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox, oy + 8, ox + TILE, oy + TILE, DESK)
+    fill(buf, w, ox, oy + 6, ox + TILE, oy + 9, DESK_TOP)
+    fill(buf, w, ox + 1, oy + 1, ox + 7, oy + 7, MONITOR)
+    fill(buf, w, ox + 2, oy + 2, ox + 6, oy + 6, SCREEN)
+    fill(buf, w, ox + 9, oy + 1, ox + 15, oy + 7, MONITOR)
+    fill(buf, w, ox + 10, oy + 2, ox + 14, oy + 6, (100, 190, 220, 255))
 
-    # 26 plant on break floor
+    # 26 big planter on lounge floor tint
     ox, oy = tile_at(2, 3)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, BREAK_FLOOR)
-    fill(buf, w, ox + 6, oy + 10, ox + 10, oy + 14, POT)
-    fill(buf, w, ox + 5, oy + 3, ox + 11, oy + 11, PLANT)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 4, oy + 10, ox + 12, oy + 16, POT)
+    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 12, PLANT)
+    fill(buf, w, ox + 3, oy + 0, ox + 13, oy + 4, (50, 140, 90, 255))
 
-    # 27 small rug sleep
+    # 27 soft rug on sleep
     ox, oy = tile_at(3, 3)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, SLEEP_FLOOR)
-    fill(buf, w, ox + 2, oy + 4, ox + 14, oy + 12, (80, 90, 120, 255))
-    rect(buf, w, ox + 2, oy + 4, ox + 14, oy + 12, (60, 70, 100, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, (170, 185, 210, 255))
+    rect(buf, w, ox + 1, oy + 2, ox + 15, oy + 14, (140, 155, 185, 255))
 
-    # rest of tiles — cool wall alt
+    # 28 cream wall alt
     ox, oy = tile_at(4, 3)
     fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL_WARM)
     fill(buf, w, ox, oy, ox + TILE, oy + 3, WALL_TOP)
 
+    # fill remaining unused slots with light floor noise
+    for ti, tj in [(5, 3), (6, 3), (7, 3), (0, 4), (1, 4), (2, 4), (3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+        ox, oy = tile_at(ti, tj)
+        fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
+
     write_png(OUT / "office-tiles.png", w, h, bytes(buf), scale=ASSET_SCALE)
-    ew, eh = w * ASSET_SCALE, h * ASSET_SCALE
-    print("wrote", OUT / "office-tiles.png", f"{ew}x{eh}")
+    print("wrote", OUT / "office-tiles.png", f"{w * ASSET_SCALE}x{h * ASSET_SCALE}")
+
+
+def make_map_json() -> None:
+    """
+    Silicon Valley campus loft — open plan, glass war-room, big furniture clusters.
+
+    GID (1-based):
+      1 oak  2 carpet  3 wall  4 sage  5 loungeWhite  6 desk  7 chair  8 table
+      9 sofa  10 plant  11 glassDoor  12 window  13 courtyard  14 bed  15 board
+      16 coffee  17 glass  18 rug  19 poster  20 lamp  21 napFloor  22 concrete
+      23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
+      29 creamWall
+    """
+    W, H = 40, 30
+    floor = [[1 for _ in range(W)] for _ in range(H)]
+    coll = [[0 for _ in range(W)] for _ in range(H)]
+    decor = [[0 for _ in range(W)] for _ in range(H)]
+
+    def set_rect(layer, x0, y0, x1, y1, v):
+        for y in range(y0, y1):
+            for x in range(x0, x1):
+                if 0 <= x < W and 0 <= y < H:
+                    layer[y][x] = v
+
+    def solid(x, y):
+        coll[y][x] = 13
+
+    def put(x, y, gid, block=True):
+        decor[y][x] = gid
+        if block:
+            solid(x, y)
+
+    # outer shell — cream walls + full glass facade north
+    for x in range(W):
+        floor[0][x] = 12 if 2 <= x <= 37 else 3
+        floor[H - 1][x] = 3
+        solid(x, 0)
+        solid(x, H - 1)
+    for y in range(H):
+        floor[y][0] = 3
+        floor[y][W - 1] = 3
+        solid(0, y)
+        solid(W - 1, y)
+    # reopen north windows (collision stays wall but looks like glass facade)
+    for x in range(2, 38):
+        floor[0][x] = 12
+
+    # open desk carpet west (big pods)
+    set_rect(floor, 1, 1, 18, 16, 2)
+    # sage / lounge east
+    set_rect(floor, 24, 1, 39, 14, 5)
+    # concrete path spine
+    set_rect(floor, 18, 1, 24, 29, 22)
+    # focus oak south-west
+    set_rect(floor, 1, 16, 18, 26, 1)
+    # nap pods SE
+    set_rect(floor, 24, 16, 39, 26, 21)
+    # lobby south
+    set_rect(floor, 14, 26, 26, 29, 25)
+    set_rect(floor, 1, 26, 14, 29, 22)
+    set_rect(floor, 26, 26, 39, 29, 22)
+
+    # glass war-room (center) — glass walls only, open feel
+    set_rect(floor, 19, 6, 31, 15, 4)
+    for x in range(19, 31):
+        floor[6][x] = 17
+        floor[14][x] = 17
+        solid(x, 6)
+        solid(x, 14)
+    for y in range(6, 15):
+        floor[y][19] = 17
+        floor[y][30] = 17
+        solid(19, y)
+        solid(30, y)
+    # glass doors (walkable)
+    for x, y in [(24, 6), (25, 6), (24, 14), (25, 14), (19, 10), (30, 10)]:
+        floor[y][x] = 11
+        coll[y][x] = 0
+
+    # --- BIG desk pods (open west) — 3 tiles wide desks ---
+    # pod A
+    for x in (3, 4, 5):
+        put(x, 5, 26 if x != 4 else 6)
+    put(4, 6, 7)
+    # pod B
+    for x in (9, 10, 11):
+        put(x, 5, 26 if x != 10 else 6)
+    put(10, 6, 7)
+    # pod C (south focus)
+    for x in (4, 5, 6):
+        put(x, 18, 26 if x != 5 else 6)
+    put(5, 19, 7)
+    # standing whiteboard near pods
+    put(14, 4, 15)
+    put(15, 4, 15)
+    put(2, 3, 20)
+    put(16, 8, 10)
+    put(2, 10, 27)
+    put(7, 10, 18, block=False)
+    put(8, 10, 18, block=False)
+    put(12, 12, 24)  # beanbag chill near desks
+    put(13, 12, 24)
+
+    # lounge sofas (4-tile long) + coffee island
+    for x in (26, 27, 28, 29):
+        put(x, 3, 9)
+    put(32, 4, 16)
+    put(33, 4, 16)
+    put(34, 4, 16)
+    put(28, 6, 23)  # round table
+    put(29, 6, 23)
+    put(28, 7, 23)
+    put(29, 7, 23)
+    put(27, 7, 7)
+    put(30, 7, 7)
+    put(36, 3, 27)
+    put(26, 10, 24)
+    put(27, 10, 24)
+    put(35, 8, 20)
+    put(37, 10, 10)
+
+    # war room furniture — big round + chairs + board
+    put(24, 9, 23)
+    put(25, 9, 23)
+    put(24, 10, 23)
+    put(25, 10, 23)
+    put(23, 9, 7)
+    put(26, 9, 7)
+    put(24, 8, 7)
+    put(25, 11, 7)
+    put(21, 8, 15)
+    put(22, 8, 15)
+    put(28, 12, 10)
+
+    # focus oak area (SW)
+    put(3, 21, 15)
+    put(10, 17, 10)
+    put(14, 20, 20)
+    put(8, 22, 18, block=False)
+    put(9, 22, 18, block=False)
+    put(2, 24, 24)
+
+    # nap pods — big beds
+    for x in (26, 27):
+        put(x, 18, 14)
+    for x in (32, 33):
+        put(x, 18, 14)
+    put(29, 20, 28, block=False)
+    put(30, 20, 28, block=False)
+    put(36, 18, 20)
+    put(37, 22, 27)
+    put(26, 23, 10)
+
+    # lobby entrance — big plants + glass doors
+    floor[H - 1][19] = 11
+    floor[H - 1][20] = 11
+    coll[H - 1][19] = 0
+    coll[H - 1][20] = 0
+    put(16, 27, 27)
+    put(23, 27, 27)
+    put(18, 27, 20)
+    put(15, 26, 19)
+    put(24, 26, 19)
+
+    # scattered big plants along concrete spine (not blocking path center)
+    for x, y in [(18, 3), (23, 3), (18, 16), (23, 16), (18, 24), (23, 24)]:
+        if decor[y][x] == 0:
+            put(x, y, 10)
+
+    # oak grain noise
+    for y in range(1, H - 1):
+        for x in range(1, W - 1):
+            if floor[y][x] == 1 and (x + y) % 6 == 0:
+                floor[y][x] = 25
+
+    waypoints = {
+        "desks": [
+            {"x": 4, "y": 7},    # pod A approach
+            {"x": 10, "y": 7},   # pod B
+            {"x": 5, "y": 20},   # focus pod
+        ],
+        "meeting": {"x": 22, "y": 10},
+        "break": {"x": 31, "y": 8},
+        "sleep": {"x": 30, "y": 21},
+        "entrance": {"x": 20, "y": 27},
+    }
+
+    # ensure waypoint tiles walkable
+    for p in waypoints["desks"] + [waypoints[k] for k in ("meeting", "break", "sleep", "entrance")]:
+        x, y = p["x"], p["y"]
+        coll[y][x] = 0
+        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27):
+            decor[y][x] = 0
+
+    def flat(layer):
+        out = []
+        for row in layer:
+            out.extend(row)
+        return out
+
+    coll_tiles = [3 if coll[y][x] else 0 for y in range(H) for x in range(W)]
+
+    data = {
+        "compressionlevel": -1,
+        "height": H,
+        "width": W,
+        "tilewidth": EXPORT_TILE,
+        "tileheight": EXPORT_TILE,
+        "infinite": False,
+        "orientation": "orthogonal",
+        "renderorder": "right-down",
+        "tiledversion": "1.10.0",
+        "type": "map",
+        "version": "1.10",
+        "nextlayerid": 4,
+        "nextobjectid": 1,
+        "tilesets": [
+            {
+                "columns": 8,
+                "firstgid": 1,
+                "image": "office-tiles.png",
+                "imageheight": 6 * EXPORT_TILE,
+                "imagewidth": 8 * EXPORT_TILE,
+                "margin": 0,
+                "name": "office",
+                "spacing": 0,
+                "tilecount": 48,
+                "tileheight": EXPORT_TILE,
+                "tilewidth": EXPORT_TILE,
+            }
+        ],
+        "layers": [
+            {"id": 1, "name": "ground", "type": "tilelayer", "visible": True, "opacity": 1, "width": W, "height": H, "data": flat(floor), "x": 0, "y": 0},
+            {"id": 2, "name": "furniture", "type": "tilelayer", "visible": True, "opacity": 1, "width": W, "height": H, "data": flat(decor), "x": 0, "y": 0},
+            {"id": 3, "name": "collision", "type": "tilelayer", "visible": False, "opacity": 0, "width": W, "height": H, "data": coll_tiles, "x": 0, "y": 0},
+        ],
+        "properties": [{"name": "waypoints", "type": "string", "value": json.dumps(waypoints)}],
+    }
+    path = OUT / "office-map.json"
+    path.write_text(json.dumps(data), encoding="utf-8")
+    print("wrote", path, f"{W}x{H}")
 
 
 def draw_char_frame(
@@ -505,498 +748,6 @@ def make_characters() -> None:
     write_png(path, w, h, bytes(buf), scale=ASSET_SCALE)
     print("wrote", path, f"{w * ASSET_SCALE}x{h * ASSET_SCALE}")
 
-
-def make_map_json() -> None:
-    """
-    Expanded office — 40x30 tiles with 5 zones + corridor + entrance.
-
-    GID (1-based):
-      1 floor  2 floor2  3 wall  4 carpetM  5 breakFloor  6 desk  7 chair  8 table
-      9 sofa  10 plant  11 door  12 window  13 void  14 bed  15 canvas  16 coffee
-      17 whiteboard  18 rug  19 picture  20 lamp  21 sleepFloor  22 corridor
-      23 roundTable  24 sideTable  25 woodEntry  26 dualDesk  27 plantBreak  28 sleepRug
-      29 wallWarm
-    """
-    W, H = 40, 30
-    floor = [[1 for _ in range(W)] for _ in range(H)]
-    coll = [[0 for _ in range(W)] for _ in range(H)]
-    decor = [[0 for _ in range(W)] for _ in range(H)]
-
-    def set_rect(layer, x0, y0, x1, y1, v):
-        for y in range(y0, y1):
-            for x in range(x0, x1):
-                if 0 <= x < W and 0 <= y < H:
-                    layer[y][x] = v
-
-    def wall_h(x0, x1, y):
-        for x in range(x0, x1):
-            floor[y][x] = 3
-            coll[y][x] = 13
-
-    def wall_v(y0, y1, x):
-        for y in range(y0, y1):
-            floor[y][x] = 3
-            coll[y][x] = 13
-
-    def door_at(x, y):
-        floor[y][x] = 11
-        coll[y][x] = 0
-
-    # outer walls
-    for x in range(W):
-        floor[0][x] = 3
-        floor[H - 1][x] = 3
-        coll[0][x] = 13
-        coll[H - 1][x] = 13
-    for y in range(H):
-        floor[y][0] = 3
-        floor[y][W - 1] = 3
-        coll[y][0] = 13
-        coll[y][W - 1] = 13
-
-    # --- 작업실 1 (NW code) x1-12, y1-11 ---
-    set_rect(floor, 1, 1, 13, 12, 1)
-    wall_h(1, 13, 11)
-    wall_v(1, 12, 12)
-    door_at(6, 11)
-    # dual desks + chairs
-    for dx, dy in [(3, 4), (7, 4), (3, 7)]:
-        decor[dy][dx] = 26
-        decor[dy][dx + 1] = 6
-        coll[dy][dx] = 13
-        coll[dy][dx + 1] = 13
-        decor[dy + 1][dx] = 7
-        coll[dy + 1][dx] = 13
-    decor[2][2] = 10
-    coll[2][2] = 13
-    decor[2][10] = 20  # lamp
-    coll[2][10] = 13
-    floor[0][4] = 12
-    floor[0][8] = 12
-    floor[1][1] = 19  # picture on near-wall via furniture? put on ground as wall tile
-    # pictures on north wall ground tiles already wall — embed picture gid on wall row interiors:
-    floor[0][5] = 19
-    floor[0][9] = 19
-
-    # --- 휴게실 (NE break) x27-38, y1-11 ---
-    set_rect(floor, 27, 1, 39, 12, 5)
-    wall_h(27, 39, 11)
-    wall_v(1, 12, 26)
-    door_at(32, 11)
-    decor[3][29] = 9
-    decor[3][30] = 9
-    decor[3][31] = 9
-    for x in (29, 30, 31):
-        coll[3][x] = 13
-    decor[5][35] = 16  # coffee
-    coll[5][35] = 13
-    decor[6][30] = 24  # side table
-    coll[6][30] = 13
-    decor[8][28] = 27
-    coll[8][28] = 13
-    decor[2][37] = 20
-    coll[2][37] = 13
-    floor[0][30] = 12
-    floor[0][34] = 12
-    floor[0][36] = 19
-
-    # --- 회의실 (center) x14-25, y3-14 ---
-    set_rect(floor, 14, 3, 26, 15, 4)
-    wall_h(14, 26, 2)
-    wall_h(14, 26, 14)
-    wall_v(3, 15, 13)
-    wall_v(3, 15, 25)
-    # doors into meeting from corridor N/S/E/W
-    door_at(19, 2)   # from north hall
-    door_at(19, 14)  # south
-    door_at(13, 8)   # west corridor
-    door_at(25, 8)   # east corridor
-    # round table cluster
-    for x, y in [(18, 7), (19, 7), (20, 7), (18, 8), (19, 8), (20, 8)]:
-        decor[y][x] = 23
-        coll[y][x] = 13
-    # chairs around
-    for x, y in [(17, 7), (21, 7), (19, 6), (19, 9)]:
-        decor[y][x] = 7
-        coll[y][x] = 13
-    # whiteboard top of room
-    decor[4][19] = 17
-    coll[4][19] = 13
-    decor[4][20] = 17
-    coll[4][20] = 13
-    decor[12][15] = 10
-    coll[12][15] = 13
-    floor[2][17] = 19
-    floor[2][21] = 12
-
-    # --- 작업실 2 (SW art) x1-12, y16-26 ---
-    set_rect(floor, 1, 16, 13, 27, 1)
-    wall_h(1, 13, 15)
-    wall_h(1, 13, 26)
-    wall_v(16, 27, 12)
-    door_at(6, 15)
-    # art desks + canvas
-    decor[18][3] = 6
-    decor[18][4] = 6
-    coll[18][3] = 13
-    coll[18][4] = 13
-    decor[19][3] = 7
-    coll[19][3] = 13
-    decor[18][8] = 15  # canvas
-    coll[18][8] = 13
-    decor[21][5] = 15
-    coll[21][5] = 13
-    decor[21][9] = 6
-    decor[21][10] = 6
-    coll[21][9] = 13
-    coll[21][10] = 13
-    decor[22][9] = 7
-    coll[22][9] = 13
-    decor[17][2] = 10
-    coll[17][2] = 13
-    decor[24][2] = 18  # rug
-    # rug walkable
-    decor[24][11] = 20
-    coll[24][11] = 13
-    floor[26][4] = 12  # south window on bottom of room wall? bottom is wall at 26 — skip
-    # window on left outer already; add picture on wall row 15
-    floor[15][3] = 19
-    floor[15][9] = 12
-
-    # --- 수면실 (SE sleep) x27-38, y16-26 ---
-    set_rect(floor, 27, 16, 39, 27, 21)
-    wall_h(27, 39, 15)
-    wall_h(27, 39, 26)
-    wall_v(16, 27, 26)
-    door_at(32, 15)
-    # beds
-    decor[18][29] = 14
-    decor[18][30] = 14
-    coll[18][29] = 13
-    coll[18][30] = 13
-    decor[18][34] = 14
-    decor[18][35] = 14
-    coll[18][34] = 13
-    coll[18][35] = 13
-    decor[22][30] = 28  # sleep rug walkable
-    decor[22][31] = 28
-    decor[24][37] = 10
-    coll[24][37] = 13
-    decor[20][37] = 20
-    coll[20][37] = 13
-    floor[15][30] = 19
-    floor[15][35] = 12
-
-    # --- corridors ---
-    # horizontal mid corridor between rooms (y12-14 already partly meeting)
-    set_rect(floor, 1, 12, 39, 15, 22)
-    # clear corridor collisions (except outer)
-    for y in range(12, 15):
-        for x in range(1, 39):
-            if floor[y][x] in (3, 11):
-                continue
-            coll[y][x] = 0
-            if floor[y][x] == 1:
-                floor[y][x] = 22
-
-    # vertical center corridor (x13-25 outside meeting already handled)
-    for y in range(1, 29):
-        for x in range(13, 26):
-            if floor[y][x] == 3 or coll[y][x]:
-                continue
-            if floor[y][x] in (4, 5, 21):
-                continue
-            floor[y][x] = 22
-
-    # south entry hall
-    set_rect(floor, 14, 27, 26, 29, 25)
-    for y in range(27, 29):
-        for x in range(14, 26):
-            coll[y][x] = 0
-    # entrance doors at bottom
-    door_at(19, H - 1)
-    door_at(20, H - 1)
-    # entry plants
-    decor[27][15] = 10
-    coll[27][15] = 13
-    decor[27][24] = 10
-    coll[27][24] = 13
-    decor[27][18] = 20
-    coll[27][18] = 13
-
-    # reconnect room doors after corridor overwrite
-    door_at(6, 11)
-    door_at(32, 11)
-    door_at(6, 15)
-    door_at(32, 15)
-    door_at(19, 2)
-    door_at(19, 14)
-    door_at(13, 8)
-    door_at(25, 8)
-    # open wall doors properly (ensure floor door + no coll)
-    for x, y in [(6, 11), (32, 11), (6, 15), (32, 15), (19, 2), (19, 14), (13, 8), (25, 8), (19, H - 1), (20, H - 1)]:
-        floor[y][x] = 11
-        coll[y][x] = 0
-
-    # hallway plants / pictures
-    for x, y in [(10, 13), (29, 13), (16, 28)]:
-        if decor[y][x] == 0:
-            decor[y][x] = 10
-            coll[y][x] = 13
-
-    waypoints = {
-        "desks": [
-            {"x": 3, "y": 6},   # work1 — mushroom
-            {"x": 7, "y": 6},   # work1/near — onion
-            {"x": 9, "y": 20},  # work2 art — claude
-        ],
-        "meeting": {"x": 17, "y": 10},
-        "break": {"x": 32, "y": 6},
-        "sleep": {"x": 32, "y": 21},
-        "entrance": {"x": 20, "y": 27},
-    }
-
-    # densify furniture: plants/lamps/pictures/rugs/sideTables — never block waypoints
-    # or leave solid strips across corridor centers (keep y=13 mid path open).
-    reserved = {(p["x"], p["y"]) for p in waypoints["desks"]}
-    reserved |= {
-        (waypoints["meeting"]["x"], waypoints["meeting"]["y"]),
-        (waypoints["break"]["x"], waypoints["break"]["y"]),
-        (waypoints["sleep"]["x"], waypoints["sleep"]["y"]),
-        (waypoints["entrance"]["x"], waypoints["entrance"]["y"]),
-        # keep desk / door approach tiles walkable
-        (3, 5),
-        (7, 5),
-        (9, 19),
-        (6, 10),
-        (6, 12),
-        (6, 14),
-        (6, 16),
-        (32, 10),
-        (32, 12),
-        (32, 14),
-        (32, 16),
-        (19, 13),
-        (20, 13),
-        (20, 26),
-        (20, 28),
-    }
-
-    def place_decor(x: int, y: int, gid: int, solid: bool = True) -> bool:
-        if not (0 <= x < W and 0 <= y < H):
-            return False
-        if (x, y) in reserved:
-            return False
-        if floor[y][x] in (3, 11, 13):  # wall / door / void
-            return False
-        if decor[y][x] != 0 or coll[y][x]:
-            return False
-        decor[y][x] = gid
-        if solid:
-            coll[y][x] = 13
-        return True
-
-    # solid: plant=10 lamp=20 picture=19 sideTable=24 plantBreak=27
-    solid_places = [
-        # workroom 1
-        (1, 3, 10),
-        (11, 3, 10),
-        (1, 8, 10),
-        (11, 8, 20),
-        (5, 2, 20),
-        (9, 3, 24),
-        (5, 8, 24),
-        (2, 9, 10),
-        (10, 9, 19),
-        (8, 2, 19),
-        (4, 9, 20),
-        # break
-        (28, 2, 10),
-        (37, 5, 27),
-        (28, 9, 27),
-        (36, 9, 20),
-        (33, 3, 24),
-        (37, 8, 19),
-        (34, 8, 10),
-        (29, 9, 20),
-        # meeting — whiteboard flanks + corners
-        (18, 4, 24),
-        (21, 4, 24),
-        (15, 5, 10),
-        (24, 5, 10),
-        (15, 13, 20),
-        (24, 13, 19),
-        (16, 12, 10),
-        (23, 12, 20),
-        (15, 7, 19),
-        (24, 9, 10),
-        # workroom 2
-        (1, 17, 10),
-        (11, 17, 20),
-        (2, 23, 20),
-        (6, 17, 24),
-        (11, 23, 10),
-        (1, 21, 19),
-        (7, 24, 24),
-        (4, 24, 10),
-        (11, 19, 19),
-        (2, 20, 20),
-        # sleep
-        (28, 17, 20),
-        (37, 17, 10),
-        (28, 24, 10),
-        (33, 24, 20),
-        (36, 22, 19),
-        (28, 21, 24),
-        (37, 21, 10),
-        (30, 24, 19),
-        # corridor edges (not mid y=13 spine)
-        (2, 12, 10),
-        (8, 12, 19),
-        (22, 12, 10),
-        (34, 12, 19),
-        (2, 14, 19),
-        (8, 14, 10),
-        (22, 14, 19),
-        (34, 14, 10),
-        (37, 13, 10),
-        (14, 13, 19),
-        (25, 13, 10),
-        # entrance hall
-        (15, 28, 19),
-        (24, 28, 20),
-        (17, 27, 10),
-        (22, 27, 10),
-        (14, 27, 19),
-        (25, 27, 24),
-    ]
-    for x, y, gid in solid_places:
-        place_decor(x, y, gid, solid=True)
-
-    # walkable rugs: rug=18 sleepRug=28
-    rug_places = [
-        (5, 9, 18),
-        (8, 9, 18),
-        (5, 6, 18),
-        (33, 8, 18),
-        (36, 6, 18),
-        (30, 8, 18),
-        (16, 10, 18),
-        (22, 10, 18),
-        (7, 23, 18),
-        (3, 24, 18),
-        (33, 22, 28),
-        (35, 22, 28),
-        (28, 22, 28),
-        (19, 28, 18),
-        (18, 27, 18),
-        (21, 27, 18),
-        (4, 3, 18),
-        (10, 7, 18),
-    ]
-    for x, y, gid in rug_places:
-        place_decor(x, y, gid, solid=False)
-
-    # floor variation noise on open floors
-    for y in range(1, H - 1):
-        for x in range(1, W - 1):
-            if floor[y][x] == 1 and (x + y) % 5 == 0:
-                floor[y][x] = 2
-
-    # windows on outer north wall (preserve some pictures)
-    for x in (3, 7, 11, 28, 33, 37):
-        if floor[0][x] == 3:
-            floor[0][x] = 12
-
-    def flat(layer):
-        out = []
-        for row in layer:
-            out.extend(row)
-        return out
-
-    coll_tiles = []
-    for y in range(H):
-        for x in range(W):
-            coll_tiles.append(3 if coll[y][x] else 0)
-
-    data = {
-        "compressionlevel": -1,
-        "height": H,
-        "width": W,
-        "tilewidth": EXPORT_TILE,
-        "tileheight": EXPORT_TILE,
-        "infinite": False,
-        "orientation": "orthogonal",
-        "renderorder": "right-down",
-        "tiledversion": "1.10.0",
-        "type": "map",
-        "version": "1.10",
-        "nextlayerid": 4,
-        "nextobjectid": 1,
-        "tilesets": [
-            {
-                "columns": 8,
-                "firstgid": 1,
-                "image": "office-tiles.png",
-                "imageheight": 6 * EXPORT_TILE,
-                "imagewidth": 8 * EXPORT_TILE,
-                "margin": 0,
-                "name": "office",
-                "spacing": 0,
-                "tilecount": 48,
-                "tileheight": EXPORT_TILE,
-                "tilewidth": EXPORT_TILE,
-            }
-        ],
-        "layers": [
-            {
-                "id": 1,
-                "name": "ground",
-                "type": "tilelayer",
-                "visible": True,
-                "opacity": 1,
-                "width": W,
-                "height": H,
-                "data": flat(floor),
-                "x": 0,
-                "y": 0,
-            },
-            {
-                "id": 2,
-                "name": "furniture",
-                "type": "tilelayer",
-                "visible": True,
-                "opacity": 1,
-                "width": W,
-                "height": H,
-                "data": flat(decor),
-                "x": 0,
-                "y": 0,
-            },
-            {
-                "id": 3,
-                "name": "collision",
-                "type": "tilelayer",
-                "visible": False,
-                "opacity": 0,
-                "width": W,
-                "height": H,
-                "data": coll_tiles,
-                "x": 0,
-                "y": 0,
-            },
-        ],
-        "properties": [
-            {
-                "name": "waypoints",
-                "type": "string",
-                "value": json.dumps(waypoints),
-            }
-        ],
-    }
-    path = OUT / "office-map.json"
-    path.write_text(json.dumps(data), encoding="utf-8")
-    print("wrote", path, f"{W}x{H}")
 
 
 def write_wav_mono(path: Path, samples: list[float], sr: int = 22050) -> None:

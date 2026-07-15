@@ -70,13 +70,13 @@ export class OfficeScene extends Phaser.Scene {
       : {
           // fallback = office-map.json properties.waypoints
           desks: [
-            { x: 3, y: 6 },
-            { x: 7, y: 6 },
-            { x: 9, y: 20 },
+            { x: 4, y: 7 },
+            { x: 10, y: 7 },
+            { x: 5, y: 20 },
           ],
-          meeting: { x: 17, y: 10 },
-          break: { x: 32, y: 6 },
-          sleep: { x: 32, y: 21 },
+          meeting: { x: 22, y: 10 },
+          break: { x: 31, y: 8 },
+          sleep: { x: 30, y: 21 },
           entrance: { x: 20, y: 27 },
         };
 
@@ -87,7 +87,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rebuildAgentIndex();
 
     // spawn 대장님 near corridor center (walkable)
-    this.boss = new Boss(this, { x: 19, y: 13 }); // corridor near meeting
+    this.boss = new Boss(this, { x: 21, y: 17 }); // concrete spine south of war room
 
     // zone labels — room readability without cluttering gameplay
     this.addZoneLabels();
@@ -320,25 +320,25 @@ export class OfficeScene extends Phaser.Scene {
   addZoneLabels() {
     const tw = this.map.tileWidth;
     const zones = [
-      { name: "작업실1", tx: 5, ty: 3 },
-      { name: "휴게실", tx: 32, ty: 3 },
-      { name: "회의실", tx: 19, ty: 7 },
-      { name: "작업실2", tx: 6, ty: 17 },
-      { name: "수면실", tx: 32, ty: 17 },
-      { name: "입구", tx: 20, ty: 27 },
+      { name: "Open Desk", tx: 8, ty: 2 },
+      { name: "Lounge", tx: 31, ty: 2 },
+      { name: "War Room", tx: 25, ty: 7 },
+      { name: "Focus", tx: 8, ty: 16 },
+      { name: "Nap Pod", tx: 31, ty: 16 },
+      { name: "Lobby", tx: 20, ty: 26 },
     ];
     for (const z of zones) {
       this.add
         .text(z.tx * tw + tw / 2, z.ty * tw + 2, z.name, {
           fontFamily: "Segoe UI, sans-serif",
-          fontSize: "16px",
-          color: "#9fd6e8",
-          stroke: "#0b1016",
-          strokeThickness: 6,
+          fontSize: "18px",
+          color: "#5a7a6a",
+          stroke: "#f4f0ea",
+          strokeThickness: 5,
         })
         .setOrigin(0.5, 0)
         .setDepth(5)
-        .setAlpha(0.8);
+        .setAlpha(0.85);
     }
   }
 

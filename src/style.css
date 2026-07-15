@@ -1,14 +1,14 @@
 :root {
   color-scheme: dark;
-  --bg0: #0b1016;
-  --bg1: #121a24;
-  --panel: rgba(14, 22, 32, 0.9);
-  --line: #2a3a4e;
-  --text: #e6eef8;
-  --muted: #8aa0b8;
-  --accent: #5ee0c8;
-  --accent-dim: #3aa896;
-  --warn: #7eb6ff;
+  --bg0: #12161c;
+  --bg1: #1a222c;
+  --panel: rgba(22, 30, 40, 0.92);
+  --line: #3a4a58;
+  --text: #e8eef4;
+  --muted: #9aa0aa;
+  --accent: #6ecfba;
+  --accent-dim: #4aa894;
+  --warn: #8ec0ff;
   font-family: "Segoe UI", system-ui, sans-serif;
   background: var(--bg0);
   color: var(--text);
@@ -26,9 +26,9 @@ body,
   height: 100%;
   overflow: hidden;
   background:
-    radial-gradient(ellipse at 20% 10%, #1a2838 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 90%, #14282c 0%, transparent 45%),
-    linear-gradient(160deg, #0b1016, #0e1620 55%, #0a1218);
+    radial-gradient(ellipse at 20% 10%, #243040 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 90%, #1e3030 0%, transparent 45%),
+    linear-gradient(160deg, #12161c, #161e28 55%, #101820);
 }
 
 #app {

@@ -33,13 +33,13 @@ TILE = 32
 # Pixel centers — public/assets/office-map.json properties.waypoints (tile → px)
 WAYPOINTS = {
     "desks": [
-        {"x": 3 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
-        {"x": 7 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
-        {"x": 9 * TILE + TILE // 2, "y": 20 * TILE + TILE // 2},
+        {"x": 4 * TILE + TILE // 2, "y": 7 * TILE + TILE // 2},
+        {"x": 10 * TILE + TILE // 2, "y": 7 * TILE + TILE // 2},
+        {"x": 5 * TILE + TILE // 2, "y": 20 * TILE + TILE // 2},
     ],
-    "meeting": {"x": 17 * TILE + TILE // 2, "y": 10 * TILE + TILE // 2},
-    "break": {"x": 32 * TILE + TILE // 2, "y": 6 * TILE + TILE // 2},
-    "sleep": {"x": 32 * TILE + TILE // 2, "y": 21 * TILE + TILE // 2},
+    "meeting": {"x": 22 * TILE + TILE // 2, "y": 10 * TILE + TILE // 2},
+    "break": {"x": 31 * TILE + TILE // 2, "y": 8 * TILE + TILE // 2},
+    "sleep": {"x": 30 * TILE + TILE // 2, "y": 21 * TILE + TILE // 2},
 }
 
 # Sprite sheets shipped with FE (cycle when profiles > 3)

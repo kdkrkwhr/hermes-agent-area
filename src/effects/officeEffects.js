@@ -1,10 +1,10 @@
 /** Runtime particle textures + status emitters + time-of-day lighting. */
 
 const TOD_PRESETS = [
-  { name: "morning", hour: 7, color: 0xa8d8ff, alpha: 0.08 },
+  { name: "morning", hour: 7, color: 0xffe8c8, alpha: 0.06 },
   { name: "day", hour: 13, color: 0xffffff, alpha: 0 },
-  { name: "evening", hour: 18, color: 0x6688aa, alpha: 0.1 },
-  { name: "night", hour: 23, color: 0x3344aa, alpha: 0.18 },
+  { name: "evening", hour: 18, color: 0xffc8a0, alpha: 0.07 },
+  { name: "night", hour: 23, color: 0x4a6080, alpha: 0.12 },
 ];
 
 export function resolveTimeOfDay(hour, devIndex = null) {
