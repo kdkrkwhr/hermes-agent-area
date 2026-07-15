@@ -508,12 +508,32 @@ def make_map_json() -> None:
         ],
         "meeting": {"x": 22, "y": 10},
         "break": {"x": 31, "y": 8},
+        # idle agents stroll these Lounge tiles (coffee / sofas / aisle)
+        "lounge": [
+            {"x": 31, "y": 8},
+            {"x": 33, "y": 9},
+            {"x": 35, "y": 7},
+            {"x": 30, "y": 5},
+            {"x": 34, "y": 11},
+            {"x": 28, "y": 9},
+            {"x": 36, "y": 11},
+            {"x": 32, "y": 5},
+            {"x": 35, "y": 10},
+            {"x": 29, "y": 11},
+            {"x": 37, "y": 7},
+            {"x": 26, "y": 8},
+        ],
         "sleep": {"x": 30, "y": 21},
         "entrance": {"x": 20, "y": 27},
     }
 
     # ensure waypoint tiles walkable
-    for p in waypoints["desks"] + [waypoints[k] for k in ("meeting", "break", "sleep", "entrance")]:
+    walk_pts = (
+        waypoints["desks"]
+        + waypoints["lounge"]
+        + [waypoints[k] for k in ("meeting", "break", "sleep", "entrance")]
+    )
+    for p in walk_pts:
         x, y = p["x"], p["y"]
         coll[y][x] = 0
         if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27):

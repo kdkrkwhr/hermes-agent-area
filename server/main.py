@@ -30,17 +30,38 @@ TICK_SECONDS = 0.05  # 20 Hz position interpolate
 SPEED_PX = 200.0  # px/s @ 32px tiles
 TILE = 32
 
+def _px(tx: int, ty: int) -> dict[str, float]:
+    return {"x": tx * TILE + TILE // 2, "y": ty * TILE + TILE // 2}
+
+
 # Pixel centers — public/assets/office-map.json properties.waypoints (tile → px)
 WAYPOINTS = {
     "desks": [
-        {"x": 4 * TILE + TILE // 2, "y": 7 * TILE + TILE // 2},
-        {"x": 10 * TILE + TILE // 2, "y": 7 * TILE + TILE // 2},
-        {"x": 5 * TILE + TILE // 2, "y": 20 * TILE + TILE // 2},
+        _px(4, 7),
+        _px(10, 7),
+        _px(5, 20),
     ],
-    "meeting": {"x": 22 * TILE + TILE // 2, "y": 10 * TILE + TILE // 2},
-    "break": {"x": 31 * TILE + TILE // 2, "y": 8 * TILE + TILE // 2},
-    "sleep": {"x": 30 * TILE + TILE // 2, "y": 21 * TILE + TILE // 2},
+    "meeting": _px(22, 10),
+    "break": _px(31, 8),
+    "lounge": [
+        _px(31, 8),
+        _px(33, 9),
+        _px(35, 7),
+        _px(30, 5),
+        _px(34, 11),
+        _px(28, 9),
+        _px(36, 11),
+        _px(32, 5),
+        _px(35, 10),
+        _px(29, 11),
+        _px(37, 7),
+        _px(26, 8),
+    ],
+    "sleep": _px(30, 21),
 }
+
+# idle agents change lounge spots on this rhythm (seconds)
+IDLE_WANDER_SEC = 14.0
 
 # Sprite sheets shipped with FE (cycle when profiles > 3)
 SHEETS = ["char-mushroom", "char-onion", "char-claude"]
@@ -54,6 +75,14 @@ BUBBLES = {
 }
 
 
+def _idle_lounge_dest(home_desk: int) -> dict[str, float]:
+    """Rotate through lounge tiles so idle agents stroll instead of freezing."""
+    spots = WAYPOINTS.get("lounge") or [WAYPOINTS["break"]]
+    bucket = int(time.time() / IDLE_WANDER_SEC)
+    idx = (bucket + home_desk * 3) % len(spots)
+    return spots[idx]
+
+
 def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
     desks = WAYPOINTS["desks"]
     desk = desks[home_desk % len(desks)]
@@ -64,7 +93,7 @@ def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
     if status == "offline":
         return "away", desk
     if status == "idle":
-        return "sleep", WAYPOINTS["sleep"]
+        return "break", _idle_lounge_dest(home_desk)
     return "break", WAYPOINTS["break"]
 
 

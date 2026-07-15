@@ -1,4 +1,4 @@
-"""Smoke: BE WAYPOINTS match office-map.json tile centers + idle→sleep."""
+"""Smoke: BE WAYPOINTS match office-map.json tile centers + idle→lounge."""
 from __future__ import annotations
 
 import json
@@ -34,13 +34,21 @@ def main() -> int:
             f"{k} tile=({tiles[k]['x']},{tiles[k]['y']}) exp={exp} got={got} {'OK' if match else 'FAIL'}"
         )
 
+    lou_tiles = tiles.get("lounge") or []
+    lou_wp = WAYPOINTS.get("lounge") or []
+    match = len(lou_tiles) == len(lou_wp) and all(
+        center(t) == lou_wp[i] for i, t in enumerate(lou_tiles)
+    )
+    ok &= match
+    print(f"lounge spots={len(lou_tiles)} match={'OK' if match else 'FAIL'}")
+
     print("--- _tile_to_zone ---")
     for st, desk, ez in (
         ("running", 0, "desk"),
         ("chatting", 1, "desk"),
         ("blocked", 0, "meeting"),
         ("offline", 2, "away"),
-        ("idle", 0, "sleep"),
+        ("idle", 0, "break"),
     ):
         z, dest = _tile_to_zone(st, desk)
         match = z == ez
@@ -49,6 +57,13 @@ def main() -> int:
         print(
             f"{st} -> zone={z} dest_tile=({tx},{ty}) px=({dest['x']},{dest['y']}) expect={ez} {'OK' if match else 'FAIL'}"
         )
+        if st == "idle":
+            in_lounge = any(
+                abs(dest["x"] - p["x"]) < 0.1 and abs(dest["y"] - p["y"]) < 0.1
+                for p in lou_wp
+            )
+            ok &= in_lounge
+            print(f"  idle dest in lounge={'OK' if in_lounge else 'FAIL'}")
 
     print("RESULT", "PASS" if ok else "FAIL")
     return 0 if ok else 1

@@ -200,17 +200,58 @@ export class Agent {
   }
 
   pickDestination() {
-    const kinds = ["desk", "meeting", "break", "sleep"];
+    const kinds = ["desk", "meeting", "break", "break", "break"];
     const kind = kinds[Math.floor(Math.random() * kinds.length)];
     this.currentKind = kind;
     if (kind === "desk") {
       return { ...this.waypoints.desks[this.def.homeDesk], kind };
     }
     if (kind === "meeting") return { ...this.waypoints.meeting, kind };
-    if (kind === "sleep" && this.waypoints.sleep) {
-      return { ...this.waypoints.sleep, kind };
+    return this.pickLoungeSpot();
+  }
+
+  loungeSpots() {
+    const lou = this.waypoints?.lounge;
+    if (Array.isArray(lou) && lou.length) return lou;
+    const b = this.waypoints?.break || { x: 31, y: 8 };
+    return [
+      b,
+      { x: b.x - 2, y: b.y + 1 },
+      { x: b.x + 2, y: b.y },
+      { x: b.x + 4, y: b.y - 1 },
+      { x: b.x - 1, y: b.y + 3 },
+      { x: b.x + 3, y: b.y + 2 },
+    ];
+  }
+
+  pickLoungeSpot() {
+    const spots = this.loungeSpots();
+    const here = this.tilePos();
+    const others = spots.filter((s) => s.x !== here.x || s.y !== here.y);
+    const pool = others.length ? others : spots;
+    const dest = pool[Math.floor(Math.random() * pool.length)];
+    this.currentKind = "break";
+    return { ...dest, kind: "break" };
+  }
+
+  async wanderLounge() {
+    if (this.busy) return;
+    // live+idle: stroll lounge; mock: same path when break-biased
+    if (this.live && this.serverStatus && this.serverStatus !== "idle") return;
+    this.busy = true;
+    const dest = this.pickLoungeSpot();
+    const from = this.tilePos();
+    const path = await this.scene.pathfinder.findPath(from.x, from.y, dest.x, dest.y);
+    if (!path.length) {
+      this.busy = false;
+      this.idleUntil = this.scene.time.now + 1500;
+      return;
     }
-    return { ...this.waypoints.break, kind };
+    this.path = path.slice(1);
+    this.pathIndex = 0;
+    // keep live bubble ("휴식 중 ☕"); mock refreshes break flavor
+    if (!this.live) this.setStatus(pickStatus(this.def, "break"));
+    this.busy = false;
   }
 
   async goRandom() {
@@ -248,6 +289,7 @@ export class Agent {
   async applyServer(agentMsg) {
     if (!agentMsg) return;
     if (agentMsg.displayName) this.setDisplayName(agentMsg.displayName);
+    const prevStatus = this.serverStatus;
     this.serverData = { ...agentMsg, displayName: this.def.displayName };
     this.serverStatus = agentMsg.status;
     if (agentMsg.bubble) this.setStatus(agentMsg.bubble);
@@ -260,6 +302,25 @@ export class Agent {
     const destX = agentMsg.dest_x ?? agentMsg.x;
     const destY = agentMsg.dest_y ?? agentMsg.y;
     if (destX == null || destY == null) return;
+
+    // idle: stroll lounge locally — don't yank back to BE dest every poll
+    if (agentMsg.status === "idle") {
+      this.currentKind = "break";
+      if (prevStatus === "idle") {
+        // already resting — wanderLounge drives movement
+        if (!this.path.length && this.scene.time.now >= this.idleUntil) {
+          this.idleUntil = this.scene.time.now + 800;
+          this.wanderLounge();
+        }
+        return;
+      }
+      // first enter idle — walk to lounge, then wander
+      this._liveDestKey = "";
+      this.idleUntil = this.scene.time.now + 600;
+    } else if (prevStatus === "idle") {
+      // left rest — clear lounge wander latch
+      this._liveDestKey = "";
+    }
 
     const tx = Math.floor(destX / this.tileSize);
     const ty = Math.floor(destY / this.tileSize);
@@ -296,9 +357,14 @@ export class Agent {
       if (this.sprite.anims.currentAnim?.key !== idleKey) {
         this.sprite.anims.play(idleKey, true);
       }
-      if (!this.live && !this.busy && time >= this.idleUntil) {
-        this.idleUntil = time + 1800 + Math.random() * 2500;
-        this.goRandom();
+      if (!this.busy && time >= this.idleUntil) {
+        if (this.live && this.serverStatus === "idle") {
+          this.idleUntil = time + 2200 + Math.random() * 3800;
+          this.wanderLounge();
+        } else if (!this.live) {
+          this.idleUntil = time + 1800 + Math.random() * 2500;
+          this.goRandom();
+        }
       }
       this.syncUi();
       return;
