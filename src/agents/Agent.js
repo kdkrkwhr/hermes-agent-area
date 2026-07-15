@@ -213,7 +213,7 @@ export class Agent {
   loungeSpots() {
     const lou = this.waypoints?.lounge;
     if (Array.isArray(lou) && lou.length) return lou;
-    const b = this.waypoints?.break || { x: 31, y: 8 };
+    const b = this.waypoints?.break || { x: 31, y: 4 };
     return [
       b,
       { x: b.x - 2, y: b.y + 1 },

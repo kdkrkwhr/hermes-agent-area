@@ -37,27 +37,25 @@ def _px(tx: int, ty: int) -> dict[str, float]:
 # Pixel centers — public/assets/office-map.json properties.waypoints (tile → px)
 WAYPOINTS = {
     "desks": [
-        _px(4, 7),
-        _px(10, 7),
-        _px(5, 20),
+        _px(3, 5),
+        _px(7, 5),
+        _px(3, 19),
     ],
-    "meeting": _px(22, 10),
-    "break": _px(31, 8),
+    "meeting": _px(18, 9),
+    "break": _px(31, 4),
     "lounge": [
-        _px(31, 8),
-        _px(33, 9),
-        _px(35, 7),
-        _px(30, 5),
-        _px(34, 11),
-        _px(28, 9),
-        _px(36, 11),
+        _px(31, 4),
         _px(32, 5),
-        _px(35, 10),
-        _px(29, 11),
-        _px(37, 7),
-        _px(26, 8),
+        _px(28, 3),
+        _px(30, 7),
+        _px(33, 5),
+        _px(29, 4),
+        _px(32, 7),
+        _px(28, 7),
+        _px(31, 7),
+        _px(33, 4),
     ],
-    "sleep": _px(30, 21),
+    "sleep": _px(31, 21),
 }
 
 # idle agents change lounge spots on this rhythm (seconds)

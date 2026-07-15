@@ -329,7 +329,16 @@ def make_tileset() -> None:
 
 def make_map_json() -> None:
     """
-    Silicon Valley campus loft — open plan, glass war-room, big furniture clusters.
+    Room-bounded campus loft (40×30) with clear walls/doors + 2-tile halls.
+
+    Zones (floors, interior):
+      작업실1 10×12 NW carpet  — x=1..10, y=1..12
+      작업실2 10×12 SW oak     — x=1..10, y=15..26
+      회의실   8×8  center     — x=16..23, y=4..11
+      휴게실   8×8  NE         — x=27..34, y=1..8
+      수면실   5×5  SE         — x=29..33, y=19..23
+      복도     2-wide spine    — x=12..13 (수직) + y=13..14 (수평)
+      로비/입구               — y=26..28 center, doors on south wall
 
     GID (1-based):
       1 oak  2 carpet  3 wall  4 sage  5 loungeWhite  6 desk  7 chair  8 table
@@ -339,7 +348,7 @@ def make_map_json() -> None:
       29 creamWall
     """
     W, H = 40, 30
-    floor = [[1 for _ in range(W)] for _ in range(H)]
+    floor = [[22 for _ in range(W)] for _ in range(H)]
     coll = [[0 for _ in range(W)] for _ in range(H)]
     decor = [[0 for _ in range(W)] for _ in range(H)]
 
@@ -350,16 +359,31 @@ def make_map_json() -> None:
                     layer[y][x] = v
 
     def solid(x, y):
-        coll[y][x] = 13
+        if 0 <= x < W and 0 <= y < H:
+            coll[y][x] = 13
 
     def put(x, y, gid, block=True):
         decor[y][x] = gid
         if block:
             solid(x, y)
 
-    # outer shell — cream walls + full glass facade north
+    def wall_h(x0, x1, y, gid=3):
+        for x in range(x0, x1):
+            floor[y][x] = gid
+            solid(x, y)
+
+    def wall_v(x, y0, y1, gid=3):
+        for y in range(y0, y1):
+            floor[y][x] = gid
+            solid(x, y)
+
+    def door(x, y):
+        floor[y][x] = 11
+        coll[y][x] = 0
+
+    # --- outer shell ---
     for x in range(W):
-        floor[0][x] = 12 if 2 <= x <= 37 else 3
+        floor[0][x] = 3
         floor[H - 1][x] = 3
         solid(x, 0)
         solid(x, H - 1)
@@ -368,166 +392,164 @@ def make_map_json() -> None:
         floor[y][W - 1] = 3
         solid(0, y)
         solid(W - 1, y)
-    # reopen north windows (collision stays wall but looks like glass facade)
     for x in range(2, 38):
-        floor[0][x] = 12
+        floor[0][x] = 12  # north glass facade (still solid)
 
-    # open desk carpet west (big pods)
-    set_rect(floor, 1, 1, 18, 16, 2)
-    # sage / lounge east
-    set_rect(floor, 24, 1, 39, 14, 5)
-    # concrete path spine
-    set_rect(floor, 18, 1, 24, 29, 22)
-    # focus oak south-west
-    set_rect(floor, 1, 16, 18, 26, 1)
-    # nap pods SE
-    set_rect(floor, 24, 16, 39, 26, 21)
-    # lobby south
-    set_rect(floor, 14, 26, 26, 29, 25)
-    set_rect(floor, 1, 26, 14, 29, 22)
-    set_rect(floor, 26, 26, 39, 29, 22)
+    # --- floors by zone ---
+    set_rect(floor, 1, 1, 11, 13, 2)      # work1 carpet
+    set_rect(floor, 1, 15, 11, 27, 1)     # work2 oak
+    set_rect(floor, 16, 4, 24, 12, 4)     # meeting sage
+    set_rect(floor, 27, 1, 35, 9, 5)      # lounge white
+    set_rect(floor, 29, 19, 34, 24, 21)   # sleep soft
+    set_rect(floor, 12, 1, 14, 27, 22)    # vertical corridor
+    set_rect(floor, 1, 13, 38, 15, 22)    # horizontal corridor
+    set_rect(floor, 14, 26, 26, 29, 25)   # lobby wood
+    set_rect(floor, 14, 15, 29, 26, 22)   # SE open hall/path
+    set_rect(floor, 24, 1, 27, 13, 22)    # NE hall between meet/lounge
 
-    # glass war-room (center) — glass walls only, open feel
-    set_rect(floor, 19, 6, 31, 15, 4)
-    for x in range(19, 31):
-        floor[6][x] = 17
-        floor[14][x] = 17
-        solid(x, 6)
-        solid(x, 14)
-    for y in range(6, 15):
-        floor[y][19] = 17
-        floor[y][30] = 17
-        solid(19, y)
-        solid(30, y)
-    # glass doors (walkable)
-    for x, y in [(24, 6), (25, 6), (24, 14), (25, 14), (19, 10), (30, 10)]:
-        floor[y][x] = 11
-        coll[y][x] = 0
-
-    # --- BIG desk pods (open west) — 3 tiles wide desks ---
-    # pod A
-    for x in (3, 4, 5):
-        put(x, 5, 26 if x != 4 else 6)
-    put(4, 6, 7)
-    # pod B
-    for x in (9, 10, 11):
-        put(x, 5, 26 if x != 10 else 6)
-    put(10, 6, 7)
-    # pod C (south focus)
-    for x in (4, 5, 6):
-        put(x, 18, 26 if x != 5 else 6)
-    put(5, 19, 7)
-    # standing whiteboard near pods
-    put(14, 4, 15)
-    put(15, 4, 15)
-    put(2, 3, 20)
-    put(16, 8, 10)
-    put(2, 10, 27)
-    put(7, 10, 18, block=False)
-    put(8, 10, 18, block=False)
-    put(12, 12, 24)  # beanbag chill near desks
-    put(13, 12, 24)
-
-    # lounge sofas (4-tile long) + coffee island
-    for x in (26, 27, 28, 29):
-        put(x, 3, 9)
-    put(32, 4, 16)
-    put(33, 4, 16)
-    put(34, 4, 16)
-    put(28, 6, 23)  # round table
-    put(29, 6, 23)
-    put(28, 7, 23)
-    put(29, 7, 23)
-    put(27, 7, 7)
-    put(30, 7, 7)
-    put(36, 3, 27)
-    put(26, 10, 24)
-    put(27, 10, 24)
-    put(35, 8, 20)
-    put(37, 10, 10)
-
-    # war room furniture — big round + chairs + board
-    put(24, 9, 23)
-    put(25, 9, 23)
-    put(24, 10, 23)
-    put(25, 10, 23)
-    put(23, 9, 7)
-    put(26, 9, 7)
-    put(24, 8, 7)
-    put(25, 11, 7)
-    put(21, 8, 15)
-    put(22, 8, 15)
-    put(28, 12, 10)
-
-    # focus oak area (SW)
-    put(3, 21, 15)
-    put(10, 17, 10)
-    put(14, 20, 20)
-    put(8, 22, 18, block=False)
-    put(9, 22, 18, block=False)
-    put(2, 24, 24)
-
-    # nap pods — big beds
-    for x in (26, 27):
-        put(x, 18, 14)
-    for x in (32, 33):
-        put(x, 18, 14)
-    put(29, 20, 28, block=False)
-    put(30, 20, 28, block=False)
-    put(36, 18, 20)
-    put(37, 22, 27)
-    put(26, 23, 10)
-
-    # lobby entrance — big plants + glass doors
-    floor[H - 1][19] = 11
-    floor[H - 1][20] = 11
-    coll[H - 1][19] = 0
-    coll[H - 1][20] = 0
-    put(16, 27, 27)
-    put(23, 27, 27)
-    put(18, 27, 20)
-    put(15, 26, 19)
-    put(24, 26, 19)
-
-    # scattered big plants along concrete spine (not blocking path center)
-    for x, y in [(18, 3), (23, 3), (18, 16), (23, 16), (18, 24), (23, 24)]:
-        if decor[y][x] == 0:
-            put(x, y, 10)
-
-    # oak grain noise
-    for y in range(1, H - 1):
-        for x in range(1, W - 1):
+    # oak grain noise in work2
+    for y in range(15, 27):
+        for x in range(1, 11):
             if floor[y][x] == 1 and (x + y) % 6 == 0:
                 floor[y][x] = 25
 
+    # --- room walls + doors onto corridors ---
+    wall_v(11, 1, 13)
+    door(11, 6)
+    wall_v(11, 15, 27)
+    door(11, 20)
+
+    # meeting glass box 16..23 × 4..11
+    wall_h(16, 24, 4, 17)
+    wall_h(16, 24, 11, 17)
+    wall_v(16, 4, 12, 17)
+    wall_v(23, 4, 12, 17)
+    set_rect(floor, 17, 5, 23, 11, 4)
+    door(16, 7)
+    door(23, 7)
+    door(19, 11)
+    door(20, 11)
+
+    # lounge cream box 27..34 × 1..8
+    wall_h(27, 35, 1, 29)
+    wall_h(27, 35, 8, 3)
+    wall_v(27, 1, 9)
+    wall_v(34, 1, 9)
+    set_rect(floor, 28, 2, 34, 8, 5)
+    for x in range(28, 34):
+        floor[1][x] = 5
+        coll[1][x] = 0
+    door(27, 4)
+    door(27, 5)
+
+    # sleep small room 29..33 × 19..23
+    wall_h(29, 34, 19)
+    wall_h(29, 34, 23)
+    wall_v(29, 19, 24)
+    wall_v(33, 19, 24)
+    set_rect(floor, 30, 20, 33, 23, 21)
+    door(29, 21)
+
+    # --- furniture: work1 desks wall-aligned ---
+    put(2, 3, 26)
+    put(3, 3, 6)
+    put(4, 3, 26)
+    put(3, 4, 7)
+    put(6, 3, 26)
+    put(7, 3, 6)
+    put(8, 3, 26)
+    put(7, 4, 7)
+    put(2, 8, 15)
+    put(2, 9, 15)
+    put(9, 8, 10)
+    put(5, 10, 18, False)
+    put(6, 10, 18, False)
+
+    # work2 focus desks
+    put(2, 17, 26)
+    put(3, 17, 6)
+    put(4, 17, 26)
+    put(3, 18, 7)
+    put(7, 17, 26)
+    put(8, 17, 6)
+    put(9, 17, 26)
+    put(8, 18, 7)
+    put(2, 22, 20)
+    put(9, 23, 10)
+    put(5, 24, 24)
+
+    # meeting: table + chairs + whiteboard
+    put(19, 7, 23)
+    put(20, 7, 23)
+    put(19, 8, 23)
+    put(20, 8, 23)
+    put(18, 7, 7)
+    put(21, 7, 7)
+    put(19, 6, 7)
+    put(20, 9, 7)
+    put(17, 5, 15)
+    put(18, 5, 15)
+    put(22, 10, 10)
+
+    # lounge: sofa + coffee + round table
+    put(28, 2, 9)
+    put(29, 2, 9)
+    put(30, 2, 9)
+    put(31, 2, 9)
+    put(33, 3, 16)
+    put(32, 3, 16)
+    put(29, 5, 23)
+    put(30, 5, 23)
+    put(29, 6, 23)
+    put(30, 6, 23)
+    put(28, 5, 7)
+    put(31, 6, 7)
+    put(33, 6, 24)
+    put(33, 7, 20)
+
+    # sleep: one bed + lamp + rug
+    put(31, 20, 14)
+    put(32, 20, 14)
+    put(30, 22, 28, False)
+    put(32, 22, 20)
+
+    # lobby entrance
+    door(19, H - 1)
+    door(20, H - 1)
+    put(16, 27, 27)
+    put(23, 27, 27)
+    put(15, 26, 19)
+    put(24, 26, 19)
+
+    # corridor plants (edge only)
+    for x, y in [(12, 3), (13, 10), (12, 17), (13, 24), (18, 13), (25, 13)]:
+        if decor[y][x] == 0:
+            put(x, y, 10)
+
     waypoints = {
         "desks": [
-            {"x": 4, "y": 7},    # pod A approach
-            {"x": 10, "y": 7},   # pod B
-            {"x": 5, "y": 20},   # focus pod
+            {"x": 3, "y": 5},
+            {"x": 7, "y": 5},
+            {"x": 3, "y": 19},
         ],
-        "meeting": {"x": 22, "y": 10},
-        "break": {"x": 31, "y": 8},
-        # idle agents stroll these Lounge tiles (coffee / sofas / aisle)
+        "meeting": {"x": 18, "y": 9},
+        "break": {"x": 31, "y": 4},
         "lounge": [
-            {"x": 31, "y": 8},
-            {"x": 33, "y": 9},
-            {"x": 35, "y": 7},
-            {"x": 30, "y": 5},
-            {"x": 34, "y": 11},
-            {"x": 28, "y": 9},
-            {"x": 36, "y": 11},
+            {"x": 31, "y": 4},
             {"x": 32, "y": 5},
-            {"x": 35, "y": 10},
-            {"x": 29, "y": 11},
-            {"x": 37, "y": 7},
-            {"x": 26, "y": 8},
+            {"x": 28, "y": 3},
+            {"x": 30, "y": 7},
+            {"x": 33, "y": 5},
+            {"x": 29, "y": 4},
+            {"x": 32, "y": 7},
+            {"x": 28, "y": 7},
+            {"x": 31, "y": 7},
+            {"x": 33, "y": 4},
         ],
-        "sleep": {"x": 30, "y": 21},
+        "sleep": {"x": 31, "y": 21},
         "entrance": {"x": 20, "y": 27},
     }
 
-    # ensure waypoint tiles walkable
     walk_pts = (
         waypoints["desks"]
         + waypoints["lounge"]

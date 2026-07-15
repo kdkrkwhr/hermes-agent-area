@@ -70,27 +70,25 @@ export class OfficeScene extends Phaser.Scene {
       : {
           // fallback = office-map.json properties.waypoints
           desks: [
-            { x: 4, y: 7 },
-            { x: 10, y: 7 },
-            { x: 5, y: 20 },
+            { x: 3, y: 5 },
+            { x: 7, y: 5 },
+            { x: 3, y: 19 },
           ],
-          meeting: { x: 22, y: 10 },
-          break: { x: 31, y: 8 },
+          meeting: { x: 18, y: 9 },
+          break: { x: 31, y: 4 },
           lounge: [
-            { x: 31, y: 8 },
-            { x: 33, y: 9 },
-            { x: 35, y: 7 },
-            { x: 30, y: 5 },
-            { x: 34, y: 11 },
-            { x: 28, y: 9 },
-            { x: 36, y: 11 },
+            { x: 31, y: 4 },
             { x: 32, y: 5 },
-            { x: 35, y: 10 },
-            { x: 29, y: 11 },
-            { x: 37, y: 7 },
-            { x: 26, y: 8 },
+            { x: 28, y: 3 },
+            { x: 30, y: 7 },
+            { x: 33, y: 5 },
+            { x: 29, y: 4 },
+            { x: 32, y: 7 },
+            { x: 28, y: 7 },
+            { x: 31, y: 7 },
+            { x: 33, y: 4 },
           ],
-          sleep: { x: 30, y: 21 },
+          sleep: { x: 31, y: 21 },
           entrance: { x: 20, y: 27 },
         };
 
@@ -101,7 +99,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rebuildAgentIndex();
 
     // spawn 대장님 near corridor center (walkable)
-    this.boss = new Boss(this, { x: 21, y: 17 }); // concrete spine south of war room
+    this.boss = new Boss(this, { x: 12, y: 26 }); // corridor near lobby entrance
 
     // zone labels — room readability without cluttering gameplay
     this.addZoneLabels();
