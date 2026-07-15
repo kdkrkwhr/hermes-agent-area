@@ -11,7 +11,8 @@
     "smoke": "node scripts/smoke.mjs",
     "smoke:kanban": "node scripts/smoke-kanban.mjs",
     "smoke:clockout": "node scripts/smoke-clockout.mjs",
-    "smoke:room": "node scripts/smoke-room.mjs"
+    "smoke:room": "node scripts/smoke-room.mjs",
+    "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {
     "playwright": "^1.61.1",
