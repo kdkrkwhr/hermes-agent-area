@@ -10,6 +10,19 @@ function truncateBubble(text, maxChars = 28) {
   return `${raw.slice(0, Math.max(0, maxChars - 1))}…`;
 }
 
+/** Compact task clock: 14s / 3m / 1h20m. Null/NaN → null (hide). */
+export function formatTaskElapsed(seconds) {
+  if (seconds == null || typeof seconds !== "number" || !Number.isFinite(seconds)) {
+    return null;
+  }
+  const s = Math.max(0, Math.floor(seconds));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  return `${h}h${m}m`;
+}
+
 export class Agent {
   constructor(scene, def, startTile, waypoints) {
     this.scene = scene;
@@ -63,6 +76,19 @@ export class Agent {
 
     // thin progress under nameplate (running/chatting only)
     this.progressGfx = scene.add.graphics().setDepth(20).setVisible(false);
+    // elapsed next to bar (task_elapsed_s); hidden when null
+    this.elapsedLabel = scene.add
+      .text(px + 18, py - 34, "", {
+        fontFamily: "Segoe UI, sans-serif",
+        fontSize: "10px",
+        color: "#a8d4e0",
+        align: "left",
+        stroke: "#0b1016",
+        strokeThickness: 4,
+      })
+      .setOrigin(0, 0.5)
+      .setDepth(20)
+      .setVisible(false);
     // desk monitor glow (running/chatting) — see ?deskfx=0
     this.deskGlowGfx = createDeskGlow(scene);
 
@@ -168,6 +194,7 @@ export class Agent {
     if (!show) {
       gfx.clear();
       gfx.setVisible(false);
+      this.drawElapsedLabel(false);
       return;
     }
 
@@ -186,16 +213,35 @@ export class Agent {
       const fill = Math.max(0, Math.min(1, progress));
       gfx.fillStyle(0x5be0c8, 1);
       gfx.fillRect(x, y, Math.max(1, Math.round(BAR_W * fill)), BAR_H);
-      return;
+    } else {
+      // indeterminate: slide a chunk; clock-driven so it pulses between WS polls
+      const t = this.scene.time.now / 1000;
+      const phase = (Math.sin(t * 2.6) + 1) / 2;
+      const seg = Math.max(6, Math.round(BAR_W * 0.35));
+      const ox = x + (BAR_W - seg) * phase;
+      gfx.fillStyle(0x7ec8e8, 1);
+      gfx.fillRect(ox, y, seg, BAR_H);
     }
 
-    // indeterminate: slide a chunk; clock-driven so it pulses between WS polls
-    const t = this.scene.time.now / 1000;
-    const phase = (Math.sin(t * 2.6) + 1) / 2;
-    const seg = Math.max(6, Math.round(BAR_W * 0.35));
-    const ox = x + (BAR_W - seg) * phase;
-    gfx.fillStyle(0x7ec8e8, 1);
-    gfx.fillRect(ox, y, seg, BAR_H);
+    this.drawElapsedLabel(true, x + BAR_W + 3, y + BAR_H / 2);
+  }
+
+  /** Short clock beside the bar; hidden when task_elapsed_s is null. */
+  drawElapsedLabel(barVisible, lx, ly) {
+    const label = this.elapsedLabel;
+    if (!label) return;
+    if (!barVisible) {
+      label.setVisible(false);
+      return;
+    }
+    const text = formatTaskElapsed(this.serverData?.task_elapsed_s);
+    if (!text) {
+      label.setVisible(false);
+      return;
+    }
+    label.setText(text);
+    label.setPosition(lx, ly);
+    label.setVisible(true);
   }
 
   tilePos() {
@@ -318,6 +364,7 @@ export class Agent {
     this.bubbleBg?.destroy();
     this.bubbleText?.destroy();
     this.progressGfx?.destroy();
+    this.elapsedLabel?.destroy();
     this.deskGlowGfx?.destroy();
   }
 
@@ -333,6 +380,7 @@ export class Agent {
     this.sprite.setAlpha(alpha);
     this.nameLabel.setAlpha(alpha);
     this.progressGfx?.setAlpha(alpha);
+    this.elapsedLabel?.setAlpha(alpha);
 
     const destX = agentMsg.dest_x ?? agentMsg.x;
     const destY = agentMsg.dest_y ?? agentMsg.y;

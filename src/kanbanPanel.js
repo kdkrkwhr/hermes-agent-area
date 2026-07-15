@@ -1,5 +1,7 @@
 /** DOM overlay: kanban stats + agent task list + click detail strip. */
 
+import { formatTaskElapsed } from "./agents/Agent.js";
+
 function parseKanbanStats(raw) {
   const text = String(raw ?? "");
   const pick = (name) => {
@@ -77,6 +79,7 @@ export function createKanbanPanel() {
         <dt>상태</dt><dd><span class="kb-badge ${statusClass(agent.status)}">${escapeHtml(statusLabel(agent.status))}</span></dd>
         <dt>태스크</dt><dd>${escapeHtml(agent.task_title || "—")}</dd>
         <dt>ID</dt><dd><code>${escapeHtml(agent.task_id || "—")}</code></dd>
+        <dt>경과</dt><dd>${escapeHtml(formatTaskElapsed(agent.task_elapsed_s) || "—")}</dd>
         <dt>구역</dt><dd>${escapeHtml(agent.zone || "—")}</dd>
         <dt>말풍선</dt><dd>${escapeHtml(agent.bubble || "—")}</dd>
         <dt>게이트웨이</dt><dd>${escapeHtml(agent.gateway || "—")}</dd>
@@ -137,6 +140,7 @@ export function createKanbanPanel() {
         a.status,
         a.task_id,
         a.task_title,
+        a.task_elapsed_s,
         a.zone,
         a.bubble,
         a.gateway,
