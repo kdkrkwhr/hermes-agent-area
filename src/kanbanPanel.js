@@ -19,6 +19,8 @@ function statusLabel(status) {
   switch (status) {
     case "running":
       return "작업중";
+    case "chatting":
+      return "응답중";
     case "blocked":
       return "대기";
     case "offline":
@@ -31,7 +33,7 @@ function statusLabel(status) {
 }
 
 function statusClass(status) {
-  if (status === "running") return "kb-running";
+  if (status === "running" || status === "chatting") return "kb-running";
   if (status === "blocked") return "kb-blocked";
   if (status === "offline") return "kb-offline";
   return "kb-idle";
@@ -111,6 +113,7 @@ export function createKanbanPanel() {
     }
     renderList(lastAgents);
     lastPanelState = { ...lastPanelState, selectedId };
+    lastSnapshotKey = "";
     return selectedId;
   }
 
@@ -119,15 +122,33 @@ export function createKanbanPanel() {
     renderDetail(null);
     renderList(lastAgents);
     lastPanelState = { ...lastPanelState, selectedId: null };
+    lastSnapshotKey = "";
   });
 
   let lastPanelState = { stats: { running: 0, blocked: 0 }, selectedId: null, agentCount: 0, mode: "offline" };
+  let lastSnapshotKey = "";
 
   function update(snapshot, { live = false, mock = false } = {}) {
     const agents = snapshot?.agents ?? [];
+    const mode = live ? "live" : mock ? "mock" : "offline";
+    const snapshotKey = `${mode}|${snapshot?.stats?.raw ?? ""}|${JSON.stringify(
+      agents.map((a) => [
+        a.id,
+        a.status,
+        a.task_id,
+        a.task_title,
+        a.zone,
+        a.bubble,
+        a.gateway,
+      ]),
+    )}`;
+    if (snapshotKey === lastSnapshotKey) {
+      return { ...lastPanelState, selectedId };
+    }
+    lastSnapshotKey = snapshotKey;
+
     lastAgents = agents.map((a) => ({ ...a }));
     const stats = parseKanbanStats(snapshot?.stats?.raw);
-    const mode = live ? "live" : mock ? "mock" : "offline";
     elStats.textContent = `${mode} · running ${stats.running} · blocked ${stats.blocked}`;
     elStats.className = `kanban-panel__stats kanban-panel__stats--${mode}`;
     renderList(lastAgents);

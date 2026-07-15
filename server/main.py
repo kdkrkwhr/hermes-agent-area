@@ -67,11 +67,12 @@ BUBBLES = {
     "blocked": "검토 대기 중...",
     "idle": "휴식 중 ☕",
     "offline": "오프라인",
+    "chatting": "응답 중...",
 }
 
 
 def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
-    if status == "running":
+    if status in ("running", "chatting"):
         return "desk", WAYPOINTS["desks"][home_desk]
     if status == "blocked":
         return "meeting", WAYPOINTS["meeting"]
@@ -79,6 +80,43 @@ def _tile_to_zone(status: str, home_desk: int) -> tuple[str, dict[str, float]]:
         # 자리 비움 — 책상 옆 살짝 비워 둔 자리(책상에 앉아있지 않음 = break와 구분)
         return "away", WAYPOINTS["desks"][home_desk]
     return "break", WAYPOINTS["break"]
+
+
+def _profile_root(profile: str) -> Path:
+    if profile == "default":
+        return HERMES_HOME
+    return HERMES_HOME / "profiles" / profile
+
+
+def _gateway_log_path(profile: str) -> Path | None:
+    root = _profile_root(profile)
+    for p in (root / "logs" / "gateway.log", root / "gateway.log"):
+        if p.exists():
+            return p
+    return None
+
+
+def gateway_turn_active(profile: str, lines: list[str] | None = None) -> bool:
+    """디코/게이트웨이 응답 루프 중이면 True.
+
+    kanban running이 없어도 inbound 후 response ready 전이면 작업 중.
+    """
+    if lines is None:
+        path = _gateway_log_path(profile)
+        if not path:
+            return False
+        try:
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()[-120:]
+        except Exception:
+            return False
+    last_inbound = -1
+    last_ready = -1
+    for i, line in enumerate(lines):
+        if "inbound message:" in line:
+            last_inbound = i
+        elif "response ready:" in line:
+            last_ready = i
+    return last_inbound > last_ready
 
 
 def _run_cmd(args: list[str], timeout: float = 20.0) -> str:
@@ -287,13 +325,17 @@ class OfficeSim:
                     status = "running"
                 elif task and task.get("status") == "blocked":
                     status = "blocked"
+                elif gateway_turn_active(a.profile):
+                    # 칸반 없어도 디코 답장 중이면 휴식 취급 금지
+                    status = "chatting"
+                    task = None
                 else:
                     status = "idle"
                     task = None
             zone, dest = _tile_to_zone(status, a.home_desk)
             a.status = status
             a.zone = zone
-            a.bubble = BUBBLES[status]
+            a.bubble = BUBBLES.get(status, BUBBLES["idle"])
             a.dest_x = float(dest["x"])
             a.dest_y = float(dest["y"])
             if task:

@@ -114,7 +114,10 @@ export class Agent {
 
   /** Particle/lighting hook: live server status or mock room kind. */
   getEffectKind() {
-    if (this.live && this.serverStatus) return this.serverStatus;
+    if (this.live && this.serverStatus) {
+      // chatting uses same desk FX as running
+      return this.serverStatus === "chatting" ? "running" : this.serverStatus;
+    }
     if (this.currentKind === "desk") return "running";
     if (this.currentKind === "meeting") return "blocked";
     if (this.currentKind === "break" || this.currentKind === "sleep") return "idle";
