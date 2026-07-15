@@ -24,6 +24,7 @@ import { deskFxEnabledFromQuery } from "../effects/deskGlow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { Minimap } from "../ui/minimap.js";
+import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
 
@@ -182,6 +183,10 @@ export class OfficeScene extends Phaser.Scene {
     this.officeEvents.start();
 
     this.minimap = new Minimap(this);
+    this.whiteboardTicker = new WhiteboardTicker(this);
+    if (this.lastSnapshot) {
+      this.whiteboardTicker.updateFromSnapshot(this.lastSnapshot);
+    }
 
     this.publishDebug(resolveWsUrl(), null);
     this.connectWs();
@@ -274,7 +279,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lastSnapshot = mockSnap;
     this.setLive(false);
     this.applySnapshot(mockSnap);
-    this.kanbanPanel.update(mockSnap, { live: false, mock: true });
+    this.updateKanbanPanel(mockSnap, { live: false, mock: true });
     this.publishDebug(resolveWsUrl(), mockSnap);
   }
 
@@ -288,6 +293,7 @@ export class OfficeScene extends Phaser.Scene {
   updateKanbanPanel(snapshot, opts = {}) {
     if (!this.kanbanPanel || !snapshot) return;
     const panelState = this.kanbanPanel.update(snapshot, opts);
+    this.whiteboardTicker?.updateFromSnapshot(snapshot);
     if (typeof window !== "undefined") {
       window.__HERMES_AREA__ = {
         ...(window.__HERMES_AREA__ || {}),
@@ -550,6 +556,7 @@ export class OfficeScene extends Phaser.Scene {
       audio: this.officeAudio?.snapshot?.() ?? null,
       events: this.officeEvents?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
+      whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
     };
   }
 
