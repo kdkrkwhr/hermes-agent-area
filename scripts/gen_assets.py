@@ -450,7 +450,7 @@ def make_map_json() -> None:
     set_rect(floor, 30, 20, 33, 23, 21)
     door(29, 21)
 
-    # --- furniture: work1 desks wall-aligned ---
+    # --- furniture: work1 Open Desk (wall-aligned + monitors/lamps/plants) ---
     put(2, 3, 26)
     put(3, 3, 6)
     put(4, 3, 26)
@@ -459,13 +459,28 @@ def make_map_json() -> None:
     put(7, 3, 6)
     put(8, 3, 26)
     put(7, 4, 7)
+    put(5, 3, 20)          # desk lamp between stations
+    put(1, 3, 20)          # wall lamp
+    put(9, 3, 20)
+    put(5, 4, 7)           # spare chair (desks WP at y=5 clear)
+    put(9, 4, 7)
+    put(1, 4, 10)
+    put(10, 4, 10)
     put(2, 8, 15)
     put(2, 9, 15)
     put(9, 8, 10)
+    put(9, 9, 10)
+    put(1, 8, 19, False)   # side posters
+    put(1, 9, 19, False)
+    put(10, 8, 19, False)
     put(5, 10, 18, False)
     put(6, 10, 18, False)
+    put(4, 10, 18, False)
+    put(7, 10, 18, False)
+    put(2, 11, 24)         # corner beanbag
+    put(10, 11, 10)
 
-    # work2 focus desks
+    # work2 Focus desks
     put(2, 17, 26)
     put(3, 17, 6)
     put(4, 17, 26)
@@ -474,11 +489,23 @@ def make_map_json() -> None:
     put(8, 17, 6)
     put(9, 17, 26)
     put(8, 18, 7)
+    put(5, 17, 20)
+    put(1, 17, 20)
+    put(10, 17, 20)
+    put(5, 18, 7)
+    put(1, 18, 10)
+    put(10, 18, 10)
     put(2, 22, 20)
+    put(4, 22, 20)
     put(9, 23, 10)
+    put(1, 23, 10)
     put(5, 24, 24)
+    put(6, 24, 18, False)
+    put(7, 24, 18, False)
+    put(2, 24, 19, False)
+    put(10, 24, 19, False)
 
-    # meeting: table + chairs + whiteboard
+    # meeting War Room: table + chairs + board + side props
     put(19, 7, 23)
     put(20, 7, 23)
     put(19, 8, 23)
@@ -489,9 +516,17 @@ def make_map_json() -> None:
     put(20, 9, 7)
     put(17, 5, 15)
     put(18, 5, 15)
+    put(22, 5, 15)         # extra board strip
     put(22, 10, 10)
+    put(17, 10, 10)
+    put(17, 6, 20)         # lamp by boards
+    put(22, 6, 20)
+    put(21, 10, 24)        # side beanbag
+    put(17, 9, 7)          # side chair (meeting WP 18,9 clear)
+    put(18, 10, 18, False)
+    put(19, 10, 18, False)
 
-    # lounge: sofa + coffee + round table
+    # lounge: sofa + coffee + round table + wall props
     put(28, 2, 9)
     put(29, 2, 9)
     put(30, 2, 9)
@@ -506,25 +541,72 @@ def make_map_json() -> None:
     put(31, 6, 7)
     put(33, 6, 24)
     put(33, 7, 20)
+    put(32, 2, 20)         # lamp behind sofa
+    # keep (28,4)/(28,6) clear — lounge doors at (27,4)/(27,5)
+    put(33, 2, 19, False)
+    put(31, 5, 18, False)
+    put(32, 6, 18, False)
+    put(29, 3, 10)         # plant off door path
+    put(30, 3, 10)
 
-    # sleep: one bed + lamp + rug
+    # sleep Nap Pod: bed + lamps + rugs
     put(31, 20, 14)
     put(32, 20, 14)
     put(30, 22, 28, False)
+    put(31, 22, 28, False)
     put(32, 22, 20)
+    put(30, 20, 20)        # second lamp
+    put(32, 21, 20)        # lamp (sleep WP 31,21 clear)
+    # keep (30,21) clear — sleep door at (29,21)
 
-    # lobby entrance
+    # lobby entrance: rugs + plants + posters
     door(19, H - 1)
     door(20, H - 1)
     put(16, 27, 27)
     put(23, 27, 27)
     put(15, 26, 19)
     put(24, 26, 19)
+    put(17, 27, 18, False)
+    put(18, 27, 18, False)
+    put(21, 27, 18, False)
+    put(22, 27, 18, False)
+    put(14, 27, 10)
+    put(25, 27, 10)
+    put(15, 27, 19, False)
+    put(24, 27, 19, False)
+    put(17, 26, 20)
+    put(22, 26, 20)
 
-    # corridor plants (edge only)
-    for x, y in [(12, 3), (13, 10), (12, 17), (13, 24), (18, 13), (25, 13)]:
+    # corridor plants / posters (edges + hall sides; keep 2-tile spine walkable)
+    for x, y in [
+        (12, 3),
+        (13, 10),
+        (12, 17),
+        (13, 24),
+        (18, 13),
+        (25, 13),
+        (12, 7),
+        (13, 14),
+        (12, 21),
+        (22, 13),
+        (28, 13),
+        (33, 13),
+    ]:
         if decor[y][x] == 0:
             put(x, y, 10)
+    for x, y in [
+        (12, 5),
+        (13, 8),
+        (12, 12),
+        (13, 19),
+        (12, 25),
+        (16, 14),
+        (24, 14),
+        (30, 14),
+        (35, 13),
+    ]:
+        if decor[y][x] == 0:
+            put(x, y, 19, False)
 
     waypoints = {
         "desks": [
