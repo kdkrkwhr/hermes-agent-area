@@ -528,6 +528,22 @@ class AgentState:
         }
 
 
+@dataclass
+class DeskBrief:
+    weather: dict[str, Any] | None = None
+    news: dict[str, Any] | None = None
+    weather_mtime: float | None = None
+    news_mtime: float | None = None
+    generated_at: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "weather": self.weather,
+            "news": self.news,
+            "generated_at": self.generated_at,
+        }
+
+
 class OfficeSim:
     def __init__(self) -> None:
         self.agents: list[AgentState] = []
@@ -537,7 +553,9 @@ class OfficeSim:
         self.last_poll_at: float | None = None
         self.poll_error: str | None = None
         self.desk_kanban: dict[str, Any] = read_kanban_desk_board()
+        self.desk_brief = DeskBrief()
         self._clients: set[WebSocket] = set()
+        self._desk_brief_clients: set[WebSocket] = set()
         self._lock = asyncio.Lock()
         # cold start from filesystem so first WS snapshot isn't empty
         self.sync_agents_from_defs(discover_agent_defs(_profiles_from_fs()))
@@ -586,6 +604,7 @@ class OfficeSim:
             "kanban_db": str(KANBAN_DB),
             "hermes_home": str(HERMES_HOME),
             "deskKanban": self.desk_kanban,
+            "deskBrief": self.desk_brief.to_dict(),
         }
 
     def apply_hermes(self, profiles: dict[str, dict[str, str]], tasks: dict[str, dict[str, Any]]) -> None:
@@ -665,6 +684,67 @@ class OfficeSim:
     def drop_client(self, ws: WebSocket) -> None:
         self._clients.discard(ws)
 
+    async def broadcast_desk_brief(self) -> None:
+        """Push desk-brief update to all desk-brief WS clients."""
+        if not self._desk_brief_clients:
+            return
+        payload = json.dumps(
+            {
+                "type": "desk-brief",
+                "ts": time.time(),
+                "weather": self.desk_brief.weather,
+                "news": self.desk_brief.news,
+                "generated_at": self.desk_brief.generated_at,
+            },
+            ensure_ascii=False,
+        )
+        dead: list[WebSocket] = []
+        for ws in list(self._desk_brief_clients):
+            try:
+                await ws.send_text(payload)
+            except Exception:
+                dead.append(ws)
+        for ws in dead:
+            self._desk_brief_clients.discard(ws)
+
+    async def add_desk_brief_client(self, ws: WebSocket) -> None:
+        await ws.accept()
+        self._desk_brief_clients.add(ws)
+        await ws.send_text(
+            json.dumps(
+                {
+                    "type": "desk-brief",
+                    "ts": time.time(),
+                    "weather": self.desk_brief.weather,
+                    "news": self.desk_brief.news,
+                    "generated_at": self.desk_brief.generated_at,
+                },
+                ensure_ascii=False,
+            )
+        )
+
+    def drop_desk_brief_client(self, ws: WebSocket) -> None:
+        self._desk_brief_clients.discard(ws)
+
+    def refresh_cron_brief(self) -> bool:
+        """Check cron outputs for new data; return True if desk_brief changed."""
+        weather = _read_cron_data(WEATHER_CRON_ID)
+        news = _read_cron_data(NEWS_CRON_ID)
+        w_mtime = weather.get("_cron_mtime") if weather else None
+        n_mtime = news.get("_cron_mtime") if news else None
+
+        changed = (
+            w_mtime != self.desk_brief.weather_mtime
+            or n_mtime != self.desk_brief.news_mtime
+        )
+        if changed:
+            self.desk_brief.weather = weather
+            self.desk_brief.news = news
+            self.desk_brief.weather_mtime = w_mtime
+            self.desk_brief.news_mtime = n_mtime
+            self.desk_brief.generated_at = time.time()
+        return changed
+
 
 office = OfficeSim()
 app = FastAPI(title="Hermes Agent Area Server")
@@ -733,6 +813,54 @@ def _read_json_file(path: Path) -> Any | None:
         return None
 
 
+def _extract_json_from_text(text: str) -> Any | None:
+    """Extract JSON from markdown text — code blocks or raw JSON objects."""
+    # try ```json / ``` code blocks
+    for m in re.finditer(r"```(?:json)?\s*\n(.*?)\n```", text, re.DOTALL):
+        try:
+            return json.loads(m.group(1).strip())
+        except json.JSONDecodeError:
+            continue
+    # try raw JSON object anywhere in the text
+    for m in re.finditer(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.DOTALL):
+        try:
+            return json.loads(m.group(0))
+        except json.JSONDecodeError:
+            continue
+    return None
+
+
+def _read_cron_data(job_id: str) -> dict[str, Any] | None:
+    """Read latest cron output for a job-id; extract JSON data from .md files."""
+    folder = CRON_OUTPUT / job_id
+    if not folder.is_dir():
+        return None
+    # prefer .json files
+    json_files = sorted(
+        folder.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
+    if json_files:
+        data = _read_json_file(json_files[0])
+        if isinstance(data, dict):
+            data["_cron_path"] = str(json_files[0])
+            data["_cron_mtime"] = json_files[0].stat().st_mtime
+            return data
+    # fall back to .md files
+    md_files = sorted(
+        folder.glob("*.md"), key=lambda p: p.stat().st_mtime, reverse=True
+    )
+    if not md_files:
+        return None
+    path = md_files[0]
+    text = path.read_text(encoding="utf-8", errors="replace")
+    data = _extract_json_from_text(text)
+    if isinstance(data, dict):
+        data["_cron_path"] = str(path)
+        data["_cron_mtime"] = path.stat().st_mtime
+        return data
+    return None
+
+
 @app.get("/api/desk-brief")
 def api_desk_brief():
     """CEO desk panel: weather/news (PWA) + kanban board digest (HERMES_HOME)."""
@@ -779,6 +907,22 @@ async def ws_endpoint(ws: WebSocket):
         office.drop_client(ws)
 
 
+@app.websocket("/ws/desk-brief")
+async def ws_desk_brief(ws: WebSocket):
+    """Push weather + news updates when cron outputs change."""
+    await office.add_desk_brief_client(ws)
+    try:
+        while True:
+            try:
+                await asyncio.wait_for(ws.receive_text(), timeout=60.0)
+            except asyncio.TimeoutError:
+                await ws.send_text(json.dumps({"type": "ping", "ts": time.time()}))
+    except WebSocketDisconnect:
+        office.drop_desk_brief_client(ws)
+    except Exception:
+        office.drop_desk_brief_client(ws)
+
+
 async def poll_loop() -> None:
     while True:
         try:
@@ -797,6 +941,9 @@ async def poll_loop() -> None:
             logs = await asyncio.to_thread(tail_gateway_log, 30)
             defs = discover_agent_defs(profiles)
 
+            # check cron outputs for weather/news changes
+            brief_changed = await asyncio.to_thread(office.refresh_cron_brief)
+
             async with office._lock:
                 office.profiles = profiles
                 office.stats = {"raw": stats_raw.strip()[:2000]}
@@ -806,6 +953,10 @@ async def poll_loop() -> None:
                 office.last_poll_at = time.time()
                 office.sync_agents_from_defs(defs)
                 office.apply_hermes(profiles, tasks)
+
+            # push desk-brief update if cron data changed
+            if brief_changed:
+                await office.broadcast_desk_brief()
         except Exception as e:
             office.poll_error = str(e)
         await asyncio.sleep(POLL_SECONDS)
