@@ -19,6 +19,7 @@ Hermes 멀티 에이전트를 **ZEP 스타일 2D 가상 사무실**에서 실시
 | **휴식 = 라운지 산책** | idle일 때 한 점에 멈추지 않고 휴게 공간을 자유롭게 이동 |
 | **구역** | Open Desk · Lounge · War Room · Focus · Nap Pod · Lobby |
 | **오프라인 미리보기** | BE 없이도 mock으로 맵·UI 확인 가능 (GitHub Pages) |
+| **PWA 설치** | Chrome에서「앱으로 설치」→ 독립 창. Pages·로컬 둘 다 가능 |
 
 ## 구조
 
@@ -57,6 +58,14 @@ npm install && npm run dev
 > **Pages만 열면** mock/오프라인입니다. 브라우저가 `https` → `ws://localhost`를 막아서,
 > 실시간 모니터링은 **로컬 FE + BE**가 필요합니다.
 > 터널을 쓸 때만 Pages에 `?ws=wss://xxxx.trycloudflare.com/ws` 를 붙이세요.
+
+### Chrome 앱(PWA)으로 설치
+
+1. https://kdkrkwhr.github.io/hermes-agent-area/ 또는 `npm run dev` 로컬 주소 열기
+2. Chrome 주소창 오른쪽 **설치 아이콘** / 메뉴 → **앱으로 설치** / **Install Hermes Agent Area**
+3. 독립 창으로 실행됨 (탭 없이). 오프라인에서도 마지막 캐시된 맵 표시
+
+실시간 연동은 여전히 **로컬 BE**가 떠 있어야 함. Pages에서 설치한 PWA는 HTTPS라 `ws://localhost`가 막히므로, live 쓰려면 로컬 FE에서 설치하거나 cloudflare 터널 `?ws=`를 쓰세요.
 
 ## 에이전트 이름 (Hermes 프로필)
 

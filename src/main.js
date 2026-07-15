@@ -4,6 +4,14 @@ import { OfficeScene } from "./scenes/OfficeScene.js";
 import { MAP_W, MAP_H } from "./constants.js";
 import { mountConnectPanel } from "./connectPanel.js";
 
+// PWA: Chrome「앱으로 설치」/ 독립 창
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    const swUrl = `${import.meta.env.BASE_URL}sw.js`;
+    navigator.serviceWorker.register(swUrl, { scope: import.meta.env.BASE_URL }).catch(() => {});
+  });
+}
+
 const toolbar = document.createElement("div");
 toolbar.className = "toolbar";
 toolbar.innerHTML = `
