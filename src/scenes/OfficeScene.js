@@ -31,6 +31,7 @@ import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
+import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -42,6 +43,7 @@ import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { LobbySignage } from "../ui/lobbySignage.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
 import { createDeskBriefPanel } from "../ui/deskBriefPanel.js";
+import { createHelpOverlay } from "../ui/helpOverlay.js";
 import { RoomInteract } from "../roomInteract.js";
 import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
@@ -237,6 +239,8 @@ export class OfficeScene extends Phaser.Scene {
     // lobby wall TV — kanban counts; ?signage=0 off
     this.lobbySignage = new LobbySignage(this);
 
+    this.helpOverlay = createHelpOverlay(this);
+
     this.initClockOut();
 
     // click mahogany desk / exec chair → desk brief (when boss nearby)
@@ -415,6 +419,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow = new LampGlow(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
+    this.coffeeSteam = new CoffeeSteam(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.applyTimeOfDayLighting();
@@ -444,6 +449,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.sync();
     this.dustMotes?.sync();
     this.sunBeams?.sync();
+    this.coffeeSteam?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -934,7 +940,9 @@ export class OfficeScene extends Phaser.Scene {
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
+      steam: this.coffeeSteam?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
+      help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       signage: this.lobbySignage?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
