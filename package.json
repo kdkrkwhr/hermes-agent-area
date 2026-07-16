@@ -15,6 +15,7 @@
     "smoke:room": "node scripts/smoke-room.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
+    "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

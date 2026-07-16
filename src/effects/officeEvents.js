@@ -14,6 +14,7 @@ const RANDOM_KINDS = [
   "fire_drill",
   "stretch_break",
   "water_cooler",
+  "pizza_party",
 ];
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
@@ -29,6 +30,9 @@ const STRETCH_LINES = ["으쌰", "기지개"];
 const WATER_CHAT_MIN_MS = 3000;
 const WATER_CHAT_MAX_MS = 5000;
 const WATER_COOLER_LINES = ["오늘 blocked 많네", "커피?", "standup 언제?"];
+/** pizza_party: lounge gather hold (ms) */
+const PIZZA_HOLD_MIN_MS = 8000;
+const PIZZA_HOLD_MAX_MS = 12000;
 const COFFEE_GID = 16;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 const PRINTER_GID = 36;
@@ -44,6 +48,10 @@ const LUNCH_WEIGHT = 4;
 const WATER_HOUR_START = 14;
 const WATER_HOUR_END = 17;
 const WATER_WEIGHT = 3;
+/** weekday late afternoon: higher pick weight for pizza_party */
+const PIZZA_HOUR_START = 16;
+const PIZZA_HOUR_END = 18;
+const PIZZA_WEIGHT = 3;
 
 function parseEventsMode() {
   try {
@@ -216,6 +224,7 @@ export class OfficeEvents {
     this.fireDrillGathered = 0;
     this.stretchAffected = 0;
     this.waterCoolerGathered = 0;
+    this.pizzaPartyGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     /** ms timestamp — IdleChatter skips while now < this */
@@ -293,12 +302,15 @@ export class OfficeEvents {
       hour >= LUNCH_HOUR_START && hour < LUNCH_HOUR_END;
     const waterWindow =
       weekday && hour >= WATER_HOUR_START && hour < WATER_HOUR_END;
+    const pizzaWindow =
+      weekday && hour >= PIZZA_HOUR_START && hour < PIZZA_HOUR_END;
     const pool = [];
     for (const k of RANDOM_KINDS) {
       if (k === "quiet_hours" && !night) continue;
       let weight = 1;
       if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
       else if (k === "water_cooler" && waterWindow) weight = WATER_WEIGHT;
+      else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -336,6 +348,7 @@ export class OfficeEvents {
     else if (kind === "fire_drill") this.runFireDrill();
     else if (kind === "stretch_break") this.runStretchBreak();
     else if (kind === "water_cooler") this.runWaterCooler();
+    else if (kind === "pizza_party") this.runPizzaParty();
 
     this.publish();
   }
@@ -861,6 +874,123 @@ export class OfficeEvents {
   }
 
   /**
+   * Pizza party: toast + steam/confetti at lounge + idle 2–4 gather 8–12s.
+   * Skip if another gather (or chatter pause lock) is active.
+   */
+  runPizzaParty() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      PIZZA_HOLD_MIN_MS +
+      Math.floor(Math.random() * (PIZZA_HOLD_MAX_MS - PIZZA_HOLD_MIN_MS + 1));
+    // lock early so standup/water/ship don't race during pathfind
+    this.markGathering(holdMs + 12000);
+    this.showToast("피자 왔어요", 3200);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    this.spawnSteamBurst(x, y - 8, Math.min(4500, holdMs));
+    this.spawnPizzaConfetti(x, y - 10, 3500);
+    void this.gatherIdleToPizzaParty(holdMs);
+  }
+
+  /** Light pizza-colored confetti ring at lounge center. */
+  spawnPizzaConfetti(x, y, ms = 3500) {
+    const emitter = this.scene.add.particles(x, y, "fx-spark", {
+      speed: { min: 24, max: 78 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.75, end: 0 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 450, max: 900 },
+      frequency: 50,
+      quantity: 3,
+      tint: [0xff6b4a, 0xffd166, 0xffffff, 0x7ec850, 0xff9f43],
+      blendMode: "ADD",
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      emitter.destroy();
+    });
+  }
+
+  /** Idle/break 2–4 → lounge spots; hold 8–12s → wander restore. */
+  async gatherIdleToPizzaParty(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const hold =
+      holdMs ??
+      PIZZA_HOLD_MIN_MS +
+        Math.floor(Math.random() * (PIZZA_HOLD_MAX_MS - PIZZA_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.pizzaPartyGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /**
    * Stretch break: toast + idle/running desk bubbles + y-scale pulse.
    * No gather move. Skip if standup/lunch/printer/fire_drill gather is active.
    */
@@ -1102,6 +1232,7 @@ export class OfficeEvents {
       fireDrillGathered: this.fireDrillGathered,
       stretchAffected: this.stretchAffected,
       waterCoolerGathered: this.waterCoolerGathered,
+      pizzaPartyGathered: this.pizzaPartyGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       gathering: this.isGathering(),
