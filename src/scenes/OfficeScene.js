@@ -37,6 +37,7 @@ import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
+import { AquariumFish } from "../effects/aquariumFish.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import {
@@ -470,6 +471,7 @@ export class OfficeScene extends Phaser.Scene {
     this.cityLights = new CityLights(this);
     this.coffeeSteam = new CoffeeSteam(this);
     this.aquariumBubbles = new AquariumBubbles(this);
+    this.aquariumFish = new AquariumFish(this);
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -506,6 +508,7 @@ export class OfficeScene extends Phaser.Scene {
     this.cityLights?.sync();
     this.coffeeSteam?.sync();
     this.aquariumBubbles?.sync();
+    this.aquariumFish?.sync();
     this.plantSway?.sync();
     this.weatherFx?.onLightingChanged();
   }
@@ -566,6 +569,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.lampGlow?.update(this.time.now);
     this.cityLights?.update(this.time.now);
+    this.aquariumFish?.update(this.time.now);
     this.plantSway?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -1029,6 +1033,7 @@ export class OfficeScene extends Phaser.Scene {
       cityLights: this.cityLights?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
+      aquariumFish: this.aquariumFish?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
