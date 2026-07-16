@@ -6,6 +6,12 @@ const BGM_VOL = 0.12;
 const FOOTSTEP_VOL = 0.045;
 /** Boss walk footstep rate (~3Hz). */
 const FOOTSTEP_MS = 320;
+/** Keyboard typing click — quieter than footstep. */
+const TYPING_VOL = 0.03;
+/** Per-agent typing click spacing. */
+const TYPING_AGENT_MS = 400;
+/** Global floor so many running agents don't click-spam. */
+const TYPING_GLOBAL_MS = 100;
 
 function readMutePref() {
   try {
@@ -23,7 +29,7 @@ function writeMutePref(muted) {
   }
 }
 
-/** Default on; `?sfx=0|false|off` disables status + footstep SFX (BGM still ok). */
+/** Default on; `?sfx=0|false|off` disables status/footstep/typing SFX (BGM still ok). */
 export function sfxQueryEnabled() {
   if (typeof location === "undefined") return true;
   const v = new URLSearchParams(location.search).get("sfx");
@@ -31,7 +37,7 @@ export function sfxQueryEnabled() {
   return !/^(0|false|off)$/i.test(v);
 }
 
-/** Ambient BGM + mute (M) + short status/footstep SFX. Unlock on first gesture (autoplay). */
+/** Ambient BGM + mute (M) + short status/footstep/typing SFX. Unlock on first gesture (autoplay). */
 export class OfficeAudio {
   constructor(scene) {
     this.scene = scene;
@@ -41,6 +47,9 @@ export class OfficeAudio {
     this.sfxEnabled = sfxQueryEnabled();
     this._lastSfxAt = 0;
     this._lastFootstepAt = 0;
+    /** @type {Map<string, number>} */
+    this._typingByAgent = new Map();
+    this._lastTypingGlobalAt = 0;
   }
 
   preload() {
@@ -122,6 +131,48 @@ export class OfficeAudio {
     const key = kind === "running" ? "sfx-running" : "sfx-blocked";
     if (!this.scene.cache.audio.exists(key)) return;
     this.scene.sound.play(key, { volume: 0.22 });
+  }
+
+  /**
+   * Desk typing click burst while effectKind===running.
+   * Per-agent ~400ms + global floor; no-ops when muted / locked / ?sfx=0.
+   */
+  playTypingSfx(agentId) {
+    if (!this.sfxOk()) return;
+    const id = String(agentId ?? "");
+    if (!id) return;
+    const now = this.scene.time.now;
+    const lastAgent = this._typingByAgent.get(id) || 0;
+    if (now - lastAgent < TYPING_AGENT_MS) return;
+    if (this._lastTypingGlobalAt && now - this._lastTypingGlobalAt < TYPING_GLOBAL_MS) {
+      return;
+    }
+    this._typingByAgent.set(id, now);
+    this._lastTypingGlobalAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // 2 tiny high clicks ≈ key burst
+      for (let i = 0; i < 2; i++) {
+        const t = t0 + i * 0.028;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        const f = 2100 + Math.random() * 900;
+        osc.frequency.setValueAtTime(f, t);
+        osc.frequency.exponentialRampToValueAtTime(f * 0.7, t + 0.025);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(TYPING_VOL, t + 0.004);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.028);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + 0.032);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /**

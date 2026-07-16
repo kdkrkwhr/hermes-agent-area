@@ -552,6 +552,13 @@ export class OfficeScene extends Phaser.Scene {
   updateVisualEffects() {
     for (const agent of this.agents) {
       this.syncAgentEmitter(agent);
+      // running desk/focus typing clicks — only while sprite is shown
+      if (
+        agent.getEffectKind() === "running" &&
+        agent.sprite?.visible
+      ) {
+        this.officeAudio?.playTypingSfx?.(agent.def.id);
+      }
     }
     this.lampGlow?.update(this.time.now);
     this.cityLights?.update(this.time.now);
