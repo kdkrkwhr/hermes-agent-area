@@ -24,6 +24,7 @@ import {
 } from "../effects/officeEffects.js";
 import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } from "../effects/deskGlow.js";
 import { shadowSnapshot } from "../effects/spriteShadow.js";
+import { footprintSnapshot } from "../effects/footprintTrail.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { IdleChatter } from "../effects/idleChatter.js";
@@ -35,6 +36,7 @@ import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
+import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import {
@@ -467,6 +469,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
     this.coffeeSteam = new CoffeeSteam(this);
+    this.aquariumBubbles = new AquariumBubbles(this);
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -502,6 +505,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sunBeams?.sync();
     this.cityLights?.sync();
     this.coffeeSteam?.sync();
+    this.aquariumBubbles?.sync();
     this.plantSway?.sync();
     this.weatherFx?.onLightingChanged();
   }
@@ -1014,10 +1018,17 @@ export class OfficeScene extends Phaser.Scene {
         this.boss,
         this.mascot,
       ].filter(Boolean)),
+      footprints: footprintSnapshot([
+        ...(this.agents || []),
+        this.boss,
+        this.mascot,
+        ...(this.visitorDirector?.visitors || []),
+      ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
+      aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,

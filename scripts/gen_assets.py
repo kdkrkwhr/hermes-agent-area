@@ -393,8 +393,31 @@ def make_tileset() -> None:
     fill(buf, w, ox + 10, oy + 9, ox + 12, oy + 11, (40, 44, 52, 255))  # button
     fill(buf, w, ox + 3, oy + 12, ox + 13, oy + 14, (60, 64, 72, 255))  # tray
 
+    # 36 aquarium (gid 37) — glass tank + water + fish + stand
+    TANK = (70, 90, 110, 255)
+    GLASS_AQ = (160, 210, 230, 180)
+    WATER = (40, 140, 190, 220)
+    WATER2 = (60, 170, 210, 200)
+    SAND = (210, 190, 140, 255)
+    FISH = (255, 140, 60, 255)
+    FISH2 = (255, 200, 80, 255)
+    STAND = (90, 70, 55, 255)
+    ox, oy = tile_at(4, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 13, ox + 15, oy + 16, STAND)  # wood stand
+    fill(buf, w, ox + 2, oy + 2, ox + 14, oy + 14, TANK)  # frame
+    fill(buf, w, ox + 3, oy + 3, ox + 13, oy + 12, WATER)  # water
+    fill(buf, w, ox + 3, oy + 3, ox + 13, oy + 5, WATER2)  # surface
+    fill(buf, w, ox + 3, oy + 10, ox + 13, oy + 12, SAND)  # gravel
+    fill(buf, w, ox + 5, oy + 6, ox + 9, oy + 9, FISH)  # fish body
+    fill(buf, w, ox + 9, oy + 7, ox + 11, oy + 9, FISH2)  # tail
+    px(buf, w, ox + 6, oy + 7, (30, 30, 40, 255))  # eye
+    px(buf, w, ox + 4, oy + 4, GLASS_AQ)  # bubble hint
+    px(buf, w, ox + 8, oy + 5, GLASS_AQ)
+    rect(buf, w, ox + 2, oy + 2, ox + 14, oy + 14, (200, 230, 240, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(4, 4), (5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -422,7 +445,7 @@ def make_map_json() -> None:
       16 coffee  17 glass  18 rug  19 poster  20 lamp  21 napFloor  22 concrete
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
-      34 bookshelf  35 flowerPot  36 printer
+      34 bookshelf  35 flowerPot  36 printer  37 aquarium
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -635,6 +658,8 @@ def make_map_json() -> None:
     put(17, 15, 9)
     put(18, 15, 9)
     put(19, 15, 9)
+    put(15, 15, 37)  # aquarium west of sofa (wall edge)
+    put(20, 15, 37)  # aquarium between sofa and coffee
     put(21, 15, 16)
     put(22, 15, 16)
     put(23, 15, 36)  # printer beside coffee (open-desk edge)
@@ -763,7 +788,7 @@ def make_map_json() -> None:
     for p in walk_pts:
         x, y = p["x"], p["y"]
         coll[y][x] = 0
-        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27, 31, 32, 34, 35, 36):
+        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27, 31, 32, 34, 35, 36, 37):
             decor[y][x] = 0
 
     def flat(layer):
