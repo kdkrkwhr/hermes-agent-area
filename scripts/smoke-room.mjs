@@ -4,17 +4,30 @@
  */
 import { chromium } from "playwright";
 
-const base = process.env.SMOKE_URL || "http://localhost:5173/hermes-agent-area/";
+const base = process.env.SMOKE_URL || "http://127.0.0.1:5173/hermes-agent-area/";
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
 const errors = [];
 page.on("pageerror", (e) => errors.push(String(e)));
 
-await page.goto(base, { waitUntil: "networkidle", timeout: 30000 });
+await page.goto(base, { waitUntil: "load", timeout: 30000 });
 await page.waitForFunction(() => window.__HERMES_AREA__?.ready === true, null, {
   timeout: 15000,
 });
-await page.waitForTimeout(600);
+// postBoot sets ready before OfficeScene finishes — wait for room interact + greet
+await page.waitForFunction(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  return !!(sc?.boss?.sprite && sc?.roomInteract?.coffeeTiles?.length);
+}, null, { timeout: 20000 });
+await page.waitForFunction(() => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const n =
+    sc?.roomInteract?.visitCount ??
+    window.__HERMES_AREA__?.roomInteract?.visitCount ??
+    0;
+  return n > 0;
+}, null, { timeout: 10000 }).catch(() => {});
+await page.waitForTimeout(300);
 await page.mouse.click(80, 80);
 
 // dismiss lobby clock-out if welcome path triggered it
@@ -25,10 +38,15 @@ await page.evaluate(() => {
 });
 
 const welcome = await page.evaluate(() => {
-  const ri = window.__HERMES_AREA__?.roomInteract;
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const ri = sc?.roomInteract;
   return {
-    visitCount: ri?.visitCount ?? 0,
-    lastKind: ri?.lastAction?.kind ?? null,
+    visitCount:
+      ri?.visitCount ?? window.__HERMES_AREA__?.roomInteract?.visitCount ?? 0,
+    lastKind:
+      ri?.lastAction?.kind ??
+      window.__HERMES_AREA__?.roomInteract?.lastAction?.kind ??
+      null,
     coffeeTiles: ri?.coffeeTiles?.length ?? 0,
   };
 });
@@ -36,7 +54,7 @@ const welcome = await page.evaluate(() => {
 const coffee = await page.evaluate(async () => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
   const tile = sc?.roomInteract?.coffeeTiles?.[0];
-  if (!tile || !sc?.boss) return { ok: false, why: "no-coffee" };
+  if (!tile || !sc?.boss?.sprite) return { ok: false, why: "no-coffee" };
   sc.boss.sprite.setPosition(tile.x, tile.y + 28);
   sc.refreshInteractHud?.();
   const hint = sc.roomInteract.hintLabel();
@@ -44,16 +62,25 @@ const coffee = await page.evaluate(async () => {
   await new Promise((r) => setTimeout(r, 200));
   const open = !!document.querySelector(".mg2048.is-open");
   // play one move then close
-  window.dispatchEvent(new KeyboardEvent("keydown", { code: "ArrowRight", bubbles: true }));
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { code: "ArrowRight", bubbles: true }),
+  );
   await new Promise((r) => setTimeout(r, 100));
   document.querySelector('.mg2048 [data-role="close"]')?.click();
   await new Promise((r) => setTimeout(r, 200));
   const score = window.__HERMES_AREA__?.roomInteract?.lastScore?.score;
-  return { ok: true, hint, open, score, closed: !document.querySelector(".mg2048.is-open") };
+  return {
+    ok: true,
+    hint,
+    open,
+    score,
+    closed: !document.querySelector(".mg2048.is-open"),
+  };
 });
 
 const nap = await page.evaluate(async () => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  if (!sc?.boss?.sprite) return { ok: false, why: "no-boss" };
   const sleep = sc?.waypoints?.sleep || { x: 31, y: 21 };
   sc.boss.sprite.setPosition(sleep.x * 32 + 16, sleep.y * 32 + 16);
   sc.refreshInteractHud?.();
@@ -70,7 +97,7 @@ const meeting = await page.evaluate(async () => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
   const meet = sc?.waypoints?.meeting || { x: 18, y: 9 };
   const agent = sc?.agents?.[0];
-  if (!agent) return { ok: false, why: "no-agent" };
+  if (!agent?.sprite || !sc?.boss?.sprite) return { ok: false, why: "no-agent" };
   sc.roomInteract.meetingActive = false;
   agent.currentKind = "meeting";
   agent.serverStatus = "blocked";
@@ -88,10 +115,14 @@ const meeting = await page.evaluate(async () => {
 
 const work = await page.evaluate(() => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
-  const agent = sc?.agents?.find((a) => a.getEffectKind() === "running") || sc?.agents?.[0];
-  if (!agent || !sc?.boss) return { ok: false, why: "no-worker" };
+  const agent =
+    sc?.agents?.find((a) => a.getEffectKind() === "running") || sc?.agents?.[0];
+  if (!agent?.sprite || !sc?.boss?.sprite) return { ok: false, why: "no-worker" };
   agent.serverStatus = "running";
-  agent.serverData = { ...(agent.serverData || {}), task_title: "칸반 인터랙션 스모크 작업" };
+  agent.serverData = {
+    ...(agent.serverData || {}),
+    task_title: "칸반 인터랙션 스모크 작업",
+  };
   agent.currentKind = "desk";
   sc.boss.sprite.setPosition(agent.sprite.x + 20, agent.sprite.y);
   sc.boss._nearAgent = agent;
@@ -119,5 +150,5 @@ const fail =
   !work.hasTask ||
   errors.length;
 
-await browser.close();
+await browser.close().catch(() => {});
 process.exit(fail ? 1 : 0);
