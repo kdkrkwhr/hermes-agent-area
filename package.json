@@ -14,6 +14,7 @@
     "smoke:clockout": "node scripts/smoke-clockout.mjs",
     "smoke:room": "node scripts/smoke-room.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
+    "smoke:projector": "node scripts/smoke-projector.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

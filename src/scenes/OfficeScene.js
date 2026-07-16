@@ -38,6 +38,7 @@ import { CityLights } from "../effects/cityLights.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
+import { MeetingProjector } from "../effects/meetingProjector.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import {
@@ -472,6 +473,7 @@ export class OfficeScene extends Phaser.Scene {
     this.coffeeSteam = new CoffeeSteam(this);
     this.aquariumBubbles = new AquariumBubbles(this);
     this.aquariumFish = new AquariumFish(this);
+    this.meetingProjector = new MeetingProjector(this);
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -556,7 +558,7 @@ export class OfficeScene extends Phaser.Scene {
     }
   }
 
-  updateVisualEffects() {
+  updateVisualEffects(delta = 16) {
     for (const agent of this.agents) {
       this.syncAgentEmitter(agent);
       // running desk/focus typing clicks — only while sprite is shown
@@ -570,6 +572,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.update(this.time.now);
     this.cityLights?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
+    this.meetingProjector?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -1034,6 +1037,7 @@ export class OfficeScene extends Phaser.Scene {
       steam: this.coffeeSteam?.snapshot?.() ?? null,
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,
+      meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
@@ -1055,7 +1059,7 @@ export class OfficeScene extends Phaser.Scene {
     for (const agent of this.agents) {
       agent.update(time, delta);
     }
-    this.updateVisualEffects();
+    this.updateVisualEffects(delta);
     if (this.boss) {
       this.boss.update(time, delta);
       this.boss.maybeSendPos(this.ws);

@@ -220,6 +220,8 @@ export class OfficeEvents {
     this.parcelNearBoss = false;
     /** ms timestamp — IdleChatter skips while now < this */
     this._gatherUntil = 0;
+    /** Sticky while standup gather/hold runs (lastEvent may become ship_it). */
+    this._standupGathering = false;
   }
 
   /** standup / lunch / printer gather in progress. */
@@ -410,6 +412,7 @@ export class OfficeEvents {
 
   runStandup() {
     this.showToast("스탠드업 타임");
+    this._standupGathering = true;
     const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
     const { x, y } = tileCenter(this.scene, meet.x, meet.y);
     const glow = this.scene.add.circle(x, y, 56, 0x5ee0c8, 0.4);
@@ -427,7 +430,13 @@ export class OfficeEvents {
       tween.stop();
       glow.destroy();
     });
-    void this.gatherIdleToMeeting(meet);
+    void this.gatherIdleToMeeting(meet).finally(() => {
+      const left = Math.max(0, (this._gatherUntil || 0) - this.scene.time.now);
+      this.scene.time.delayedCall(left + 80, () => {
+        this._standupGathering = false;
+        this.publish();
+      });
+    });
   }
 
   /**
@@ -1097,6 +1106,7 @@ export class OfficeEvents {
       parcelNearBoss: this.parcelNearBoss,
       gathering: this.isGathering(),
       gatherUntil: this._gatherUntil || 0,
+      standupGathering: !!this._standupGathering,
     };
   }
 
