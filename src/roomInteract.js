@@ -8,8 +8,14 @@ const AQUARIUM_GID = 37;
 const LINGER_MS = 4500;
 const AQUAFEED_MS = 7000;
 const AQUAFEED_COOLDOWN_MS = 15000;
+/** Mascot pet: 4–6s active, 12s cooldown, ~2.0 tile proximity. */
+const MASCOTPET_MS_MIN = 4000;
+const MASCOTPET_MS_MAX = 6000;
+const MASCOTPET_COOLDOWN_MS = 12000;
+const MASCOTPET_NEAR_TILES = 2.0;
 const VISIT_KEY = "hermes-area-visit-count";
 const TYPING_FRAMES = ["·", "··", "···"];
+const HEART_TINTS = [0xff6699, 0xff88aa, 0xff4466, 0xffaacc];
 
 function tileCenter(scene, tx, ty) {
   const tw = scene.map.tileWidth;
@@ -129,6 +135,67 @@ function aquariumFeedEnabledFromQuery() {
   }
 }
 
+/** Default on; `?mascotpet=0|false|off` disables (mascot spawn still needs `?mascot≠0`). */
+function mascotPetEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("mascotpet");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
+function nearMascot(scene) {
+  const m = scene.mascot?.sprite;
+  const b = scene.boss?.sprite;
+  if (!m || !b || !scene.map) return false;
+  const reach = scene.map.tileWidth * MASCOTPET_NEAR_TILES;
+  return Math.hypot(b.x - m.x, b.y - m.y) <= reach;
+}
+
+function ensureHeartTexture(scene) {
+  if (scene.textures.exists("fx-heart")) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  // tiny heart: two bumps + diamond tip
+  g.fillCircle(3, 3, 2.2);
+  g.fillCircle(7, 3, 2.2);
+  g.fillTriangle(1, 4, 9, 4, 5, 9);
+  g.generateTexture("fx-heart", 10, 10);
+  g.destroy();
+}
+
+function burstMascotHearts(scene, x, y) {
+  if (!scene?.add) return null;
+  ensureHeartTexture(scene);
+  const qty = 6 + Math.floor(Math.random() * 5); // 6–10
+  const emitter = scene.add.particles(x, y - 12, "fx-heart", {
+    speed: { min: 24, max: 68 },
+    angle: { min: 220, max: 320 },
+    gravityY: -18,
+    scale: { start: 0.95, end: 0.2 },
+    alpha: { start: 0.95, end: 0 },
+    lifespan: { min: 700, max: 1200 },
+    quantity: qty,
+    frequency: -1,
+    tint: HEART_TINTS,
+    blendMode: "NORMAL",
+    rotate: { min: -20, max: 20 },
+  });
+  emitter.setDepth(12);
+  emitter.explode(qty);
+  scene.time.delayedCall(1400, () => {
+    try {
+      emitter.destroy();
+    } catch {
+      /* ignore */
+    }
+  });
+  return { emitter, qty };
+}
+
 function loungeAgents(scene) {
   return (scene.agents || []).filter((a) => {
     if (a.serverStatus === "idle" || a.currentKind === "break") return true;
@@ -180,6 +247,11 @@ export class RoomInteract {
     this.aquaFeedActiveUntil = 0;
     this.aquaFeedCooldownUntil = 0;
     this.lastFeedAt = 0;
+    this.mascotPetEnabled = mascotPetEnabledFromQuery();
+    this.mascotPetActiveUntil = 0;
+    this.mascotPetCooldownUntil = 0;
+    this.lastPetAt = 0;
+    this._lastHeartQty = 0;
   }
 
   /** Call once after map ready — entry welcome. */
@@ -207,6 +279,7 @@ export class RoomInteract {
   }
 
   hintKind() {
+    // priority: coffee > aquafeed > nap > mascotpet > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -216,6 +289,14 @@ export class RoomInteract {
       return "aquarium";
     }
     if (nearSleep(this.scene)) return "nap";
+    if (
+      this.mascotPetEnabled &&
+      this.scene.mascot &&
+      nearMascot(this.scene) &&
+      !this.mascotPetActive()
+    ) {
+      return "mascotpet";
+    }
     const near = this.scene.boss?._nearAgent;
     if (near && isWorking(near)) return "work";
     return null;
@@ -231,6 +312,12 @@ export class RoomInteract {
       return "E 먹이주기";
     }
     if (k === "nap") return "E 낮잠";
+    if (k === "mascotpet") {
+      if (this.mascotPetCoolingDown()) {
+        return `쓰다듬기 쿨다운 ${this.mascotPetCooldownLeftSec()}s`;
+      }
+      return "E 쓰다듬기";
+    }
     if (k === "work") return "E 작업내용";
     return null;
   }
@@ -249,6 +336,13 @@ export class RoomInteract {
     if (nearSleep(this.scene)) {
       this.openNap();
       return true;
+    }
+    if (
+      this.mascotPetEnabled &&
+      this.scene.mascot &&
+      nearMascot(this.scene)
+    ) {
+      return this.startMascotPet();
     }
 
     const near = this.scene.boss?._nearAgent;
@@ -329,6 +423,61 @@ export class RoomInteract {
     return true;
   }
 
+  mascotPetActive() {
+    return this.scene.time.now < this.mascotPetActiveUntil;
+  }
+
+  mascotPetCoolingDown() {
+    return this.scene.time.now < this.mascotPetCooldownUntil;
+  }
+
+  mascotPetCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.mascotPetCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startMascotPet() {
+    if (!this.mascotPetEnabled || !this.scene.mascot) return false;
+    if (this.mascotPetActive()) return true;
+    if (this.mascotPetCoolingDown()) {
+      this.showToast(`쓰다듬기 쿨다운 ${this.mascotPetCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "mascot_pet_cooldown",
+        cooldownSec: this.mascotPetCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const now = this.scene.time.now;
+    const dur =
+      MASCOTPET_MS_MIN +
+      Math.floor(Math.random() * (MASCOTPET_MS_MAX - MASCOTPET_MS_MIN + 1));
+    this.lastPetAt = now;
+    this.mascotPetActiveUntil = now + dur;
+    this.mascotPetCooldownUntil = now + MASCOTPET_COOLDOWN_MS;
+    const boss = this.scene.boss?.sprite;
+    const mascot = this.scene.mascot;
+    mascot.startPet?.(dur, boss?.x, boss?.y);
+    const burst = burstMascotHearts(
+      this.scene,
+      mascot.sprite.x,
+      mascot.sprite.y,
+    );
+    this._lastHeartQty = burst?.qty ?? 0;
+    this.scene.officeAudio?.playMascotMeow?.();
+    this.showToast("쓰다듬기 ♥");
+    this.lastAction = {
+      kind: "mascot_pet_start",
+      startedAt: now,
+      durationMs: dur,
+      hearts: this._lastHeartQty,
+    };
+    this.publish();
+    return true;
+  }
+
   openNap() {
     if (this.nap?.isOn?.()) return;
     this.lastAction = { kind: "nap_start" };
@@ -378,6 +527,14 @@ export class RoomInteract {
       this.lastAction = {
         kind: "aquarium_feed_end",
         lastFeedAt: this.lastFeedAt,
+      };
+      this.publish();
+    }
+    if (this.mascotPetActiveUntil && time >= this.mascotPetActiveUntil) {
+      this.mascotPetActiveUntil = 0;
+      this.lastAction = {
+        kind: "mascot_pet_end",
+        lastPetAt: this.lastPetAt,
       };
       this.publish();
     }
@@ -505,6 +662,20 @@ export class RoomInteract {
     }
   }
 
+  mascotPetSnapshot() {
+    return {
+      enabled: !!this.mascotPetEnabled && !!this.scene.mascot,
+      active: this.mascotPetActive(),
+      cooldown: this.mascotPetCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.mascotPetCooldownUntil - this.scene.time.now),
+      ),
+      lastPetAt: this.lastPetAt || null,
+      hearts: this._lastHeartQty || 0,
+    };
+  }
+
   snapshot() {
     return {
       visitCount: this.visitCount || readVisitCount(),
@@ -524,6 +695,10 @@ export class RoomInteract {
         Math.round(this.aquaFeedCooldownUntil - this.scene.time.now),
       ),
       lastFeedAt: this.lastFeedAt || null,
+      mascotPetEnabled: !!this.mascotPetEnabled && !!this.scene.mascot,
+      mascotPetActive: this.mascotPetActive(),
+      mascotPetCooldown: this.mascotPetCoolingDown(),
+      lastPetAt: this.lastPetAt || null,
     };
   }
 
@@ -532,6 +707,7 @@ export class RoomInteract {
     window.__HERMES_AREA__ = {
       ...(window.__HERMES_AREA__ || {}),
       roomInteract: this.snapshot(),
+      mascotPet: this.mascotPetSnapshot(),
     };
   }
 }
@@ -544,4 +720,6 @@ export {
   nearCoffee,
   nearAquarium,
   nearSleep,
+  nearMascot,
+  mascotPetEnabledFromQuery,
 };

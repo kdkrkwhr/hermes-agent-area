@@ -32,6 +32,9 @@ export class Mascot {
     this.busy = false;
     this.idleUntil = scene.time.now + 800;
     this.lastDir = "down";
+    /** @type {number} pet-mode end time (scene.time.now); 0 = off */
+    this.petUntil = 0;
+    this._petBaseY = null;
 
     const px = startTile.x * this.tileSize + this.tileSize / 2;
     const py = startTile.y * this.tileSize + this.tileSize / 2;
@@ -45,6 +48,61 @@ export class Mascot {
 
     this.ensureAnims();
     this.sprite.anims.play(`${ID}-idle-down`, true);
+  }
+
+  isPetting(time = this.scene.time.now) {
+    return time < (this.petUntil || 0);
+  }
+
+  /**
+   * Stop wander, face toward a world point (boss), short idle bounce.
+   * @param {number} durationMs
+   * @param {number} [faceX]
+   * @param {number} [faceY]
+   */
+  startPet(durationMs, faceX, faceY) {
+    const now = this.scene.time.now;
+    this.path = [];
+    this.pathIndex = 0;
+    this.busy = false;
+    this.petUntil = now + Math.max(400, durationMs || 5000);
+    if (typeof faceX === "number" && typeof faceY === "number") {
+      this.lastDir = this.facingFromDelta(
+        faceX - this.sprite.x,
+        faceY - this.sprite.y,
+      );
+    }
+    const idleKey = `${ID}-idle-${this.lastDir || "down"}`;
+    try {
+      this.sprite.anims.play(idleKey, true);
+    } catch {
+      /* ignore */
+    }
+    this.scene.tweens.killTweensOf(this.sprite);
+    this._petBaseY = this.sprite.y;
+    this.sprite.setScale(1, 1);
+    const repeats = Math.max(3, Math.floor((durationMs || 5000) / 450));
+    this.scene.tweens.add({
+      targets: this.sprite,
+      scaleY: 1.14,
+      y: this.sprite.y - 5,
+      duration: 200,
+      yoyo: true,
+      repeat: repeats,
+      ease: "Sine.easeInOut",
+    });
+  }
+
+  endPet() {
+    if (!this.petUntil) return;
+    this.petUntil = 0;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setScale(1, 1);
+    if (this._petBaseY != null) {
+      this.sprite.y = this._petBaseY;
+      this._petBaseY = null;
+    }
+    this.idleUntil = this.scene.time.now + 1200 + Math.random() * 800;
   }
 
   syncShadow() {
@@ -140,6 +198,22 @@ export class Mascot {
   }
 
   update(time, delta) {
+    if (this.petUntil && time >= this.petUntil) {
+      this.endPet();
+    }
+    if (this.isPetting(time)) {
+      const idleKey = `${ID}-idle-${this.lastDir || "down"}`;
+      if (this.sprite.anims.currentAnim?.key !== idleKey) {
+        try {
+          this.sprite.anims.play(idleKey, true);
+        } catch {
+          /* ignore */
+        }
+      }
+      this.syncShadow();
+      return;
+    }
+
     if (!this.path.length) {
       const idleKey = `${ID}-idle-${this.lastDir || "down"}`;
       if (this.sprite.anims.currentAnim?.key !== idleKey) {

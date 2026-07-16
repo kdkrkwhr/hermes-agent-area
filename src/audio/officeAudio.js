@@ -27,6 +27,7 @@ const TYPING_GLOBAL_MS = 100;
 /** Lobby door-chime throttle when visitors stack. */
 const DOOR_CHIME_MS = 1500;
 const BLOOP_MS = 450;
+const MEOW_MS = 700;
 
 function readMutePref() {
   try {
@@ -67,6 +68,7 @@ export class OfficeAudio {
     this._lastTypingGlobalAt = 0;
     this._lastDoorChimeAt = 0;
     this._lastBloopAt = 0;
+    this._lastMeowAt = 0;
     /** @type {BiquadFilterNode | null} */
     this._bgmFilter = null;
     /** @type {string | null} */
@@ -424,6 +426,44 @@ export class OfficeAudio {
       gain.connect(ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.18);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Short mascot meow / chirp on pet — procedural WebAudio.
+   * Respects mute / ?sfx=0.
+   */
+  playMascotMeow() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastMeowAt && now - this._lastMeowAt < MEOW_MS) return;
+    this._lastMeowAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // rising chirp + soft trailing mew
+      const tones = [
+        { type: "triangle", f0: 480, f1: 820, at: 0, dur: 0.11, vol: 0.09 },
+        { type: "sine", f0: 640, f1: 420, at: 0.08, dur: 0.16, vol: 0.07 },
+      ];
+      for (const { type, f0, f1, at, dur, vol } of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        const t = t0 + at;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(80, f1), t + dur);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
     } catch {
       /* autoplay / headless */
     }
