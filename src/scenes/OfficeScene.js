@@ -39,6 +39,14 @@ import {
   isTaskCompleteTransition,
   maybeForceCelebrate,
 } from "../effects/taskCelebrate.js";
+import {
+  burstChatPing,
+  chatPingSnapshot,
+  flushForceChatPing,
+  isChatPingTransition,
+  maybeForceChatPing,
+  pingEnabledFromQuery,
+} from "../effects/chatPing.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { LobbySignage } from "../ui/lobbySignage.js";
@@ -414,6 +422,9 @@ export class OfficeScene extends Phaser.Scene {
     this.lightingOverlay = createLightingOverlay(this, mapW, mapH);
     this.agentEmitters = new Map();
     this._emitterKinds = new Map();
+    this._agentStatuses = new Map();
+    this._chatPingBurstCount = 0;
+    this._chatPingLastAt = null;
     this.deskFxEnabled = deskFxEnabledFromQuery();
     this.focusFxEnabled = focusFxEnabledFromQuery();
     this.devTimeIndex = this.parseDevTimeOverride();
@@ -425,9 +436,11 @@ export class OfficeScene extends Phaser.Scene {
     this.coffeeSteam = new CoffeeSteam(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
+    this.pingEnabled = pingEnabledFromQuery();
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
     maybeForceCelebrate(this, this.agents);
+    maybeForceChatPing(this, this.agents);
 
     this.input.keyboard?.on("keydown-L", () => {
       this.devTimeIndex =
@@ -457,6 +470,16 @@ export class OfficeScene extends Phaser.Scene {
   }
 
   syncAgentEmitter(agent) {
+    // chatting collapses to running in getEffectKind — track raw status for ping
+    const status = agent.serverStatus ?? null;
+    const prevStatus = this._agentStatuses.get(agent.def.id);
+    if (status !== prevStatus) {
+      this._agentStatuses.set(agent.def.id, status);
+      if (this.pingEnabled && isChatPingTransition(prevStatus, status)) {
+        burstChatPing(this, agent);
+      }
+    }
+
     const kind = agent.getEffectKind();
     const prev = this._emitterKinds.get(agent.def.id);
     if (prev === kind) return;
@@ -875,6 +898,7 @@ export class OfficeScene extends Phaser.Scene {
       if (!agent) continue;
       agent.applyServer(raw);
     }
+    flushForceChatPing(this);
   }
 
   publishDebug(url, msg) {
@@ -921,11 +945,11 @@ export class OfficeScene extends Phaser.Scene {
               : null,
       lighting: this.lightingPreset?.name ?? null,
       effectKinds: Object.fromEntries(
-        this.agents.map((a) => [a.def.id, a.getEffectKind()]),
+        (this.agents || []).map((a) => [a.def.id, a.getEffectKind()]),
       ),
       deskFxEnabled: this.deskFxEnabled !== false,
       deskGlow: Object.fromEntries(
-        this.agents.map((a) => {
+        (this.agents || []).map((a) => {
           const on = a.deskGlowGfx?.visible;
           return [a.def.id, on ? resolveDeskGlowKind(a) : null];
         }),
@@ -937,6 +961,7 @@ export class OfficeScene extends Phaser.Scene {
       snow: this.snowFlakes?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
+      chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([
         ...(this.agents || []),
         this.boss,
