@@ -26,7 +26,6 @@ import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } 
 import { shadowSnapshot } from "../effects/spriteShadow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
-import { IdleChatter } from "../effects/idleChatter.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
 import { WeatherFx } from "../effects/weatherFx.js";
@@ -43,7 +42,6 @@ import {
 import {
   burstChatPing,
   chatPingSnapshot,
-  flushForceChatPing,
   isChatPingTransition,
   maybeForceChatPing,
   pingEnabledFromQuery,
@@ -158,9 +156,6 @@ export class OfficeScene extends Phaser.Scene {
       this.mascot = new Mascot(this, lou, this.waypoints);
     }
 
-    // lobby visitor walk-by — ambient only; ?visitor=0 off, ?visitor=1 fast
-    this.visitorDirector = new VisitorDirector(this);
-
     // zone labels — room readability without cluttering gameplay
     this.addZoneLabels();
 
@@ -243,8 +238,9 @@ export class OfficeScene extends Phaser.Scene {
 
     this.officeEvents = new OfficeEvents(this);
     this.officeEvents.start();
-    this.idleChatter = new IdleChatter(this);
-    this.idleChatter.start();
+
+    // lobby walk-by NPC — ambience only; ?visitor=0 off, ?visitor=1 fast
+    this.visitorDirector = new VisitorDirector(this);
 
     this.minimap = new Minimap(this);
     this.whiteboardTicker = new WhiteboardTicker(this);
@@ -868,6 +864,7 @@ export class OfficeScene extends Phaser.Scene {
         this.agentEmitters?.get(agent.def.id)?.destroy();
         this.agentEmitters?.delete(agent.def.id);
         this._emitterKinds?.delete(agent.def.id);
+        this._agentStatuses?.delete(agent.def.id);
         agent.destroy();
       }
     }
@@ -902,7 +899,6 @@ export class OfficeScene extends Phaser.Scene {
       if (!agent) continue;
       agent.applyServer(raw);
     }
-    flushForceChatPing(this);
   }
 
   publishDebug(url, msg) {
@@ -949,18 +945,17 @@ export class OfficeScene extends Phaser.Scene {
               : null,
       lighting: this.lightingPreset?.name ?? null,
       effectKinds: Object.fromEntries(
-        (this.agents || []).map((a) => [a.def.id, a.getEffectKind()]),
+        this.agents.map((a) => [a.def.id, a.getEffectKind()]),
       ),
       deskFxEnabled: this.deskFxEnabled !== false,
       deskGlow: Object.fromEntries(
-        (this.agents || []).map((a) => {
+        this.agents.map((a) => {
           const on = a.deskGlowGfx?.visible;
           return [a.def.id, on ? resolveDeskGlowKind(a) : null];
         }),
       ),
       audio: this.officeAudio?.snapshot?.() ?? null,
       events: this.officeEvents?.snapshot?.() ?? null,
-      chatter: this.idleChatter?.snapshot?.() ?? null,
       rain: this.windowRain?.snapshot?.() ?? null,
       snow: this.snowFlakes?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
@@ -970,7 +965,9 @@ export class OfficeScene extends Phaser.Scene {
         ...(this.agents || []),
         this.boss,
         this.mascot,
+        this.visitorDirector?.visitor,
       ].filter(Boolean)),
+      visitor: this.visitorDirector?.snapshot?.() ?? null,
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
@@ -979,7 +976,6 @@ export class OfficeScene extends Phaser.Scene {
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       signage: this.lobbySignage?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
-      visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,
         done: !!this._clockOutDone,

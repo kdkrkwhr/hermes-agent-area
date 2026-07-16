@@ -31,6 +31,7 @@ ATTENDANCE_PWA = Path(
 CRON_OUTPUT = HERMES_HOME / "cron" / "output"
 WEATHER_CRON_ID = "b7e2c91a4d08"  # company-weather-pwa
 NEWS_CRON_ID = "f1a2b3c94d56"  # daily-news-pwa
+STOCK_CRON_ID = "3f480c05eb1f"  # morning-kr-stock-report
 POLL_SECONDS = 5.0
 TICK_SECONDS = 0.05  # 20 Hz position interpolate
 SPEED_PX = 200.0  # px/s @ 32px tiles
@@ -588,14 +589,19 @@ class AgentState:
 class DeskBrief:
     weather: dict[str, Any] | None = None
     news: dict[str, Any] | None = None
+    stock: dict[str, Any] | None = None
+    kanban: dict[str, Any] | None = None
     weather_mtime: float | None = None
     news_mtime: float | None = None
+    stock_mtime: float | None = None
     generated_at: float | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "weather": self.weather,
             "news": self.news,
+            "stock": self.stock,
+            "kanban": self.kanban,
             "generated_at": self.generated_at,
         }
 
@@ -750,6 +756,8 @@ class OfficeSim:
                 "ts": time.time(),
                 "weather": self.desk_brief.weather,
                 "news": self.desk_brief.news,
+                "stock": self.desk_brief.stock,
+                "kanban": self.desk_brief.kanban,
                 "generated_at": self.desk_brief.generated_at,
             },
             ensure_ascii=False,
@@ -773,6 +781,8 @@ class OfficeSim:
                     "ts": time.time(),
                     "weather": self.desk_brief.weather,
                     "news": self.desk_brief.news,
+                    "stock": self.desk_brief.stock,
+                    "kanban": self.desk_brief.kanban,
                     "generated_at": self.desk_brief.generated_at,
                 },
                 ensure_ascii=False,
@@ -786,18 +796,25 @@ class OfficeSim:
         """Check cron outputs for new data; return True if desk_brief changed."""
         weather = _read_cron_data(WEATHER_CRON_ID)
         news = _read_cron_data(NEWS_CRON_ID)
+        stock = _read_cron_data(STOCK_CRON_ID)
+        kanban = read_kanban_desk_board()
         w_mtime = weather.get("_cron_mtime") if weather else None
         n_mtime = news.get("_cron_mtime") if news else None
+        s_mtime = stock.get("_cron_mtime") if stock else None
 
         changed = (
             w_mtime != self.desk_brief.weather_mtime
             or n_mtime != self.desk_brief.news_mtime
+            or s_mtime != self.desk_brief.stock_mtime
         )
         if changed:
             self.desk_brief.weather = weather
             self.desk_brief.news = news
+            self.desk_brief.stock = stock
+            self.desk_brief.kanban = kanban
             self.desk_brief.weather_mtime = w_mtime
             self.desk_brief.news_mtime = n_mtime
+            self.desk_brief.stock_mtime = s_mtime
             self.desk_brief.generated_at = time.time()
         return changed
 
@@ -917,9 +934,76 @@ def _read_cron_data(job_id: str) -> dict[str, Any] | None:
     return None
 
 
+def _read_hermes_files_tree(root: Path, max_depth: int = 3, max_files: int = 60) -> dict[str, Any]:
+    """Scan HERMES_HOME directory tree for 내PC tab — text files only, sensitive excluded."""
+    SENSITIVE = {".env", ".env.local", "credentials", "token", "secret", ".git"}
+    SKIP_EXT = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp3", ".wav", ".ogg",
+                ".mp4", ".webm", ".db", ".sqlite", ".sqlite3", ".exe", ".dll",
+                ".so", ".bin", ".pyc", ".ttf", ".woff", ".woff2", ".ico", ".zip",
+                ".tar", ".gz", ".7z", ".pdf", ".docx", ".pptx"}
+    TEXT_EXT = {".py", ".js", ".ts", ".jsx", ".tsx", ".md", ".txt", ".json",
+                ".yaml", ".yml", ".toml", ".cfg", ".ini", ".html", ".css",
+                ".csv", ".xml", ".sh", ".bash", ".ps1", ".java", ".c", ".cpp",
+                ".h", ".cs", ".rs", ".go", ".rb", ".php", ".swift", ".kt"}
+    MAX_FILE_SIZE = 100 * 1024  # 100KB
+
+    def _scan_dir(path: Path, depth: int) -> dict[str, Any] | None:
+        if depth > max_depth:
+            return None
+        name = path.name
+        if name.startswith(".") or name in SENSITIVE:
+            return None
+        try:
+            entries = sorted(path.iterdir(), key=lambda p: (not p.is_dir(), p.name.lower()))
+        except (PermissionError, OSError):
+            return None
+
+        children: list[dict[str, Any]] = []
+        file_count = 0
+        for entry in entries:
+            if file_count >= max_files:
+                break
+            ename = entry.name
+            if ename.startswith(".") or ename in SENSITIVE:
+                continue
+            try:
+                if entry.is_dir():
+                    subtree = _scan_dir(entry, depth + 1)
+                    if subtree and subtree.get("children"):
+                        children.append(subtree)
+                elif entry.is_file():
+                    ext = entry.suffix.lower()
+                    if ext in SKIP_EXT:
+                        continue
+                    size = entry.stat().st_size
+                    if size > MAX_FILE_SIZE:
+                        continue
+                    node: dict[str, Any] = {
+                        "name": ename,
+                        "type": "file",
+                        "size": size,
+                        "ext": ext,
+                        "preview": ext in TEXT_EXT,
+                    }
+                    children.append(node)
+                    file_count += 1
+            except (PermissionError, OSError):
+                continue
+        if not children:
+            return None
+        return {"name": name, "type": "dir", "children": children}
+
+    result = _scan_dir(root, 0)
+    return {
+        "root": str(root),
+        "tree": result,
+        "generated_at": time.time(),
+    }
+
+
 @app.get("/api/desk-brief")
 def api_desk_brief():
-    """CEO desk panel: weather/news (PWA + cron) + kanban board digest (HERMES_HOME)."""
+    """CEO desk panel: weather/news (PWA + cron) + stock + kanban + files (HERMES_HOME)."""
     weather_path = ATTENDANCE_PWA / "data" / "weather" / "latest.json"
     news_path = ATTENDANCE_PWA / "data" / "news" / "latest.json"
     weather = _read_json_file(weather_path)
@@ -931,13 +1015,17 @@ def api_desk_brief():
     if not news:
         news = _read_cron_data(NEWS_CRON_ID)
 
+    stock = _read_cron_data(STOCK_CRON_ID)
     kanban = read_kanban_desk_board()
+    files = _read_hermes_files_tree(HERMES_HOME)
     # keep WS snapshot warm for clients that listen only
     office.desk_kanban = kanban
     return {
         "weather": weather,
         "news": news,
+        "stock": stock,
         "kanban": kanban,
+        "files": files,
         "source": "be-pwa" if weather or news or kanban.get("by_assignee") else "empty",
         "paths": {
             "weather": str(weather_path),
@@ -950,6 +1038,7 @@ def api_desk_brief():
         "cron": {
             "company-weather-pwa": _latest_cron_meta(WEATHER_CRON_ID),
             "daily-news-pwa": _latest_cron_meta(NEWS_CRON_ID),
+            "morning-kr-stock-report": _latest_cron_meta(STOCK_CRON_ID),
         },
     }
 
@@ -968,6 +1057,43 @@ async def ws_endpoint(ws: WebSocket):
         office.drop_client(ws)
     except Exception:
         office.drop_client(ws)
+
+
+@app.get("/api/file-preview")
+def api_file_preview(path: str = ""):
+    """Read a text file under HERMES_HOME for 내PC preview (500 chars max, sanitized)."""
+    if not path:
+        return {"error": "path required", "content": ""}
+    try:
+        full = Path(path).resolve()
+    except Exception:
+        return {"error": "invalid path", "content": ""}
+    try:
+        hermes_resolved = HERMES_HOME.resolve()
+    except Exception:
+        return {"error": "hermes home resolve failed", "content": ""}
+    # security: must be under HERMES_HOME
+    if not str(full).startswith(str(hermes_resolved)):
+        return {"error": "path outside HERMES_HOME", "content": ""}
+    if not full.is_file():
+        return {"error": "not a file", "content": ""}
+    # skip binary / sensitive
+    name = full.name.lower()
+    if name in {".env", ".env.local"} or name.startswith("."):
+        return {"error": "restricted", "content": ""}
+    ext = full.suffix.lower()
+    SKIP = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp3", ".wav", ".mp4",
+            ".db", ".sqlite", ".exe", ".dll", ".bin", ".zip", ".tar", ".gz"}
+    if ext in SKIP:
+        return {"error": "binary file", "content": ""}
+    try:
+        size = full.stat().st_size
+        if size > 100 * 1024:
+            return {"error": "file too large", "content": ""}
+        text = full.read_text(encoding="utf-8", errors="replace")[:500]
+        return {"path": path, "content": text, "size": size, "error": None}
+    except Exception as e:
+        return {"error": str(e), "content": ""}
 
 
 @app.websocket("/ws/desk-brief")

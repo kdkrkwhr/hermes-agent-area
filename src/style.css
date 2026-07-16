@@ -561,6 +561,16 @@ body,
   font-size: 14px;
 }
 
+.dbp__badge {
+  font-size: 10px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(240, 180, 60, 0.25);
+  color: #f0c860;
+  border: 1px solid rgba(240, 180, 60, 0.4);
+  white-space: nowrap;
+}
+
 .dbp__close {
   border: 0;
   background: transparent;
@@ -575,16 +585,81 @@ body,
   color: #fff;
 }
 
-/* ── body · two columns ──────────────────────────────────── */
+/* ── body · bookmark tabs ────────────────────────────────── */
 
 .dbp__body {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  padding: 12px 14px;
-  min-height: 180px;
-  max-height: min(44vh, 360px);
+  display: flex;
+  min-height: 220px;
+  max-height: min(52vh, 420px);
+  overflow: hidden;
+}
+
+/* ── vertical tab bar (bookmark style) ───────────────────── */
+
+.dbp__tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 6px;
+  background: rgba(18, 26, 36, 0.6);
+  border-right: 1px solid rgba(140, 160, 180, 0.2);
+  min-width: 70px;
+  flex-shrink: 0;
+}
+
+.dbp__tab {
+  border: 0;
+  background: rgba(30, 42, 58, 0.5);
+  color: #8aa0b8;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 8px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  text-align: center;
+  line-height: 1.35;
+  transition: background 0.15s, color 0.15s;
+  font-family: inherit;
+}
+
+.dbp__tab:hover {
+  background: rgba(50, 70, 90, 0.6);
+  color: #c8d8e8;
+}
+
+.dbp__tab.is-active {
+  background: rgba(90, 200, 170, 0.2);
+  color: #6ecfba;
+  border: 1px solid rgba(110, 207, 186, 0.35);
+  box-shadow: 0 0 8px rgba(110, 207, 186, 0.15);
+}
+
+/* ── content area ────────────────────────────────────────── */
+
+.dbp__content {
+  flex: 1;
   overflow: auto;
+  padding: 10px 12px;
+}
+
+/* ── pane visibility ─────────────────────────────────────── */
+
+.dbp__pane {
+  display: none;
+}
+
+.dbp__pane.is-active {
+  display: block;
+}
+
+/* weather/news pane — retains 2-col grid */
+.dbp__pane[data-pane="weather"] {
+  display: none;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.dbp__pane[data-pane="weather"].is-active {
+  display: grid;
 }
 
 .dbp__col {
@@ -606,6 +681,15 @@ body,
 
 .dbp__card--news {
   border-left: 3px solid #f0d9a8;
+}
+
+.dbp__card--stock {
+  border-left: 3px solid #b890e0;
+}
+
+.dbp__card--kanban {
+  border-left: 3px solid #f0b860;
+  margin-bottom: 6px;
 }
 
 .dbp__card-head {
@@ -681,6 +765,198 @@ body,
   text-decoration: underline;
 }
 
+/* ── stock ───────────────────────────────────────────────── */
+
+.dbp__stock-indices {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(140, 160, 180, 0.15);
+}
+
+.dbp__stock-idx {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dbp__stock-label {
+  color: #8aa0b8;
+  font-size: 10px;
+  margin-right: 4px;
+}
+
+.dbp__stock-price {
+  color: #e8eef4;
+}
+
+.dbp__stock-change {
+  font-size: 11px;
+  margin-left: 4px;
+}
+.dbp__stock-change.is-up { color: #e86060; }
+.dbp__stock-change.is-down { color: #5080d0; }
+
+.dbp__stock-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.dbp__stock-table th {
+  text-align: left;
+  padding: 4px 6px;
+  color: #6a7a8c;
+  font-size: 10px;
+  font-weight: 600;
+  border-bottom: 1px solid rgba(140, 160, 180, 0.15);
+}
+
+.dbp__stock-table td {
+  padding: 5px 6px;
+  color: #d0dce8;
+  border-bottom: 1px solid rgba(140, 160, 180, 0.08);
+}
+
+.dbp__stock-name {
+  font-weight: 600;
+}
+
+/* ── kanban ──────────────────────────────────────────────── */
+
+.dbp__kanban-bot {
+  margin-bottom: 10px;
+  padding: 8px;
+  background: rgba(24, 32, 42, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(140, 160, 180, 0.12);
+}
+
+.dbp__kanban-bot-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: #d8e4f0;
+  margin-bottom: 6px;
+}
+
+.dbp__kanban-task {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-bottom: 3px;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.dbp__kanban-task--running {
+  background: rgba(60, 180, 120, 0.12);
+  color: #b8e8d0;
+}
+
+.dbp__kanban-task--blocked {
+  background: rgba(240, 180, 60, 0.12);
+  color: #f0d898;
+}
+
+.dbp__kanban-task--ready {
+  background: rgba(140, 160, 200, 0.08);
+  color: #a0b8d0;
+}
+
+.dbp__kanban-task-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.dbp__kanban-task-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dbp__kanban-done {
+  font-size: 10px;
+  color: #6a8a6a;
+  margin-top: 4px;
+  padding-left: 4px;
+}
+
+/* ── files (내PC) ─────────────────────────────────────────── */
+
+.dbp__files-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  height: 100%;
+  min-height: 200px;
+}
+
+.dbp__files-tree {
+  overflow-y: auto;
+  max-height: 320px;
+  padding: 4px;
+  background: rgba(16, 22, 30, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(140, 160, 180, 0.15);
+}
+
+.dbp__ft-dir {
+  font-size: 12px;
+  padding: 3px 0;
+  color: #c0d0e0;
+  font-weight: 600;
+}
+
+.dbp__ft-file {
+  font-size: 11px;
+  padding: 2px 4px;
+  color: #8aa0b8;
+  cursor: default;
+  border-radius: 3px;
+}
+
+.dbp__ft-file--preview {
+  cursor: pointer;
+  color: #b8d4e0;
+}
+
+.dbp__ft-file--preview:hover {
+  background: rgba(110, 207, 186, 0.15);
+  color: #6ecfba;
+}
+
+.dbp__files-preview {
+  overflow-y: auto;
+  max-height: 320px;
+  padding: 6px;
+  background: rgba(16, 22, 30, 0.5);
+  border-radius: 8px;
+  border: 1px solid rgba(140, 160, 180, 0.15);
+}
+
+.dbp__ft-preview-head {
+  font-size: 11px;
+  color: #6ecfba;
+  font-weight: 700;
+  margin-bottom: 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(140, 160, 180, 0.15);
+}
+
+.dbp__ft-preview-body {
+  margin: 0;
+  padding: 0;
+  font-size: 11px;
+  color: #b8c4d4;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: "Consolas", "Fira Code", "JetBrains Mono", monospace;
+}
+
 /* ── muted / foot ────────────────────────────────────────── */
 
 .dbp__muted {
@@ -701,8 +977,27 @@ body,
 
 /* ── responsive ──────────────────────────────────────────── */
 
-@media (max-width: 520px) {
+@media (max-width: 560px) {
   .dbp__body {
+    flex-direction: column;
+  }
+  .dbp__tabs {
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid rgba(140, 160, 180, 0.2);
+    padding: 6px;
+    gap: 4px;
+  }
+  .dbp__tab {
+    flex-shrink: 0;
+    font-size: 10px;
+    padding: 6px 10px;
+  }
+  .dbp__pane[data-pane="weather"].is-active {
+    grid-template-columns: 1fr;
+  }
+  .dbp__files-layout {
     grid-template-columns: 1fr;
   }
 }
