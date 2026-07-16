@@ -134,12 +134,45 @@ export function buildMockSnapshot(agents, reason = "mock mode") {
   const ready = agents.filter((a) => a.status === "ready").length;
   const review = agents.filter((a) => a.status === "review").length;
   const todo = agents.filter((a) => a.status === "todo").length;
+  const now = Date.now() / 1000;
   return {
     type: "snapshot",
     ts: Date.now() / 1000,
     agents,
     stats: {
       raw: `By status:\n  running   ${running}\n  blocked   ${blocked}\n  ready     ${ready}\n  review    ${review}\n  todo      ${todo}\n  done      0\n(${reason})`,
+    },
+    deskKanban: {
+      source: "mock",
+      generated_at: now,
+      by_assignee: [
+        {
+          assignee: "default",
+          display_name: "default",
+          active: [],
+          done: [
+            { id: "t_done_default_1", title: "가상사무실: 회장실 성과 진열장", status: "done", assignee: "default", completed_at: now - 45, created_at: now - 2400 },
+            { id: "t_done_default_2", title: "TOD ambient BGM filter/rate morph", status: "done", assignee: "default", completed_at: now - 3400, created_at: now - 7200 },
+          ],
+        },
+        {
+          assignee: "profile-2",
+          display_name: "profile-2",
+          active: [],
+          done: [
+            { id: "t_done_profile2_1", title: "가상사무실: ready/review 대기열", status: "done", assignee: "profile-2", completed_at: now - 5400, created_at: now - 9900 },
+            { id: "t_done_profile2_2", title: "칸반 상태 패널 정리", status: "done", assignee: "profile-2", completed_at: now - 9400, created_at: now - 14000 },
+          ],
+        },
+        {
+          assignee: "profile-3",
+          display_name: "profile-3",
+          active: [],
+          done: [
+            { id: "t_done_profile3_1", title: "리뷰 코멘트 triage", status: "done", assignee: "profile-3", completed_at: now - 12400, created_at: now - 18800 },
+          ],
+        },
+      ],
     },
     mock: true,
   };

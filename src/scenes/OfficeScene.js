@@ -43,6 +43,8 @@ import { PlantSway } from "../effects/plantSway.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
+import { FocusHeadphones } from "../effects/focusHeadphones.js";
+import { AchievementShelf } from "../effects/achievementShelf.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -479,6 +481,9 @@ export class OfficeScene extends Phaser.Scene {
     this.meetingProjector = new MeetingProjector(this);
     this.wallClock = new WallClock(this);
     this.deskSticky = new DeskSticky(this);
+    this.focusHeadphones = new FocusHeadphones(this);
+    this.trophyShelf = new AchievementShelf(this);
+    this.trophyShelf.start();
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -581,6 +586,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumFish?.update(this.time.now);
     this.meetingProjector?.update(this.time.now, delta);
     this.deskSticky?.sync();
+    this.focusHeadphones?.sync();
     this.plantSway?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -616,10 +622,12 @@ export class OfficeScene extends Phaser.Scene {
     const panelState = this.kanbanPanel.update(snapshot, opts);
     this.whiteboardTicker?.updateFromSnapshot(snapshot);
     this.lobbySignage?.updateFromSnapshot(snapshot);
+    this.trophyShelf?.updateFromSnapshot(snapshot);
     if (typeof window !== "undefined") {
       window.__HERMES_AREA__ = {
         ...(window.__HERMES_AREA__ || {}),
         kanbanPanel: panelState,
+        trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       };
     }
     return panelState;
@@ -1048,6 +1056,8 @@ export class OfficeScene extends Phaser.Scene {
       meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
       wallClock: this.wallClock?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
+      focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
+      trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
