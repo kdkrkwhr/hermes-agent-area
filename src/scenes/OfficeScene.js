@@ -39,6 +39,7 @@ import {
 } from "../effects/taskCelebrate.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
+import { LobbySignage } from "../ui/lobbySignage.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
 import { createDeskBriefPanel } from "../ui/deskBriefPanel.js";
 import { RoomInteract } from "../roomInteract.js";
@@ -233,6 +234,8 @@ export class OfficeScene extends Phaser.Scene {
     if (this.lastSnapshot) {
       this.whiteboardTicker.updateFromSnapshot(this.lastSnapshot);
     }
+    // lobby wall TV — kanban counts; ?signage=0 off
+    this.lobbySignage = new LobbySignage(this);
 
     this.initClockOut();
 
@@ -515,6 +518,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.kanbanPanel || !snapshot) return;
     const panelState = this.kanbanPanel.update(snapshot, opts);
     this.whiteboardTicker?.updateFromSnapshot(snapshot);
+    this.lobbySignage?.updateFromSnapshot(snapshot);
     if (typeof window !== "undefined") {
       window.__HERMES_AREA__ = {
         ...(window.__HERMES_AREA__ || {}),
@@ -932,6 +936,7 @@ export class OfficeScene extends Phaser.Scene {
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
+      signage: this.lobbySignage?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,
