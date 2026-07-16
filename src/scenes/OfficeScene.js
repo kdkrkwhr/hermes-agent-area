@@ -25,6 +25,7 @@ import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } 
 import { shadowSnapshot } from "../effects/spriteShadow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
+import { IdleChatter } from "../effects/idleChatter.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
 import { WeatherFx } from "../effects/weatherFx.js";
@@ -230,6 +231,8 @@ export class OfficeScene extends Phaser.Scene {
 
     this.officeEvents = new OfficeEvents(this);
     this.officeEvents.start();
+    this.idleChatter = new IdleChatter(this);
+    this.idleChatter.start();
 
     this.minimap = new Minimap(this);
     this.whiteboardTicker = new WhiteboardTicker(this);
@@ -929,6 +932,7 @@ export class OfficeScene extends Phaser.Scene {
       ),
       audio: this.officeAudio?.snapshot?.() ?? null,
       events: this.officeEvents?.snapshot?.() ?? null,
+      chatter: this.idleChatter?.snapshot?.() ?? null,
       rain: this.windowRain?.snapshot?.() ?? null,
       snow: this.snowFlakes?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,

@@ -182,6 +182,20 @@ export class OfficeEvents {
     this.printerGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
+    /** ms timestamp — IdleChatter skips while now < this */
+    this._gatherUntil = 0;
+  }
+
+  /** standup / lunch / printer gather in progress. */
+  isGathering() {
+    return this.scene.time.now < (this._gatherUntil || 0);
+  }
+
+  /** Extend gather window so ambient chatter stays paused. */
+  markGathering(ms) {
+    const until = this.scene.time.now + Math.max(0, ms | 0);
+    this._gatherUntil = Math.max(this._gatherUntil || 0, until);
+    this.publish();
   }
 
   start() {
@@ -383,6 +397,8 @@ export class OfficeEvents {
     ).slice(0, 3);
     const spots = meetingOffsets(meet);
     const holdMs = 2500 + Math.floor(Math.random() * 1501);
+    // pathfind + hold — keep IdleChatter paused for the whole window
+    this.markGathering(holdMs + 10000);
     const moved = [];
     let gathered = 0;
 
@@ -520,6 +536,7 @@ export class OfficeEvents {
             { x: br.x - 2, y: br.y },
           ];
     const holdMs = 3000 + Math.floor(Math.random() * 2001);
+    this.markGathering(holdMs + 10000);
     const moved = [];
     let gathered = 0;
 
@@ -734,6 +751,8 @@ export class OfficeEvents {
       printerGathered: this.printerGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
+      gathering: this.isGathering(),
+      gatherUntil: this._gatherUntil || 0,
     };
   }
 
