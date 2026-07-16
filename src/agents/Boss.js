@@ -2,6 +2,10 @@ import {
   createSpriteShadow,
   updateSpriteShadow,
 } from "../effects/spriteShadow.js";
+import {
+  createFootprintTrail,
+  updateFootprintTrail,
+} from "../effects/footprintTrail.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 180;
@@ -25,6 +29,8 @@ export class Boss {
     this.sprite.setOrigin(0.5, 0.85);
     // soft foot shadow — see ?shadow=0; under boss (12 → 11)
     this.shadowGfx = createSpriteShadow(scene, { depth: 11 });
+    // walk footprint trail — see ?footprints=0
+    this.footprintTrail = createFootprintTrail(scene, { depth: 10 });
 
     this.nameLabel = scene.add
       .text(px, py - 40, "대장님", {
@@ -270,6 +276,10 @@ export class Boss {
     this.drawBubble();
     updateSpriteShadow(this.shadowGfx, this.sprite, {
       moving: this._moving,
+    });
+    updateFootprintTrail(this.footprintTrail, this.sprite, {
+      moving: this._moving,
+      dir: this.lastDir || "down",
     });
   }
 

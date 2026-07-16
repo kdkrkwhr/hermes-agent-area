@@ -4,6 +4,11 @@ import {
   createSpriteShadow,
   updateSpriteShadow,
 } from "../effects/spriteShadow.js";
+import {
+  createFootprintTrail,
+  updateFootprintTrail,
+  destroyFootprintTrail,
+} from "../effects/footprintTrail.js";
 import { VisitorScheduler } from "../systems/VisitorScheduler.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
@@ -93,6 +98,7 @@ export class Visitor {
     this.sprite.setAlpha(0.88);
     // not interactive — ambient only
     this.shadowGfx = createSpriteShadow(scene, { depth: 8 });
+    this.footprintTrail = createFootprintTrail(scene, { depth: 7 });
 
     this.ensureAnims();
     this.sprite.anims.play(`${this.id}-idle-down`, true);
@@ -137,6 +143,12 @@ export class Visitor {
       moving: this.path.length > 0,
       width: 16,
       height: 6,
+    });
+    updateFootprintTrail(this.footprintTrail, this.sprite, {
+      moving: this.path.length > 0,
+      width: 8,
+      height: 4,
+      dir: this.lastDir || "down",
     });
   }
 
@@ -220,11 +232,17 @@ export class Visitor {
       /* ignore */
     }
     try {
+      destroyFootprintTrail(this.footprintTrail);
+    } catch {
+      /* ignore */
+    }
+    try {
       this.sprite?.destroy?.();
     } catch {
       /* ignore */
     }
     this.shadowGfx = null;
+    this.footprintTrail = null;
     this.sprite = null;
     if (cb) {
       this._doneResolve = null;

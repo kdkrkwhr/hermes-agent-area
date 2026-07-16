@@ -13,6 +13,7 @@
     "smoke:locate": "node scripts/smoke-locate.mjs",
     "smoke:clockout": "node scripts/smoke-clockout.mjs",
     "smoke:room": "node scripts/smoke-room.mjs",
+    "smoke:footprints": "node scripts/smoke-footprints.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

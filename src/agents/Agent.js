@@ -8,6 +8,11 @@ import {
   createSpriteShadow,
   updateSpriteShadow,
 } from "../effects/spriteShadow.js";
+import {
+  createFootprintTrail,
+  updateFootprintTrail,
+  destroyFootprintTrail,
+} from "../effects/footprintTrail.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -101,6 +106,8 @@ export class Agent {
     this.deskGlowGfx = createDeskGlow(scene);
     // soft foot shadow — see ?shadow=0; depth just under sprite (10 → 9)
     this.shadowGfx = createSpriteShadow(scene, { depth: 9 });
+    // walk footprint trail — see ?footprints=0; under shadow/sprite
+    this.footprintTrail = createFootprintTrail(scene, { depth: 8 });
 
     this.setStatus(pickStatus(def, "desk"));
     this.ensureAnims();
@@ -379,6 +386,8 @@ export class Agent {
     this.elapsedLabel?.destroy();
     this.deskGlowGfx?.destroy();
     this.shadowGfx?.destroy();
+    destroyFootprintTrail(this.footprintTrail);
+    this.footprintTrail = null;
   }
 
   async applyServer(agentMsg) {
@@ -549,6 +558,10 @@ export class Agent {
     );
     updateSpriteShadow(this.shadowGfx, this.sprite, {
       moving: this.path.length > 0,
+    });
+    updateFootprintTrail(this.footprintTrail, this.sprite, {
+      moving: this.path.length > 0,
+      dir: this.lastDir || "down",
     });
   }
 }

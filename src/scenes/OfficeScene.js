@@ -1022,7 +1022,7 @@ export class OfficeScene extends Phaser.Scene {
         ...(this.agents || []),
         this.boss,
         this.mascot,
-        ...(this.visitorDirector?.visitors || []),
+        this.visitorDirector?.visitor,
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
