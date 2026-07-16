@@ -1,9 +1,10 @@
-/** Tiny ADD-blend monitor glow for desk running/chatting agents. */
+/** Tiny ADD-blend monitor glow for desk running/chatting/blocked agents. */
 
 export const DESK_GLOW_COLORS = {
   running: 0x5ee0c8,
   chatting: 0x88aaff,
   focus: 0xffb347,
+  blocked: 0xff8866,
 };
 
 /** `?deskfx=0` (or false/off) disables glow. Default on. */
@@ -25,10 +26,11 @@ export function focusFxEnabledFromQuery() {
   return !(v === "0" || v === "false" || v === "off");
 }
 
-/** Status that owns a glow — chatting keeps its own tint (not collapsed to running). */
+/** Status that owns a glow — chatting/blocked keep own tint (not collapsed to running). */
 export function resolveDeskGlowKind(agent) {
   if (!agent) return null;
   const status = agent.serverStatus;
+  if (status === "blocked") return "blocked";
   if (status === "running" || status === "chatting") {
     const zone = agent.serverData?.zone || agent.currentKind;
     if (status === "running" && zone === "focus") return "focus";
@@ -49,7 +51,8 @@ export function createDeskGlow(scene) {
 
 /**
  * Pulse a 2×2 px rect near the head (facing-aware offset).
- * Alpha 0.25–0.7, period ~180ms.
+ * running/chatting/focus: alpha 0.25–0.7, period ~180ms.
+ * blocked: slower (~420ms), softer peak (0.20–0.55).
  */
 export function updateDeskGlow(gfx, agent, enabled) {
   if (!gfx) return;
@@ -67,8 +70,10 @@ export function updateDeskGlow(gfx, agent, enabled) {
   }
 
   const t = agent.scene.time.now;
-  const phase = (Math.sin((t / 180) * Math.PI * 2) + 1) / 2;
-  const alpha = 0.25 + phase * 0.45;
+  const periodMs = kind === "blocked" ? 420 : 180;
+  const phase = (Math.sin((t / periodMs) * Math.PI * 2) + 1) / 2;
+  const alpha =
+    kind === "blocked" ? 0.2 + phase * 0.35 : 0.25 + phase * 0.45;
   const color = DESK_GLOW_COLORS[kind] ?? DESK_GLOW_COLORS.running;
 
   const dir = agent.lastDir || "down";

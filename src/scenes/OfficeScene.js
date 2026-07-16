@@ -21,7 +21,7 @@ import {
   resolveTimeOfDay,
   TOD_PRESETS,
 } from "../effects/officeEffects.js";
-import { deskFxEnabledFromQuery, focusFxEnabledFromQuery } from "../effects/deskGlow.js";
+import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } from "../effects/deskGlow.js";
 import { shadowSnapshot } from "../effects/spriteShadow.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
@@ -918,7 +918,7 @@ export class OfficeScene extends Phaser.Scene {
       deskGlow: Object.fromEntries(
         this.agents.map((a) => {
           const on = a.deskGlowGfx?.visible;
-          return [a.def.id, on ? a.serverStatus : null];
+          return [a.def.id, on ? resolveDeskGlowKind(a) : null];
         }),
       ),
       audio: this.officeAudio?.snapshot?.() ?? null,
