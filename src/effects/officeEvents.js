@@ -8,8 +8,20 @@ const RANDOM_KINDS = [
   "quiet_hours",
   "rain_shower",
   "lunch_rush",
+  "printer_jam",
+  "parcel_delivery",
+  "power_flicker",
 ];
+/** power_flicker: dark overlay flash duration range (ms) */
+const FLICKER_MIN_MS = 600;
+const FLICKER_MAX_MS = 1200;
 const COFFEE_GID = 16;
+/** reserved furniture index — missing on map → lobby/entrance fallback */
+const PRINTER_GID = 36;
+const PARCEL_TEX = "fx-parcel";
+const PARCEL_NEAR_TILES = 2.5;
+const PARCEL_MIN_MS = 8000;
+const PARCEL_MAX_MS = 12000;
 /** lunch hours local: higher pick weight for lunch_rush */
 const LUNCH_HOUR_START = 11;
 const LUNCH_HOUR_END = 14;
@@ -46,6 +58,80 @@ function findCoffeeTile(scene) {
   }
   const br = scene.waypoints?.break;
   return br ? tileCenter(scene, br.x, br.y) : tileCenter(scene, 35, 5);
+}
+
+/** Lobby AABB center, else entrance waypoint. */
+function findParcelSpot(scene) {
+  const lob = scene.waypoints?.lobby;
+  if (
+    lob &&
+    Number.isFinite(lob.xMin) &&
+    Number.isFinite(lob.xMax) &&
+    Number.isFinite(lob.yMin) &&
+    Number.isFinite(lob.yMax)
+  ) {
+    const tx = (lob.xMin + lob.xMax) / 2;
+    const ty = (lob.yMin + lob.yMax) / 2;
+    return {
+      x: tx * scene.map.tileWidth + scene.map.tileWidth / 2,
+      y: ty * scene.map.tileHeight + scene.map.tileHeight / 2,
+      tx,
+      ty,
+    };
+  }
+  const ent = scene.waypoints?.entrance || { x: 20, y: 27 };
+  const c = tileCenter(scene, ent.x, ent.y);
+  return { ...c, tx: ent.x, ty: ent.y };
+}
+
+function ensureParcelTexture(scene) {
+  if (scene.textures.exists(PARCEL_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  // cardboard box — short stack of brown rects + tape
+  g.fillStyle(0xc4a574, 1);
+  g.fillRect(1, 4, 14, 10);
+  g.fillStyle(0xa88858, 1);
+  g.fillRect(1, 4, 14, 3);
+  g.fillStyle(0xe8d4a8, 1);
+  g.fillRect(7, 4, 2, 10);
+  g.fillRect(1, 8, 14, 2);
+  g.fillStyle(0x8b6914, 1);
+  g.fillRect(6, 2, 4, 2);
+  g.generateTexture(PARCEL_TEX, 16, 16);
+  g.destroy();
+}
+
+function bossTileDist(scene, tx, ty) {
+  const boss = scene.boss;
+  if (!boss?.sprite || !scene.map) return Infinity;
+  const tw = scene.map.tileWidth;
+  const th = scene.map.tileHeight;
+  const bx = boss.sprite.x / tw;
+  const by = boss.sprite.y / th;
+  return Math.hypot(bx - tx, by - ty);
+}
+
+/** tile coords of printer furniture, else lobby/entrance. */
+function findPrinterTile(scene) {
+  const layer = scene.furniture;
+  if (layer?.getTileAt) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === PRINTER_GID) return { x: tx, y: ty };
+      }
+    }
+  }
+  const ent = scene.waypoints?.entrance;
+  if (ent) return { x: ent.x, y: ent.y };
+  const lob = scene.waypoints?.lobby;
+  if (lob) {
+    return {
+      x: Math.floor((lob.xMin + lob.xMax) / 2),
+      y: Math.floor((lob.yMin + lob.yMax) / 2),
+    };
+  }
+  return { x: 20, y: 27 };
 }
 
 /** live idle / mock break — skip running·blocked·chatting. */
@@ -93,6 +179,9 @@ export class OfficeEvents {
     this._shipCooldownUntil = 0;
     this.standupGathered = 0;
     this.lunchGathered = 0;
+    this.printerGathered = 0;
+    this.parcelActive = false;
+    this.parcelNearBoss = false;
   }
 
   start() {
@@ -184,7 +273,75 @@ export class OfficeEvents {
     else if (kind === "quiet_hours") this.runQuietHours();
     else if (kind === "rain_shower") this.runRainShower();
     else if (kind === "lunch_rush") this.runLunchRush();
+    else if (kind === "printer_jam") this.runPrinterJam();
+    else if (kind === "parcel_delivery") this.runParcelDelivery();
+    else if (kind === "power_flicker") this.runPowerFlicker();
 
+    this.publish();
+  }
+
+  /** Lobby parcel box sprite + toast; 8–12s fade. Near boss → E hint only. */
+  runParcelDelivery() {
+    const spot = findParcelSpot(this.scene);
+    ensureParcelTexture(this.scene);
+    const near =
+      bossTileDist(this.scene, spot.tx, spot.ty) <= PARCEL_NEAR_TILES;
+    this.parcelActive = true;
+    this.parcelNearBoss = near;
+    this.showToast(
+      near ? "택배 도착 · E 수령" : "택배 도착",
+      near ? 4000 : 2800,
+    );
+
+    const box = this.scene.add.image(spot.x, spot.y - 4, PARCEL_TEX);
+    box.setDepth(9);
+    box.setScale(1.4);
+    box.setAlpha(1);
+
+    const life =
+      PARCEL_MIN_MS +
+      Math.floor(Math.random() * (PARCEL_MAX_MS - PARCEL_MIN_MS + 1));
+    const fadeMs = 900;
+
+    // refresh E hint if 대장님 walks close while box is up
+    const poll = this.scene.time.addEvent({
+      delay: 400,
+      loop: true,
+      callback: () => {
+        if (!this.parcelActive || !box.active) return;
+        const nowNear =
+          bossTileDist(this.scene, spot.tx, spot.ty) <= PARCEL_NEAR_TILES;
+        if (nowNear && !this.parcelNearBoss) {
+          this.parcelNearBoss = true;
+          this.showToast("택배 도착 · E 수령", 3200);
+          this.publish();
+        }
+      },
+    });
+
+    const fade = this.scene.time.delayedCall(life, () => {
+      poll.remove(false);
+      this.scene.tweens.add({
+        targets: box,
+        alpha: 0,
+        y: box.y - 10,
+        duration: fadeMs,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          box.destroy();
+          this.parcelActive = false;
+          this.publish();
+        },
+      });
+    });
+
+    this.track(() => {
+      poll.remove(false);
+      fade.remove(false);
+      this.scene.tweens.killTweensOf(box);
+      box.destroy();
+      this.parcelActive = false;
+    });
     this.publish();
   }
 
@@ -215,8 +372,11 @@ export class OfficeEvents {
     void this.gatherIdleToMeeting(meet);
   }
 
-  /** Idle/break ≤3 → meeting ±1; 2.5–4s 후 lounge wander 복귀. */
-  async gatherIdleToMeeting(meet) {
+  /**
+   * Idle/break ≤3 → center ±1 ring; hold then lounge wander.
+   * @param {string} metricKey snapshot field (standupGathered | printerGathered)
+   */
+  async gatherIdleToMeeting(meet, metricKey = "standupGathered") {
     const agents = this.scene.agents || [];
     const candidates = shuffleInPlace(
       agents.filter((a) => isStandupGatherable(a)),
@@ -250,7 +410,7 @@ export class OfficeEvents {
       agent.idleUntil = this.scene.time.now + holdMs + 400;
     }
 
-    this.standupGathered = gathered;
+    this[metricKey] = gathered;
     this.publish();
 
     if (!moved.length) return;
@@ -271,6 +431,37 @@ export class OfficeEvents {
       }
     });
     this.track(() => restore.remove(false));
+  }
+
+  /** toast + spark at printer/lobby; idle 2–3 → ±1 ring. */
+  runPrinterJam() {
+    this.showToast("프린터 잼");
+    const pt = findPrinterTile(this.scene);
+    const { x, y } = tileCenter(this.scene, pt.x, pt.y);
+    this.spawnSparkBurst(x, y - 8, 1800);
+    void this.gatherIdleToMeeting(pt, "printerGathered");
+  }
+
+  spawnSparkBurst(x, y, ms = 1500) {
+    const emitter = this.scene.add.particles(x, y, "fx-spark", {
+      speed: { min: 50, max: 140 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 1, end: 0 },
+      lifespan: { min: 400, max: 700 },
+      frequency: 40,
+      quantity: 4,
+      tint: [0xfff066, 0xff6b9d, 0x5ee0c8, 0xffffff],
+      blendMode: "ADD",
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(700, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      emitter.destroy();
+    });
   }
 
   runCoffeeRush() {
@@ -383,25 +574,7 @@ export class OfficeEvents {
     const spr = agent?.sprite;
     const x = spr?.x ?? this.scene.map.widthInPixels / 2;
     const y = (spr?.y ?? this.scene.map.heightInPixels / 2) - 24;
-    const emitter = this.scene.add.particles(x, y, "fx-spark", {
-      speed: { min: 50, max: 140 },
-      angle: { min: 0, max: 360 },
-      scale: { start: 1, end: 0 },
-      lifespan: { min: 400, max: 700 },
-      frequency: 40,
-      quantity: 4,
-      tint: [0xfff066, 0xff6b9d, 0x5ee0c8, 0xffffff],
-      blendMode: "ADD",
-    });
-    emitter.setDepth(12);
-    const stop = this.scene.time.delayedCall(1500, () => {
-      emitter.stop();
-      this.scene.time.delayedCall(700, () => emitter.destroy());
-    });
-    this.track(() => {
-      stop.remove(false);
-      emitter.destroy();
-    });
+    this.spawnSparkBurst(x, y, 1500);
   }
 
   runQuietHours() {
@@ -430,7 +603,51 @@ export class OfficeEvents {
     });
   }
 
-  showToast(text) {
+  /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
+  runPowerFlicker() {
+    this.showToast("정전");
+    this.playBuzz();
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    if (!overlay || !preset) return;
+
+    const duration =
+      FLICKER_MIN_MS +
+      Math.floor(Math.random() * (FLICKER_MAX_MS - FLICKER_MIN_MS + 1));
+    const darkColor = 0x0a0a14;
+    const darkAlpha = 0.62;
+
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+
+    let dark = true;
+    overlay.setFillStyle(darkColor, darkAlpha);
+
+    const pulse = this.scene.time.addEvent({
+      delay: 70,
+      loop: true,
+      callback: () => {
+        dark = !dark;
+        if (dark) overlay.setFillStyle(darkColor, darkAlpha);
+        else restoreOverlay();
+      },
+    });
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      pulse.remove(false);
+      restoreOverlay();
+    });
+
+    this.track(() => {
+      pulse.remove(false);
+      restore.remove(false);
+      restoreOverlay();
+    });
+  }
+
+  showToast(text, holdMs = 2600) {
     const el = this.ensureToastHost();
     el.textContent = text;
     el.classList.add("is-visible");
@@ -439,7 +656,7 @@ export class OfficeEvents {
     this._toastTimer = setTimeout(() => {
       el.classList.add("is-out");
       el.classList.remove("is-visible");
-    }, 2600);
+    }, holdMs);
   }
 
   ensureToastHost() {
@@ -477,6 +694,30 @@ export class OfficeEvents {
     }
   }
 
+  /** Short electrical buzz for power_flicker — skip if muted/locked. */
+  playBuzz() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(90, ctx.currentTime);
+      osc.frequency.exponentialRampToValueAtTime(55, ctx.currentTime + 0.12);
+      gain.gain.setValueAtTime(0.0001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.035, ctx.currentTime + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.16);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   track(cleanup) {
     this._active.push(cleanup);
   }
@@ -490,6 +731,9 @@ export class OfficeEvents {
       lastAt: this.lastAt,
       standupGathered: this.standupGathered,
       lunchGathered: this.lunchGathered,
+      printerGathered: this.printerGathered,
+      parcelActive: this.parcelActive,
+      parcelNearBoss: this.parcelNearBoss,
     };
   }
 
