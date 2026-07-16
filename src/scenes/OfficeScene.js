@@ -35,6 +35,7 @@ import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
+import { PlantSway } from "../effects/plantSway.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -465,6 +466,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
     this.coffeeSteam = new CoffeeSteam(this);
+    this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
@@ -498,6 +500,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sunBeams?.sync();
     this.cityLights?.sync();
     this.coffeeSteam?.sync();
+    this.plantSway?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -550,6 +553,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.lampGlow?.update(this.time.now);
     this.cityLights?.update(this.time.now);
+    this.plantSway?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
       if (this._lightMinute !== minute) {
@@ -1004,6 +1008,7 @@ export class OfficeScene extends Phaser.Scene {
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
+      plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
