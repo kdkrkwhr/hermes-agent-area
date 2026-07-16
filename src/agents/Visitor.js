@@ -4,15 +4,12 @@ import {
   createSpriteShadow,
   updateSpriteShadow,
 } from "../effects/spriteShadow.js";
+import { VisitorScheduler } from "../systems/VisitorScheduler.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 110;
 const SHEETS = ["char-onion", "char-mushroom", "char-claude"];
 const TINTS = [0x8eb4d8, 0xb8a0d0, 0x90c8a8];
-const MIN_MS = 90000;
-const MAX_MS = 180000;
-const FAST_MIN_MS = 1200;
-const FAST_MAX_MS = 2800;
 const WANDER_MIN_MS = 8000;
 const WANDER_MAX_MS = 14000;
 
@@ -211,7 +208,9 @@ export class Visitor {
     }
   }
 
+  /** Clean up scene object and internal state. Returns the resolved promise from the cycle if one was set. */
   finish() {
+    const cb = this._doneResolve;
     this.phase = "done";
     this.alive = false;
     this.path = [];
@@ -227,6 +226,15 @@ export class Visitor {
     }
     this.shadowGfx = null;
     this.sprite = null;
+    if (cb) {
+      this._doneResolve = null;
+      cb(true);
+    }
+  }
+
+  /** Alias for finish() — conforms to task spec method name. */
+  despawn() {
+    this.finish();
   }
 
   update(time, delta) {
@@ -300,45 +308,65 @@ export class VisitorDirector {
     this.visitor = null;
     this.visitCount = 0;
     this.lastPhase = null;
-    this._schedule = null;
 
+    // independent scheduler using native setTimeout — decoupled from game loop
+    this._scheduler = new VisitorScheduler(() => this.spawnVisit());
+    // initial spawn after short delay (preserves existing behavior)
     if (this.enabled) {
-      this.scheduleNext(this.fast ? 400 : 2500);
+      const initDelay = this.fast ? 400 : 2500;
+      setTimeout(() => {
+        if (this.enabled) this.spawnVisit();
+      }, initDelay);
     }
     scene.events.once("shutdown", () => this.destroy());
     this.publish();
   }
 
   destroy() {
-    if (this._schedule) {
-      this._schedule.remove(false);
-      this._schedule = null;
-    }
+    this._scheduler?.destroy();
+    this._scheduler = null;
     this.visitor?.finish?.();
     this.visitor = null;
     this.enabled = false;
     this.publish();
   }
 
-  scheduleNext(explicitMs) {
-    if (!this.enabled) return;
-    if (this._schedule) this._schedule.remove(false);
-    const min = this.fast ? FAST_MIN_MS : MIN_MS;
-    const max = this.fast ? FAST_MAX_MS : MAX_MS;
-    const delay =
-      explicitMs != null
-        ? explicitMs
-        : min + Math.floor(Math.random() * (max - min + 1));
-    this._schedule = this.scene.time.delayedCall(delay, () => {
-      this.spawnVisit();
-      this.scheduleNext();
-    });
-  }
-
   /** Test/hook: spawn one visitor immediately (skips if already active). */
   spawnNow() {
     if (!this.enabled) return false;
     return this.spawnVisit();
+  }
+
+  /**
+   * Public spawn per task spec: returns a Promise that resolves when the
+   * visitor has fully despawned (or immediately on failure). Accepts optional
+   * callback with signature (success: boolean).
+   */
+  spawn(callback) {
+    if (!this.enabled) {
+      const p = Promise.resolve(false);
+      if (callback) callback(false);
+      return p;
+    }
+    if (this.visitor?.alive) {
+      const p = Promise.resolve(false);
+      if (callback) callback(false);
+      return p;
+    }
+
+    const ok = this.spawnVisit();
+    if (!ok) {
+      const p = Promise.resolve(false);
+      if (callback) callback(false);
+      return p;
+    }
+
+    return new Promise((resolve) => {
+      this.visitor._doneResolve = (success) => {
+        if (callback) callback(success);
+        resolve(success);
+      };
+    });
   }
 
   spawnVisit() {
@@ -350,7 +378,11 @@ export class VisitorDirector {
     this.visitCount += 1;
     this.lastPhase = "enter";
     this.visitor.beginVisit();
-    this.scene.officeEvents?.showToast?.("손님", 2200);
+    // emit custom event so UI layer can react (toast, etc.)
+    this.scene.events.emit("visitor-spawned", {
+      visitor: this.visitor,
+      count: this.visitCount,
+    });
     this.publish();
     return true;
   }
@@ -360,7 +392,9 @@ export class VisitorDirector {
     this.visitor.update(time, delta);
     this.lastPhase = this.visitor.phase;
     if (!this.visitor.alive) {
+      const count = this.visitCount;
       this.visitor = null;
+      this.scene.events.emit("visitor-despawned", { count });
       this.publish();
     } else if ((time / 500) | 0 !== this._lastPubBucket) {
       this._lastPubBucket = (time / 500) | 0;

@@ -163,6 +163,30 @@ export class OfficeAudio {
    * Clock-out SFX — soft door-close thud + short bell.
    * WebAudio only (no asset); no-ops when muted / locked.
    */
+  /** Short turnstile beep — respects mute / ?sfx=0. */
+  playGateBeep(kind = "in") {
+    if (!this.sfxOk()) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      const f = kind === "in" ? 880 : 660;
+      osc.frequency.setValueAtTime(f, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.1);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   playClockOutSfx() {
     if (!this.sfxOk()) return;
     try {

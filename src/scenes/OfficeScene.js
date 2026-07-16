@@ -51,9 +51,12 @@ import {
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { LobbySignage } from "../ui/lobbySignage.js";
+import { EntranceGate } from "../ui/entranceGate.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
 import { createDeskBriefPanel } from "../ui/deskBriefPanel.js";
 import { createHelpOverlay } from "../ui/helpOverlay.js";
+import { showVisitorToast } from "../ui/toastSystem.js";
+import { randomVisitorToast } from "../config/toastMessages.js";
 import { RoomInteract } from "../roomInteract.js";
 import { notifyAgentDone } from "../notify.js";
 import { CHAR_FRAME_H, CHAR_FRAME_W } from "../constants.js";
@@ -161,6 +164,11 @@ export class OfficeScene extends Phaser.Scene {
     // lobby visitor walk-by — ambient only; ?visitor=0 off, ?visitor=1 fast
     this.visitorDirector = new VisitorDirector(this);
 
+    // toast on visitor spawn — random Korean one-liner
+    this.events.on("visitor-spawned", () => {
+      showVisitorToast(randomVisitorToast(), 2800);
+    });
+
     // zone labels — room readability without cluttering gameplay
     this.addZoneLabels();
 
@@ -253,6 +261,8 @@ export class OfficeScene extends Phaser.Scene {
     }
     // lobby wall TV — kanban counts; ?signage=0 off
     this.lobbySignage = new LobbySignage(this);
+    // entrance turnstile + LED counter; ?gate=0 off
+    this.entranceGate = new EntranceGate(this);
 
     this.helpOverlay = createHelpOverlay(this);
 
@@ -339,6 +349,7 @@ export class OfficeScene extends Phaser.Scene {
     this._clockOutPending = true;
     this.clockOutLocked = true;
     this.clockOutModal?.open();
+    this.events.emit("clock-out-open");
     if (typeof window !== "undefined") {
       window.__HERMES_AREA__ = {
         ...(window.__HERMES_AREA__ || {}),
@@ -364,6 +375,7 @@ export class OfficeScene extends Phaser.Scene {
     this._clockOutDone = true;
     this._clockOutPending = false;
     this.clockOutLocked = true;
+    this.events.emit("clock-out-confirm");
     this.officeAudio?.playClockOutSfx?.();
 
     // BE disconnect: close WS intentionally (skip auto mock reconnect)
@@ -978,6 +990,7 @@ export class OfficeScene extends Phaser.Scene {
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
       signage: this.lobbySignage?.snapshot?.() ?? null,
+      gate: this.entranceGate?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {

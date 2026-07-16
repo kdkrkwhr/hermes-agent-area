@@ -510,6 +510,31 @@ body,
   transform: translateX(-50%) translateY(8px);
 }
 
+/* Visitor toast — stacked variant matching .office-toast transition */
+.visitor-toast {
+  padding: 8px 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(14, 22, 32, 0.92);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.22s ease, transform 0.22s ease;
+  white-space: nowrap;
+}
+.visitor-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.visitor-toast.is-out {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
 .desk-brief-panel {
   position: fixed;
   left: 50%;

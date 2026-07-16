@@ -48,7 +48,8 @@ const armed = await page.evaluate(() => {
     hasSprite: !!v?.sprite,
     tinted: v?.sprite?.tintTopLeft !== 0xffffff,
     interactive: !!v?.sprite?.input,
-    toast: document.getElementById("office-toast")?.textContent || "",
+    toast:
+      document.querySelector("#visitor-toast-host .visitor-toast")?.textContent || "",
   };
 });
 
@@ -66,6 +67,30 @@ const walking = await page.evaluate(() => {
     busy: !!v?.busy,
   };
 });
+
+// Verify spawn() returns Promise, despawn() cleans up per spec
+const spawnPromise = await page.evaluate(async () => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const vd = sc.visitorDirector;
+  // clear existing state
+  if (vd.visitor?.alive) vd.visitor.finish();
+  vd.visitor = null;
+  vd.enabled = true;
+
+  // spawn() should return a Promise
+  const result = vd.spawn();
+  const isPromise = result instanceof Promise;
+  const vAfterSpawn = vd.visitor;
+  const hasDespawn = typeof vAfterSpawn?.despawn === "function";
+  const hasFinish = typeof vAfterSpawn?.finish === "function";
+
+  // force-finish to trigger promise resolution
+  vAfterSpawn?.finish();
+  const resolved = await result;
+
+  return { isPromise, hasDespawn, hasFinish, resolved };
+});
+
 
 await page
   .screenshot({ path: `${shotDir}/visitor.png`, fullPage: false })
@@ -91,7 +116,7 @@ const off = await page.evaluate(() => {
   return { snap: vd.snapshot(), spawned: n };
 });
 
-console.log(JSON.stringify({ armed, walking, off, errors }, null, 2));
+console.log(JSON.stringify({ armed, walking, spawnPromise, off, errors }, null, 2));
 await browser.close();
 
 if (errors.length) {
@@ -111,8 +136,23 @@ if (!String(armed.toast).includes("손님")) {
   process.exit(1);
 }
 if (!walking.snap.active && walking.phase !== "done") {
-  // still ok if already exited super fast — but with 1.8s should still be active
   console.error("FAIL: visitor should still be active after 1.8s", walking);
+  process.exit(1);
+}
+if (!spawnPromise.isPromise) {
+  console.error("FAIL: spawn() must return a Promise", spawnPromise);
+  process.exit(1);
+}
+if (!spawnPromise.hasDespawn) {
+  console.error("FAIL: visitor must have despawn() method", spawnPromise);
+  process.exit(1);
+}
+if (!spawnPromise.hasFinish) {
+  console.error("FAIL: visitor must have finish() method", spawnPromise);
+  process.exit(1);
+}
+if (!spawnPromise.resolved) {
+  console.error("FAIL: spawn() promise should resolve true on despawn", spawnPromise);
   process.exit(1);
 }
 if (off.spawned || off.snap.enabled || off.snap.active) {
