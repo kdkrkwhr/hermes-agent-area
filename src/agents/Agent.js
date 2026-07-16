@@ -156,12 +156,14 @@ export class Agent {
   getEffectKind() {
     if (this.live && this.serverStatus) {
       if (this.serverStatus === "chatting") return "running";
-      // offline → Nap Pod Zzz (not desk absence / no spark)
       if (this.serverStatus === "offline") return "sleep";
+      if (this.serverStatus === "review") return "blocked";
+      if (this.serverStatus === "ready" || this.serverStatus === "todo") return "ready";
       return this.serverStatus;
     }
     if (this.currentKind === "desk" || this.currentKind === "focus") return "running";
-    if (this.currentKind === "meeting") return "blocked";
+    if (this.currentKind === "meeting" || this.currentKind === "review") return "blocked";
+    if (this.currentKind === "queue") return "ready";
     if (this.currentKind === "sleep") return "sleep";
     if (this.currentKind === "break") return "idle";
     return "idle";
@@ -416,6 +418,10 @@ export class Agent {
       this.currentKind = "sleep";
     } else if (zone === "meeting" || agentMsg.status === "blocked") {
       this.currentKind = "meeting";
+    } else if (zone === "review" || agentMsg.status === "review") {
+      this.currentKind = "review";
+    } else if (zone === "queue" || agentMsg.status === "ready" || agentMsg.status === "todo") {
+      this.currentKind = "queue";
     } else if (zone === "focus") {
       this.currentKind = "focus";
     } else if (

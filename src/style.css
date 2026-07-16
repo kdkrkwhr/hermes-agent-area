@@ -306,6 +306,16 @@ body,
   color: #7eb6ff;
 }
 
+.kb-ready {
+  background: #3a3018;
+  color: #ffd080;
+}
+
+.kb-review {
+  background: #2a2848;
+  color: #c4b0ff;
+}
+
 .kb-offline {
   background: #2a3038;
   color: #7a8fa8;

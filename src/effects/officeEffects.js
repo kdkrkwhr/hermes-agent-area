@@ -117,8 +117,12 @@ export function createStatusEmitter(scene, kind, follow) {
   if (kind === "running") {
     return scene.add.particles(0, 0, "fx-spark", sparkConfig(follow));
   }
-  if (kind === "blocked") {
+  if (kind === "blocked" || kind === "review") {
     return scene.add.particles(0, 0, "fx-question", questionConfig(follow));
+  }
+  if (kind === "ready") {
+    const cfg = { ...questionConfig(follow), tint: [0xffcc66, 0xffaa44, 0xffdd88] };
+    return scene.add.particles(0, 0, "fx-question", cfg);
   }
   if (kind === "sleep" || kind === "offline") {
     return scene.add.particles(0, 0, "fx-zzz", zzzConfig(follow));

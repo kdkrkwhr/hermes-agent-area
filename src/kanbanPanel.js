@@ -12,6 +12,8 @@ function parseKanbanStats(raw) {
     running: pick("running"),
     blocked: pick("blocked"),
     ready: pick("ready"),
+    review: pick("review"),
+    todo: pick("todo"),
     done: pick("done"),
     raw: text.trim(),
   };
@@ -25,6 +27,12 @@ function statusLabel(status) {
       return "응답중";
     case "blocked":
       return "대기";
+    case "ready":
+      return "큐";
+    case "review":
+      return "리뷰";
+    case "todo":
+      return "할일";
     case "offline":
       return "오프라인";
     case "idle":
@@ -37,6 +45,8 @@ function statusLabel(status) {
 function statusClass(status) {
   if (status === "running" || status === "chatting") return "kb-running";
   if (status === "blocked") return "kb-blocked";
+  if (status === "ready" || status === "todo") return "kb-ready";
+  if (status === "review") return "kb-review";
   if (status === "offline") return "kb-offline";
   return "kb-idle";
 }
@@ -175,7 +185,7 @@ export function createKanbanPanel({ onLocate } = {}) {
 
     lastAgents = agents.map((a) => ({ ...a }));
     const stats = parseKanbanStats(snapshot?.stats?.raw);
-    elStats.textContent = `${mode} · running ${stats.running} · blocked ${stats.blocked}`;
+    elStats.textContent = `${mode} · R ${stats.running} · B ${stats.blocked} · Q ${stats.ready} · Rev ${stats.review}`;
     elStats.className = `kanban-panel__stats kanban-panel__stats--${mode}`;
     renderList(lastAgents);
     if (selectedId) {

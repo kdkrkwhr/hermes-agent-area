@@ -61,6 +61,9 @@ def main() -> int:
         ("running", 0, "desk"),
         ("chatting", 1, "desk"),
         ("blocked", 0, "meeting"),
+        ("review", 1, "review"),
+        ("ready", 2, "queue"),
+        ("todo", 0, "queue"),
         ("offline", 2, "sleep"),
         ("idle", 0, "break"),
     ):
@@ -78,6 +81,22 @@ def main() -> int:
             )
             ok &= in_lounge
             print(f"  idle dest in lounge={'OK' if in_lounge else 'FAIL'}")
+        if st in ("ready", "todo"):
+            queue_wp = WAYPOINTS.get("queue") or []
+            in_queue = any(
+                abs(dest["x"] - p["x"]) < 0.1 and abs(dest["y"] - p["y"]) < 0.1
+                for p in queue_wp
+            )
+            ok &= in_queue
+            print(f"  {st} dest in queue={'OK' if in_queue else 'FAIL'}")
+        if st == "review":
+            review_wp = WAYPOINTS.get("reviewWait") or []
+            in_review = any(
+                abs(dest["x"] - p["x"]) < 0.1 and abs(dest["y"] - p["y"]) < 0.1
+                for p in review_wp
+            )
+            ok &= in_review
+            print(f"  review dest in reviewWait={'OK' if in_review else 'FAIL'}")
         if st == "offline":
             at_sleep = (
                 abs(dest["x"] - sleep_wp["x"]) < 0.1

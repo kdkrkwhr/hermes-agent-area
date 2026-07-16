@@ -73,8 +73,9 @@ const depthOk =
 const countsOk =
   Number.isFinite(counts.running) &&
   Number.isFinite(counts.blocked) &&
-  Number.isFinite(counts.idle) &&
-  (counts.running >= 1 || counts.blocked >= 1);
+  Number.isFinite(counts.ready) &&
+  Number.isFinite(counts.review) &&
+  (counts.running >= 1 || counts.blocked >= 1 || counts.ready >= 1);
 const onOk =
   on.signage?.enabled === true &&
   on.hasTv &&

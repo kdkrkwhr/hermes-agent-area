@@ -68,6 +68,21 @@ WAYPOINTS = {
         _px(18, 18),
     ],
     "sleep": _px(31, 21),
+    # lobby queue — south corridor outside War Room (ready/todo)
+    "queue": [
+        _px(18, 27),
+        _px(20, 27),
+        _px(22, 27),
+        _px(24, 27),
+    ],
+    # south of meeting / near whiteboard (review wait)
+    "reviewWait": [
+        _px(15, 11),
+        _px(19, 12),
+        _px(18, 12),
+        _px(19, 10),
+        _px(20, 10),
+    ],
 }
 
 # idle agents change lounge spots on this rhythm (seconds)
@@ -79,10 +94,23 @@ SHEETS = ["char-mushroom", "char-onion", "char-claude"]
 BUBBLES = {
     "running": "코드 작업 중...",
     "blocked": "검토 대기 중...",
+    "ready": "큐 대기 중...",
+    "review": "리뷰 대기 중...",
+    "todo": "할 일 대기...",
     "idle": "휴식 중 ☕",
     "offline": "오프라인",
     "chatting": "응답 중...",
 }
+
+
+def _queue_dest(home_desk: int) -> dict[str, float]:
+    spots = WAYPOINTS.get("queue") or [_px(20, 27)]
+    return spots[home_desk % len(spots)]
+
+
+def _review_dest(home_desk: int) -> dict[str, float]:
+    spots = WAYPOINTS.get("reviewWait") or [WAYPOINTS["meeting"]]
+    return spots[home_desk % len(spots)]
 
 
 def _idle_lounge_dest(home_desk: int) -> dict[str, float]:
@@ -144,6 +172,10 @@ def _tile_to_zone(
         return "desk", desk
     if status == "blocked":
         return "meeting", WAYPOINTS["meeting"]
+    if status == "review":
+        return "review", _review_dest(home_desk)
+    if status in ("ready", "todo"):
+        return "queue", _queue_dest(home_desk)
     if status == "offline":
         # gateway cold/disconnected → Nap Pod (not desk away)
         return "sleep", WAYPOINTS["sleep"]
@@ -373,13 +405,15 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
                 """
                 SELECT id, title, status, assignee, started_at, max_runtime_seconds, skills
                 FROM tasks
-                WHERE status IN ('running', 'blocked', 'ready')
+                WHERE status IN ('running', 'blocked', 'review', 'ready', 'todo')
                   AND assignee IS NOT NULL
                 ORDER BY
                   CASE status
                     WHEN 'running' THEN 0
                     WHEN 'blocked' THEN 1
-                    ELSE 2
+                    WHEN 'review' THEN 2
+                    WHEN 'ready' THEN 3
+                    ELSE 4
                   END,
                   started_at DESC NULLS LAST,
                   created_at DESC
@@ -391,11 +425,11 @@ def read_kanban_active() -> dict[str, dict[str, Any]]:
                 """
                 SELECT id, title, status, assignee, started_at, max_runtime_seconds, skills
                 FROM tasks
-                WHERE status IN ('running', 'blocked', 'ready')
+                WHERE status IN ('running', 'blocked', 'review', 'ready', 'todo')
                   AND assignee IS NOT NULL
                 """
             ).fetchall()
-            rank = {"running": 0, "blocked": 1, "ready": 2}
+            rank = {"running": 0, "blocked": 1, "review": 2, "ready": 3, "todo": 4}
             rows = sorted(rows, key=lambda r: rank.get(r["status"], 9))
     except Exception as e:
         return {"__error__": {"status": "error", "id": "", "title": str(e)}}
@@ -683,6 +717,12 @@ class OfficeSim:
                     status = "running"
                 elif task and task.get("status") == "blocked":
                     status = "blocked"
+                elif task and task.get("status") == "review":
+                    status = "review"
+                elif task and task.get("status") == "ready":
+                    status = "ready"
+                elif task and task.get("status") == "todo":
+                    status = "todo"
                 elif gateway_turn_active(a.profile):
                     # 칸반 없어도 디코 답장 중이면 휴식 취급 금지
                     status = "chatting"
@@ -707,6 +747,12 @@ class OfficeSim:
                     a.bubble = f"코드 작업 중... ({a.task_title[:24]})"
                 elif status == "blocked" and a.task_title:
                     a.bubble = f"검토 대기 중... ({a.task_title[:24]})"
+                elif status == "review" and a.task_title:
+                    a.bubble = f"리뷰 대기... ({a.task_title[:24]})"
+                elif status == "ready" and a.task_title:
+                    a.bubble = f"큐 대기... ({a.task_title[:24]})"
+                elif status == "todo" and a.task_title:
+                    a.bubble = f"할 일... ({a.task_title[:24]})"
             else:
                 a.task_id = None
                 a.task_title = None

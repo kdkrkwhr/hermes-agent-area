@@ -22,12 +22,14 @@ async function runCase(label, url) {
     { timeout: 12000 },
   );
 
-  await page.evaluate(() => {
-    document.querySelector(".kanban-panel__row[data-agent-id='onion']")?.click();
+  const pickId = await page.evaluate(() => {
+    const row = document.querySelector(".kanban-panel__row[data-agent-id]");
+    row?.click();
+    return row?.dataset?.agentId || null;
   });
   await page.waitForFunction(
-    () => window.__HERMES_AREA__?.kanbanPanel?.selectedId === "onion",
-    null,
+    (id) => window.__HERMES_AREA__?.kanbanPanel?.selectedId === id,
+    pickId,
     { timeout: 5000 },
   );
 
@@ -48,7 +50,7 @@ async function runCase(label, url) {
   const fatal = errors.filter(
     (e) => !/Framebuffer|WebGL|WebSocket connection/i.test(e),
   );
-  return { label, snapshot, fatal };
+  return { label, snapshot, pickId, fatal };
 }
 
 const mockCase = await runCase(
@@ -62,14 +64,18 @@ function okCase(c, { mock = false } = {}) {
   const p = c.snapshot.kanbanPanel;
   const hasTitles = c.snapshot.agents?.some((a) => a.task_title);
   const statsOk = mock
-    ? p?.stats?.running >= 1 && p?.stats?.blocked >= 1 && p?.mode === "mock"
+    ? p?.stats?.running >= 1 &&
+      p?.stats?.blocked >= 1 &&
+      p?.stats?.ready >= 1 &&
+      p?.mode === "mock" &&
+      /Q\s+\d+/.test(c.snapshot.statsText || "")
     : p?.stats?.running >= 1 && p?.mode === "live";
   return (
     c.fatal.length === 0 &&
     c.snapshot.rowCount === 3 &&
     statsOk &&
     hasTitles &&
-    (c.snapshot.detailVisible === true || c.snapshot.kanbanPanel?.selectedId === "onion")
+    (c.snapshot.detailVisible === true || c.snapshot.kanbanPanel?.selectedId === c.pickId)
   );
 }
 

@@ -137,6 +137,19 @@ export class OfficeScene extends Phaser.Scene {
           sleep: { x: 31, y: 21 },
           entrance: { x: 20, y: 27 },
           lobby: { xMin: 14, yMin: 26, xMax: 25, yMax: 28 },
+          queue: [
+            { x: 18, y: 27 },
+            { x: 20, y: 27 },
+            { x: 22, y: 27 },
+            { x: 24, y: 27 },
+          ],
+          reviewWait: [
+            { x: 15, y: 11 },
+            { x: 19, y: 12 },
+            { x: 18, y: 12 },
+            { x: 19, y: 10 },
+            { x: 20, y: 10 },
+          ],
           ceoDesk: { x: 30, y: 7 },
           ceoOffice: { xMin: 26, yMin: 2, xMax: 34, yMax: 11 },
         };

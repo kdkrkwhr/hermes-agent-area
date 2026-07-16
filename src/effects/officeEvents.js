@@ -137,7 +137,15 @@ function findPrinterTile(scene) {
 /** live idle / mock break — skip running·blocked·chatting. */
 function isStandupGatherable(agent) {
   const s = agent?.serverStatus;
-  if (s === "running" || s === "blocked" || s === "chatting" || s === "offline") {
+  if (
+    s === "running" ||
+    s === "blocked" ||
+    s === "chatting" ||
+    s === "offline" ||
+    s === "ready" ||
+    s === "review" ||
+    s === "todo"
+  ) {
     return false;
   }
   if (agent.live) return s === "idle";

@@ -58,9 +58,7 @@ function findWhiteboardAnchor(scene) {
 
 function formatTickerLine(snapshot) {
   const stats = parseKanbanStats(snapshot?.stats?.raw);
-  const agents = snapshot?.agents ?? [];
-  const idle = agents.filter((a) => a.status === "idle").length;
-  return `R ${stats.running} · B ${stats.blocked} · I ${idle}`;
+  return `R ${stats.running} · B ${stats.blocked} · Q ${stats.ready} · Rev ${stats.review}`;
 }
 
 export class WhiteboardTicker {
@@ -77,7 +75,7 @@ export class WhiteboardTicker {
 
     this.anchor = findWhiteboardAnchor(scene);
     this.label = scene.add
-      .text(this.anchor.x, this.anchor.y, "R 0 · B 0 · I 0", {
+      .text(this.anchor.x, this.anchor.y, "R 0 · B 0 · Q 0 · Rev 0", {
         fontFamily: "Consolas, Segoe UI, monospace",
         fontSize: "12px",
         color: "#d8e8f8",

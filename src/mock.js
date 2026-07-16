@@ -131,12 +131,15 @@ export function isPagesLocalWsBlocked() {
 export function buildMockSnapshot(agents, reason = "mock mode") {
   const running = agents.filter((a) => a.status === "running").length;
   const blocked = agents.filter((a) => a.status === "blocked").length;
+  const ready = agents.filter((a) => a.status === "ready").length;
+  const review = agents.filter((a) => a.status === "review").length;
+  const todo = agents.filter((a) => a.status === "todo").length;
   return {
     type: "snapshot",
     ts: Date.now() / 1000,
     agents,
     stats: {
-      raw: `By status:\n  running   ${running}\n  blocked   ${blocked}\n  ready     0\n  done      0\n(${reason})`,
+      raw: `By status:\n  running   ${running}\n  blocked   ${blocked}\n  ready     ${ready}\n  review    ${review}\n  todo      ${todo}\n  done      0\n(${reason})`,
     },
     mock: true,
   };
@@ -144,10 +147,6 @@ export function buildMockSnapshot(agents, reason = "mock mode") {
 
 /** Demo snapshot when BE unreachable — not real Hermes status. */
 export function buildMockAgents() {
-  const sleepPx = {
-    x: 31 * TILE_SIZE + TILE_SIZE / 2,
-    y: 21 * TILE_SIZE + TILE_SIZE / 2,
-  };
   const focusPx = {
     x: 3 * TILE_SIZE + TILE_SIZE / 2,
     y: 19 * TILE_SIZE + TILE_SIZE / 2,
@@ -157,31 +156,34 @@ export function buildMockAgents() {
     y: 5 * TILE_SIZE + TILE_SIZE / 2,
   });
   return AGENTS.map((def, i) => {
-    // 0 deep-work running @focus, 1 blocked @meeting, 2 offline @Nap Pod
-    const status = i === 0 ? "running" : i === 1 ? "blocked" : "offline";
+    // 0 deep-work running @focus, 1 blocked @meeting, 2 ready @lobby queue
+    const status = i === 0 ? "running" : i === 1 ? "blocked" : "ready";
     const titles = [
       "deep-work: Focus zone pipeline",
       "가상사무실: 칸반 상태 패널",
-      null,
+      "가상사무실: ready/review 대기열",
     ];
     const zones =
-      status === "running" ? "focus" : status === "blocked" ? "meeting" : "sleep";
+      status === "running" ? "focus" : status === "blocked" ? "meeting" : "queue";
     const bubbles =
       status === "running"
         ? "딥워크 중... (mock)"
         : status === "blocked"
           ? "검토 대기 중... (mock)"
-          : "오프라인 · 수면 중 (mock)";
+          : "큐 대기 중... (mock)";
     const now = Date.now() / 1000;
     const taskStarted =
-      status === "running" ? now - 420 : status === "blocked" ? now - 900 : null;
+      status === "running" ? now - 420 : status === "blocked" ? now - 900 : now - 120;
     const taskProgress = status === "running" ? 0.42 : null;
     const taskElapsed = taskStarted != null ? Math.round(now - taskStarted) : null;
-    const atSleep = status === "offline";
     const atFocus = status === "running";
     const desk = openDeskPx(def.homeDesk);
-    const x = atSleep ? sleepPx.x : atFocus ? focusPx.x : desk.x;
-    const y = atSleep ? sleepPx.y : atFocus ? focusPx.y : (14 * TILE_SIZE + TILE_SIZE / 2);
+    const queuePx = {
+      x: (18 + i * 2) * TILE_SIZE + TILE_SIZE / 2,
+      y: 27 * TILE_SIZE + TILE_SIZE / 2,
+    };
+    const x = atFocus ? focusPx.x : status === "ready" ? queuePx.x : desk.x;
+    const y = atFocus ? focusPx.y : status === "ready" ? queuePx.y : (14 * TILE_SIZE + TILE_SIZE / 2);
     return {
       id: def.id,
       displayName: def.displayName,
@@ -195,11 +197,11 @@ export function buildMockAgents() {
       task_started_at: taskStarted,
       task_elapsed_s: taskElapsed,
       task_progress: taskProgress,
-      gateway: atSleep ? "stopped" : "running",
+      gateway: "running",
       x,
       y,
-      dest_x: atSleep ? sleepPx.x : atFocus ? focusPx.x : x,
-      dest_y: atSleep ? sleepPx.y : atFocus ? focusPx.y : y,
+      dest_x: atFocus ? focusPx.x : status === "ready" ? queuePx.x : x,
+      dest_y: atFocus ? focusPx.y : status === "ready" ? queuePx.y : y,
     };
   });
 }

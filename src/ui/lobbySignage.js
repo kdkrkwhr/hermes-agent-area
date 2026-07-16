@@ -50,9 +50,11 @@ function formatSignageLines(snapshot) {
   const done = stats.done ?? 0;
   return {
     line1: `R ${stats.running}  B ${stats.blocked}`,
-    line2: `I ${idle}  D ${done}`,
+    line2: `Q ${stats.ready}  Rev ${stats.review}`,
     running: stats.running,
     blocked: stats.blocked,
+    ready: stats.ready,
+    review: stats.review,
     idle,
     done,
   };
@@ -129,7 +131,7 @@ export class LobbySignage {
       .setScrollFactor(1);
 
     this.line2 = scene.add
-      .text(x, y + 10, "I 0  D 0", {
+      .text(x, y + 10, "Q 0  Rev 0", {
         fontFamily: "Consolas, Segoe UI, monospace",
         fontSize: "10px",
         color: "#b0c4d8",
@@ -161,6 +163,8 @@ export class LobbySignage {
     this.counts = {
       running: fmt.running,
       blocked: fmt.blocked,
+      ready: fmt.ready,
+      review: fmt.review,
       idle: fmt.idle,
       done: fmt.done,
     };
