@@ -12,6 +12,7 @@ const RANDOM_KINDS = [
   "parcel_delivery",
   "power_flicker",
   "fire_drill",
+  "stretch_break",
 ];
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
@@ -19,6 +20,10 @@ const FLICKER_MAX_MS = 1200;
 /** fire_drill: red pulse + gather duration range (ms) */
 const FIRE_DRILL_MIN_MS = 8000;
 const FIRE_DRILL_MAX_MS = 12000;
+/** stretch_break: bubble + scale pulse at desk (ms) */
+const STRETCH_MIN_MS = 4000;
+const STRETCH_MAX_MS = 7000;
+const STRETCH_LINES = ["으쌰", "기지개"];
 const COFFEE_GID = 16;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 const PRINTER_GID = 36;
@@ -156,6 +161,13 @@ function isStandupGatherable(agent) {
   return agent.getEffectKind?.() === "idle";
 }
 
+/** idle or running (desk/focus) — stretch in place, no gather move. */
+function isStretchEligible(agent) {
+  if (!agent?.sprite) return false;
+  const kind = agent.getEffectKind?.();
+  return kind === "idle" || kind === "running";
+}
+
 function shuffleInPlace(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -193,6 +205,7 @@ export class OfficeEvents {
     this.lunchGathered = 0;
     this.printerGathered = 0;
     this.fireDrillGathered = 0;
+    this.stretchAffected = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     /** ms timestamp — IdleChatter skips while now < this */
@@ -304,6 +317,7 @@ export class OfficeEvents {
     else if (kind === "parcel_delivery") this.runParcelDelivery();
     else if (kind === "power_flicker") this.runPowerFlicker();
     else if (kind === "fire_drill") this.runFireDrill();
+    else if (kind === "stretch_break") this.runStretchBreak();
 
     this.publish();
   }
@@ -689,6 +703,87 @@ export class OfficeEvents {
     });
   }
 
+  /**
+   * Stretch break: toast + idle/running desk bubbles + y-scale pulse.
+   * No gather move. Skip if standup/lunch/printer/fire_drill gather is active.
+   */
+  runStretchBreak() {
+    if (this.isGathering()) return;
+
+    this.showToast("스트레칭 타임", 2800);
+
+    const duration =
+      STRETCH_MIN_MS +
+      Math.floor(Math.random() * (STRETCH_MAX_MS - STRETCH_MIN_MS + 1));
+    const agents = (this.scene.agents || []).filter((a) => isStretchEligible(a));
+    this.stretchAffected = agents.length;
+    this.publish();
+
+    const restores = [];
+
+    for (const agent of agents) {
+      const spr = agent.sprite;
+      if (!spr) continue;
+
+      agent._stretchBackup = agent.statusText;
+      agent.setStatus(
+        STRETCH_LINES[Math.floor(Math.random() * STRETCH_LINES.length)],
+      );
+
+      const baseScaleX = spr.scaleX;
+      const baseScaleY = spr.scaleY;
+      const tween = this.scene.tweens.add({
+        targets: spr,
+        scaleY: baseScaleY * 1.08,
+        duration: Math.min(450, Math.floor(duration / 3)),
+        yoyo: true,
+        repeat: Math.max(0, Math.floor(duration / 900) - 1),
+        ease: "Sine.easeInOut",
+        onComplete: () => {
+          spr.setScale(baseScaleX, baseScaleY);
+        },
+      });
+
+      const restore = this.scene.time.delayedCall(duration, () => {
+        this.scene.tweens.killTweensOf(spr);
+        spr.setScale(baseScaleX, baseScaleY);
+        if (agent._stretchBackup != null) {
+          // don't clobber if interact/expand took the bubble
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null
+          ) {
+            agent.setStatus(agent._stretchBackup);
+          }
+          agent._stretchBackup = null;
+        }
+      });
+
+      restores.push(() => {
+        restore.remove(false);
+        this.scene.tweens.killTweensOf(spr);
+        spr.setScale(baseScaleX, baseScaleY);
+        if (agent._stretchBackup != null) {
+          agent.setStatus(agent._stretchBackup);
+          agent._stretchBackup = null;
+        }
+      });
+    }
+
+    this.track(() => {
+      for (const fn of restores) {
+        try {
+          fn();
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -848,6 +943,7 @@ export class OfficeEvents {
       lunchGathered: this.lunchGathered,
       printerGathered: this.printerGathered,
       fireDrillGathered: this.fireDrillGathered,
+      stretchAffected: this.stretchAffected,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       gathering: this.isGathering(),
