@@ -4,7 +4,7 @@
  */
 import { chromium } from "playwright";
 
-const base = process.env.SMOKE_URL || "http://127.0.0.1:5173/";
+const base = process.env.SMOKE_URL || "http://127.0.0.1:5173/hermes-agent-area/";
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage({ viewport: { width: 960, height: 720 } });
 const errors = [];
