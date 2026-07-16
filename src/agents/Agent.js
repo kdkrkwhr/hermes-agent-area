@@ -387,7 +387,14 @@ export class Agent {
     const prevStatus = this.serverStatus;
     this.serverData = { ...agentMsg, displayName: this.def.displayName };
     this.serverStatus = agentMsg.status;
-    if (agentMsg.bubble) this.setStatus(agentMsg.bubble);
+    // don't clobber event-owned bubbles (stretch / water cooler)
+    if (
+      agentMsg.bubble &&
+      this._stretchBackup == null &&
+      this._waterBackup == null
+    ) {
+      this.setStatus(agentMsg.bubble);
+    }
 
     const alpha = agentMsg.status === "offline" ? 0.45 : 1;
     this.sprite.setAlpha(alpha);

@@ -13,6 +13,7 @@ const RANDOM_KINDS = [
   "power_flicker",
   "fire_drill",
   "stretch_break",
+  "water_cooler",
 ];
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
@@ -24,6 +25,10 @@ const FIRE_DRILL_MAX_MS = 12000;
 const STRETCH_MIN_MS = 4000;
 const STRETCH_MAX_MS = 7000;
 const STRETCH_LINES = ["으쌰", "기지개"];
+/** water_cooler: lounge chat bubble duration (ms) */
+const WATER_CHAT_MIN_MS = 3000;
+const WATER_CHAT_MAX_MS = 5000;
+const WATER_COOLER_LINES = ["오늘 blocked 많네", "커피?", "standup 언제?"];
 const COFFEE_GID = 16;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 const PRINTER_GID = 36;
@@ -35,6 +40,10 @@ const PARCEL_MAX_MS = 12000;
 const LUNCH_HOUR_START = 11;
 const LUNCH_HOUR_END = 14;
 const LUNCH_WEIGHT = 4;
+/** weekday afternoon: higher pick weight for water_cooler */
+const WATER_HOUR_START = 14;
+const WATER_HOUR_END = 17;
+const WATER_WEIGHT = 3;
 
 function parseEventsMode() {
   try {
@@ -206,6 +215,7 @@ export class OfficeEvents {
     this.printerGathered = 0;
     this.fireDrillGathered = 0;
     this.stretchAffected = 0;
+    this.waterCoolerGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     /** ms timestamp — IdleChatter skips while now < this */
@@ -274,14 +284,19 @@ export class OfficeEvents {
   fireRandom() {
     if (!this.enabled) return;
     const night = this.scene.lightingPreset?.name === "night";
-    const hour = new Date().getHours();
+    const now = new Date();
+    const hour = now.getHours();
+    const weekday = now.getDay() >= 1 && now.getDay() <= 5;
     const lunchWindow =
       hour >= LUNCH_HOUR_START && hour < LUNCH_HOUR_END;
+    const waterWindow =
+      weekday && hour >= WATER_HOUR_START && hour < WATER_HOUR_END;
     const pool = [];
     for (const k of RANDOM_KINDS) {
       if (k === "quiet_hours" && !night) continue;
-      const weight =
-        k === "lunch_rush" && lunchWindow ? LUNCH_WEIGHT : 1;
+      let weight = 1;
+      if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
+      else if (k === "water_cooler" && waterWindow) weight = WATER_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -318,6 +333,7 @@ export class OfficeEvents {
     else if (kind === "power_flicker") this.runPowerFlicker();
     else if (kind === "fire_drill") this.runFireDrill();
     else if (kind === "stretch_break") this.runStretchBreak();
+    else if (kind === "water_cooler") this.runWaterCooler();
 
     this.publish();
   }
@@ -704,6 +720,138 @@ export class OfficeEvents {
   }
 
   /**
+   * Water cooler: toast + idle/break 2–4 → lounge/break chat 3–5s.
+   * Droplet/sparkle ring at lounge. Skip if another gather is active.
+   */
+  runWaterCooler() {
+    if (this.isGathering()) return;
+
+    // lock early so printer/standup/ship don't race during pathfind
+    this.markGathering(WATER_CHAT_MAX_MS + 12000);
+    this.showToast("정수기 앞 잡담 중", 2800);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    this.spawnDropletRing(x, y - 6, 3500);
+    void this.gatherIdleToWaterCooler();
+  }
+
+  /** Small blue droplet / sparkle ring around lounge center. */
+  spawnDropletRing(x, y, ms = 3500) {
+    const emitter = this.scene.add.particles(x, y, "fx-spark", {
+      speed: { min: 28, max: 70 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.7, end: 0 },
+      alpha: { start: 0.85, end: 0 },
+      lifespan: { min: 450, max: 800 },
+      frequency: 55,
+      quantity: 3,
+      tint: [0x7ec8ff, 0xa8e4ff, 0xffffff, 0x5ee0c8],
+      blendMode: "ADD",
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      emitter.destroy();
+    });
+  }
+
+  /** Idle/break 2–4 → lounge spots; chat bubbles 3–5s → wander restore. */
+  async gatherIdleToWaterCooler() {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const holdMs =
+      WATER_CHAT_MIN_MS +
+      Math.floor(Math.random() * (WATER_CHAT_MAX_MS - WATER_CHAT_MIN_MS + 1));
+    this.markGathering(holdMs + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      // don't re-filter mid-loop — WS may flip serverStatus while prior agents pathfind
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + holdMs + 400;
+      agent._waterBackup = agent.statusText;
+      agent.setStatus(
+        WATER_COOLER_LINES[
+          Math.floor(Math.random() * WATER_COOLER_LINES.length)
+        ],
+      );
+    }
+
+    this.waterCoolerGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(holdMs, () => {
+      for (const agent of moved) {
+        if (agent._waterBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null
+          ) {
+            agent.setStatus(agent._waterBackup);
+          }
+          agent._waterBackup = null;
+        }
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /**
    * Stretch break: toast + idle/running desk bubbles + y-scale pulse.
    * No gather move. Skip if standup/lunch/printer/fire_drill gather is active.
    */
@@ -944,6 +1092,7 @@ export class OfficeEvents {
       printerGathered: this.printerGathered,
       fireDrillGathered: this.fireDrillGathered,
       stretchAffected: this.stretchAffected,
+      waterCoolerGathered: this.waterCoolerGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       gathering: this.isGathering(),

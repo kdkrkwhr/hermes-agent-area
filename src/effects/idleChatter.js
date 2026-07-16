@@ -69,6 +69,7 @@ export function isChatterEligible(agent) {
   if (agent._workBackup != null) return false;
   if (agent._specBackup != null) return false;
   if (agent._stretchBackup != null) return false;
+  if (agent._waterBackup != null) return false;
   if (agent._chatterBackup != null) return false;
 
   const s = agent.serverStatus;
@@ -185,7 +186,8 @@ export class IdleChatter {
           agent._coffeeBackup != null ||
           agent._workBackup != null ||
           agent._specBackup != null ||
-          agent._stretchBackup != null
+          agent._stretchBackup != null ||
+          agent._waterBackup != null
         ) {
           agent._chatterBackup = null;
           return;
