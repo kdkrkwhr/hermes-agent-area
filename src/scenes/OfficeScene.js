@@ -33,6 +33,7 @@ import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
+import { CityLights } from "../effects/cityLights.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import {
   burstTaskCelebrate,
@@ -462,6 +463,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow = new LampGlow(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
+    this.cityLights = new CityLights(this);
     this.coffeeSteam = new CoffeeSteam(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
@@ -494,6 +496,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.sync();
     this.dustMotes?.sync();
     this.sunBeams?.sync();
+    this.cityLights?.sync();
     this.coffeeSteam?.sync();
     this.weatherFx?.onLightingChanged();
   }
@@ -546,6 +549,7 @@ export class OfficeScene extends Phaser.Scene {
       this.syncAgentEmitter(agent);
     }
     this.lampGlow?.update(this.time.now);
+    this.cityLights?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
       if (this._lightMinute !== minute) {
@@ -998,6 +1002,7 @@ export class OfficeScene extends Phaser.Scene {
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
+      cityLights: this.cityLights?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
