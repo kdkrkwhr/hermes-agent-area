@@ -42,6 +42,7 @@ import { MeetingProjector } from "../effects/meetingProjector.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
+import { DeskSticky } from "../effects/deskSticky.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -477,6 +478,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumFish = new AquariumFish(this);
     this.meetingProjector = new MeetingProjector(this);
     this.wallClock = new WallClock(this);
+    this.deskSticky = new DeskSticky(this);
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -578,6 +580,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
     this.meetingProjector?.update(this.time.now, delta);
+    this.deskSticky?.sync();
     this.plantSway?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -1044,6 +1047,7 @@ export class OfficeScene extends Phaser.Scene {
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,
       meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
       wallClock: this.wallClock?.snapshot?.() ?? null,
+      deskSticky: this.deskSticky?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
@@ -1051,6 +1055,7 @@ export class OfficeScene extends Phaser.Scene {
       signage: this.lobbySignage?.snapshot?.() ?? null,
       gate: this.entranceGate?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
+      mascotPet: this.roomInteract?.mascotPetSnapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,
