@@ -36,6 +36,7 @@ import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { PlantSway } from "../effects/plantSway.js";
+import { ThunderFx } from "../effects/thunderFx.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -468,6 +469,7 @@ export class OfficeScene extends Phaser.Scene {
     this.coffeeSteam = new CoffeeSteam(this);
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
+    this.thunderFx = new ThunderFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
     this.applyTimeOfDayLighting();
@@ -997,6 +999,7 @@ export class OfficeScene extends Phaser.Scene {
       rain: this.windowRain?.snapshot?.() ?? null,
       snow: this.snowFlakes?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
+      thunder: this.thunderFx?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([

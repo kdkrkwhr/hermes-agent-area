@@ -224,6 +224,59 @@ export class OfficeAudio {
     }
   }
 
+  /**
+   * Distant thunder rumble for rain lightning — WebAudio only.
+   * No-ops when muted / locked / ?sfx=0.
+   */
+  playThunderSfx() {
+    if (!this.sfxOk()) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const dur = 0.55 + Math.random() * 0.35;
+
+      // low boom
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      const f0 = 55 + Math.random() * 25;
+      osc.frequency.setValueAtTime(f0, t0);
+      osc.frequency.exponentialRampToValueAtTime(f0 * 0.45, t0 + dur);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.14, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + dur + 0.02);
+
+      // soft noise crackle (buffer)
+      const n = Math.floor(ctx.sampleRate * Math.min(0.22, dur * 0.4));
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      }
+      const noise = ctx.createBufferSource();
+      const nGain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(400, t0);
+      noise.buffer = buf;
+      nGain.gain.setValueAtTime(0.0001, t0);
+      nGain.gain.exponentialRampToValueAtTime(0.07, t0 + 0.01);
+      nGain.gain.exponentialRampToValueAtTime(0.0001, t0 + Math.min(0.25, dur * 0.5));
+      noise.connect(filter);
+      filter.connect(nGain);
+      nGain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + 0.28);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   snapshot() {
     return {
       unlocked: this.unlocked,
