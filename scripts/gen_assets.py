@@ -378,8 +378,23 @@ def make_tileset() -> None:
     fill(buf, w, ox + 6, oy + 1, ox + 10, oy + 4, (240, 120, 150, 255))
     fill(buf, w, ox + 7, oy + 6, ox + 9, oy + 10, (60, 130, 70, 255))
 
+    # 35 office printer (gid 36) — chunky body + tray + LCD
+    PRINTER = (88, 96, 108, 255)
+    PRINTER2 = (120, 128, 140, 255)
+    PAPER = (245, 245, 240, 255)
+    LCD = (80, 200, 160, 255)
+    ox, oy = tile_at(3, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 2, oy + 5, ox + 14, oy + 15, PRINTER)  # body
+    fill(buf, w, ox + 2, oy + 5, ox + 14, oy + 7, PRINTER2)  # top lip
+    fill(buf, w, ox + 4, oy + 2, ox + 12, oy + 5, PRINTER2)  # output slot
+    fill(buf, w, ox + 5, oy + 1, ox + 11, oy + 4, PAPER)  # jammed paper
+    fill(buf, w, ox + 5, oy + 8, ox + 9, oy + 11, LCD)  # status LCD
+    fill(buf, w, ox + 10, oy + 9, ox + 12, oy + 11, (40, 44, 52, 255))  # button
+    fill(buf, w, ox + 3, oy + 12, ox + 13, oy + 14, (60, 64, 72, 255))  # tray
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(3, 4), (4, 4), (5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(4, 4), (5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -407,7 +422,7 @@ def make_map_json() -> None:
       16 coffee  17 glass  18 rug  19 poster  20 lamp  21 napFloor  22 concrete
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
-      34 bookshelf  35 flowerPot
+      34 bookshelf  35 flowerPot  36 printer
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -622,6 +637,7 @@ def make_map_json() -> None:
     put(19, 15, 9)
     put(21, 15, 16)
     put(22, 15, 16)
+    put(23, 15, 36)  # printer beside coffee (open-desk edge)
     put(17, 17, 23)
     put(18, 17, 23)
     put(16, 17, 7)
@@ -629,6 +645,7 @@ def make_map_json() -> None:
     put(22, 17, 20)
     put(15, 16, 10)
     put(23, 16, 10)
+    put(24, 16, 36)  # second printer on lounge/corridor edge
     put(20, 16, 18, False)
 
     # sleep Nap Pod: bed + lamps + rugs
@@ -746,7 +763,7 @@ def make_map_json() -> None:
     for p in walk_pts:
         x, y = p["x"], p["y"]
         coll[y][x] = 0
-        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27, 31, 32, 34, 35):
+        if decor[y][x] in (6, 7, 9, 10, 14, 15, 16, 20, 23, 24, 26, 27, 31, 32, 34, 35, 36):
             decor[y][x] = 0
 
     def flat(layer):

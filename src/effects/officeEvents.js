@@ -16,7 +16,7 @@ const RANDOM_KINDS = [
 const FLICKER_MIN_MS = 600;
 const FLICKER_MAX_MS = 1200;
 const COFFEE_GID = 16;
-/** reserved furniture index — missing on map → lobby/entrance fallback */
+/** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
 const PARCEL_NEAR_TILES = 2.5;

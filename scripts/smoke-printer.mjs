@@ -2,7 +2,7 @@ import { chromium } from "playwright";
 
 const base =
   process.env.SMOKE_BASE || "http://localhost:5173/hermes-agent-area/";
-const url = `${base.replace(/\/?$/, "/")}?events=0`;
+const url = `${base.replace(/\/?$/, "/")}?events=0&help=0`;
 
 const browser = await chromium.launch({ headless: true });
 const page = await browser.newPage();
@@ -46,11 +46,14 @@ await page.evaluate(() => {
     a.pathIndex = 0;
     a.busy = false;
     a.idleUntil = sc.time.now + 999999;
-    a.sprite.setPosition(7 * 32 + 16, 8 * 32 + 16);
+    // start near lounge printers so path is short
+    a.sprite.setPosition(20 * 32 + 16, 16 * 32 + 16);
     sc._emitterKinds.set(a.def.id, "idle");
   }
 
   oe.fire("printer_jam");
+  window.__HERMES_AREA__._smokePrinterToast =
+    document.getElementById("office-toast")?.textContent || "";
 });
 
 await page.waitForFunction(
@@ -64,17 +67,49 @@ const result = await page.evaluate(() => {
   const oe = sc.officeEvents;
   const agents = sc.agents || [];
   const ent = sc.waypoints?.entrance || { x: 20, y: 27 };
-  const toast = document.getElementById("office-toast")?.textContent || "";
+  const toast =
+    window.__HERMES_AREA__?._smokePrinterToast ||
+    document.getElementById("office-toast")?.textContent ||
+    "";
+
+  let printerTile = null;
+  const layer = sc.furniture;
+  if (layer?.getTileAt) {
+    for (let ty = 0; ty < sc.map.height; ty++) {
+      for (let tx = 0; tx < sc.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === 36) {
+          printerTile = { x: tx, y: ty };
+          break;
+        }
+      }
+      if (printerTile) break;
+    }
+  }
+
+  const nearPrinter = printerTile
+    ? agents.filter((a) => {
+        const t = a.tilePos();
+        return (
+          Math.abs(t.x - printerTile.x) <= 4 &&
+          Math.abs(t.y - printerTile.y) <= 4
+        );
+      }).length
+    : 0;
+
   return {
     agentCount: agents.length,
     printerGathered: oe.printerGathered,
     lastEvent: oe.lastEvent,
     toast,
     events: window.__HERMES_AREA__?.events,
-    nearPrinter: agents.filter((a) => {
-      const t = a.tilePos();
-      return Math.abs(t.x - ent.x) <= 12 && Math.abs(t.y - ent.y) <= 12;
-    }).length,
+    printerTile,
+    entrance: ent,
+    nearPrinter,
+    usedEntranceFallback:
+      !!printerTile &&
+      printerTile.x === ent.x &&
+      printerTile.y === ent.y,
   };
 });
 
@@ -84,6 +119,14 @@ await browser.close();
 if (errors.length) {
   console.error("page errors", errors);
   process.exit(2);
+}
+if (!result.printerTile) {
+  console.error("FAIL: furniture missing GID 36 printer tile");
+  process.exit(1);
+}
+if (result.usedEntranceFallback) {
+  console.error("FAIL: printer tile equals entrance fallback", result.printerTile);
+  process.exit(1);
 }
 if (result.lastEvent !== "printer_jam") {
   console.error("FAIL: lastEvent should be printer_jam, got", result.lastEvent);
@@ -97,4 +140,13 @@ if (!String(result.toast).includes("프린터")) {
   console.error("FAIL: toast should mention 프린터, got:", result.toast);
   process.exit(1);
 }
-console.log("PASS: printerGathered=", result.printerGathered, "toast=", result.toast);
+console.log(
+  "PASS: printer@",
+  result.printerTile,
+  "gathered=",
+  result.printerGathered,
+  "near=",
+  result.nearPrinter,
+  "toast=",
+  result.toast,
+);
