@@ -575,6 +575,7 @@ export class OfficeScene extends Phaser.Scene {
     }
     this.lampGlow?.update(this.time.now);
     this.cityLights?.update(this.time.now);
+    this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
     this.meetingProjector?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);

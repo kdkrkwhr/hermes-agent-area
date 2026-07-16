@@ -26,6 +26,7 @@ const TYPING_AGENT_MS = 400;
 const TYPING_GLOBAL_MS = 100;
 /** Lobby door-chime throttle when visitors stack. */
 const DOOR_CHIME_MS = 1500;
+const BLOOP_MS = 450;
 
 function readMutePref() {
   try {
@@ -65,6 +66,7 @@ export class OfficeAudio {
     this._typingByAgent = new Map();
     this._lastTypingGlobalAt = 0;
     this._lastDoorChimeAt = 0;
+    this._lastBloopAt = 0;
     /** @type {BiquadFilterNode | null} */
     this._bgmFilter = null;
     /** @type {string | null} */
@@ -395,6 +397,33 @@ export class OfficeAudio {
         osc.start(t);
         osc.stop(t + dur + 0.02);
       }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Tiny aquarium bloop — respects mute / ?sfx=0. */
+  playAquariumBloop() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastBloopAt && now - this._lastBloopAt < BLOOP_MS) return;
+    this._lastBloopAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(520, t0);
+      osc.frequency.exponentialRampToValueAtTime(760, t0 + 0.09);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.08, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.18);
     } catch {
       /* autoplay / headless */
     }

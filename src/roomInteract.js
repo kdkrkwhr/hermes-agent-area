@@ -4,7 +4,10 @@ import { mountMinigame2048 } from "./ui/minigame2048.js";
 import { mountNapMode } from "./ui/napMode.js";
 
 const COFFEE_GID = 16;
+const AQUARIUM_GID = 37;
 const LINGER_MS = 4500;
+const AQUAFEED_MS = 7000;
+const AQUAFEED_COOLDOWN_MS = 15000;
 const VISIT_KEY = "hermes-area-visit-count";
 const TYPING_FRAMES = ["·", "··", "···"];
 
@@ -28,6 +31,24 @@ function findCoffeeTiles(scene) {
   if (!hits.length) {
     const br = scene.waypoints?.break || { x: 18, y: 16 };
     hits.push(tileCenter(scene, br.x + 3, br.y - 1));
+  }
+  return hits;
+}
+
+function findAquariumTiles(scene) {
+  const hits = [];
+  const layer = scene.furniture;
+  if (layer?.getTileAt && scene.map) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === AQUARIUM_GID) hits.push(tileCenter(scene, tx, ty));
+      }
+    }
+  }
+  if (!hits.length) {
+    const br = scene.waypoints?.break || { x: 18, y: 16 };
+    hits.push(tileCenter(scene, br.x + 4, br.y - 2));
   }
   return hits;
 }
@@ -88,6 +109,26 @@ function nearCoffee(scene, coffeeTiles) {
   return false;
 }
 
+function nearAquarium(scene, aquariumTiles) {
+  const b = scene.boss?.sprite;
+  if (!b) return false;
+  for (const c of aquariumTiles) {
+    if (Math.hypot(b.x - c.x, b.y - c.y) <= 62) return true;
+  }
+  return false;
+}
+
+function aquariumFeedEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("aquafeed");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
 function loungeAgents(scene) {
   return (scene.agents || []).filter((a) => {
     if (a.serverStatus === "idle" || a.currentKind === "break") return true;
@@ -121,6 +162,7 @@ export class RoomInteract {
   constructor(scene) {
     this.scene = scene;
     this.coffeeTiles = findCoffeeTiles(scene);
+    this.aquariumTiles = findAquariumTiles(scene);
     this.minigame = null;
     this.nap = null;
     this.lastScore = null;
@@ -134,6 +176,10 @@ export class RoomInteract {
     this.visitCount = readVisitCount();
     this.lastHint = null;
     this.lastAction = null;
+    this.aquariumFeedEnabled = aquariumFeedEnabledFromQuery();
+    this.aquaFeedActiveUntil = 0;
+    this.aquaFeedCooldownUntil = 0;
+    this.lastFeedAt = 0;
   }
 
   /** Call once after map ready — entry welcome. */
@@ -162,6 +208,13 @@ export class RoomInteract {
 
   hintKind() {
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
+    if (
+      this.aquariumFeedEnabled &&
+      nearAquarium(this.scene, this.aquariumTiles) &&
+      !this.aquaFeedActive()
+    ) {
+      return "aquarium";
+    }
     if (nearSleep(this.scene)) return "nap";
     const near = this.scene.boss?._nearAgent;
     if (near && isWorking(near)) return "work";
@@ -171,6 +224,12 @@ export class RoomInteract {
   hintLabel() {
     const k = this.hintKind();
     if (k === "coffee") return "E 미니게임";
+    if (k === "aquarium") {
+      if (this.aquaFeedCoolingDown()) {
+        return `먹이 쿨다운 ${this.aquaFeedCooldownLeftSec()}s`;
+      }
+      return "E 먹이주기";
+    }
     if (k === "nap") return "E 낮잠";
     if (k === "work") return "E 작업내용";
     return null;
@@ -183,6 +242,9 @@ export class RoomInteract {
     if (nearCoffee(this.scene, this.coffeeTiles)) {
       this.openMinigame();
       return true;
+    }
+    if (this.aquariumFeedEnabled && nearAquarium(this.scene, this.aquariumTiles)) {
+      return this.startAquariumFeed();
     }
     if (nearSleep(this.scene)) {
       this.openNap();
@@ -225,6 +287,46 @@ export class RoomInteract {
       },
     });
     this.publish();
+  }
+
+  aquaFeedActive() {
+    return this.scene.time.now < this.aquaFeedActiveUntil;
+  }
+
+  aquaFeedCoolingDown() {
+    return this.scene.time.now < this.aquaFeedCooldownUntil;
+  }
+
+  aquaFeedCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.aquaFeedCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startAquariumFeed() {
+    if (!this.aquariumFeedEnabled) return false;
+    if (this.aquaFeedActive()) return true;
+    if (this.aquaFeedCoolingDown()) {
+      this.showToast(`먹이 쿨다운 ${this.aquaFeedCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "aquarium_feed_cooldown",
+        cooldownSec: this.aquaFeedCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const now = this.scene.time.now;
+    this.lastFeedAt = now;
+    this.aquaFeedActiveUntil = now + AQUAFEED_MS;
+    this.aquaFeedCooldownUntil = now + AQUAFEED_COOLDOWN_MS;
+    this.scene.aquariumFish?.triggerFeed?.(AQUAFEED_MS);
+    this.scene.aquariumBubbles?.triggerFeed?.(AQUAFEED_MS);
+    this.scene.officeAudio?.playAquariumBloop?.();
+    this.showToast("먹이 투하! 물고기 집합");
+    this.lastAction = { kind: "aquarium_feed_start", startedAt: now };
+    this.publish();
+    return true;
   }
 
   openNap() {
@@ -271,6 +373,14 @@ export class RoomInteract {
     this.updateLinger(time);
     this.updateMeeting(time);
     this.updateLobbyWelcome();
+    if (this.aquaFeedActiveUntil && time >= this.aquaFeedActiveUntil) {
+      this.aquaFeedActiveUntil = 0;
+      this.lastAction = {
+        kind: "aquarium_feed_end",
+        lastFeedAt: this.lastFeedAt,
+      };
+      this.publish();
+    }
   }
 
   updateTyping(time) {
@@ -405,6 +515,15 @@ export class RoomInteract {
       hint: this.hintKind(),
       lastAction: this.lastAction,
       coffeeTiles: this.coffeeTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
+      aquariumTiles: this.aquariumTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
+      aquafeedEnabled: this.aquariumFeedEnabled,
+      aquafeedActive: this.aquaFeedActive(),
+      aquafeedCooldown: this.aquaFeedCoolingDown(),
+      aquafeedCooldownMsLeft: Math.max(
+        0,
+        Math.round(this.aquaFeedCooldownUntil - this.scene.time.now),
+      ),
+      lastFeedAt: this.lastFeedAt || null,
     };
   }
 
@@ -417,4 +536,12 @@ export class RoomInteract {
   }
 }
 
-export { findCoffeeTiles, COFFEE_GID, nearCoffee, nearSleep };
+export {
+  findCoffeeTiles,
+  findAquariumTiles,
+  COFFEE_GID,
+  AQUARIUM_GID,
+  nearCoffee,
+  nearAquarium,
+  nearSleep,
+};

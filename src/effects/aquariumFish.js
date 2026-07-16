@@ -1,5 +1,6 @@
 /** Ambient GID-37 aquarium fish. Soft sprites. `?fish=0` off. */
 
+import Phaser from "phaser";
 import { findAquariumTiles } from "./aquariumBubbles.js";
 
 /** Below bubbles (9); above furniture (0). */
@@ -13,6 +14,8 @@ const INSET_BOT = 10;
 const ALPHA_DAY = 0.92;
 const ALPHA_NIGHT = 0.55;
 const TINTS = [0xff8c3c, 0xffc850, 0x5ec8ff, 0xff6b9a];
+const FEED_MS = 7000;
+const FEED_BLEND_MS = 320;
 
 /**
  * Query: omit = on. `0`/`off`/`false` = never.
@@ -88,6 +91,7 @@ export class AquariumFish {
             .setVisible(false);
           this.fish.push({
             sprite,
+            tankIndex: this.fish.length,
             midX,
             midY: midY + (i === 0 ? -1.5 : 1.5),
             ampX: ampX * (0.85 + (i % 2) * 0.15),
@@ -96,6 +100,8 @@ export class AquariumFish {
             bobPeriod: 2100 + (n % 3) * 300,
             phase: (n * 1.7) % (Math.PI * 2),
             bobPhase: (n * 2.3) % (Math.PI * 2),
+            feedOffsetX: (i % 2 === 0 ? -1 : 1) * (2 + (n % 2) * 3),
+            feedOffsetY: -3 + i * 5,
           });
           n += 1;
         }
@@ -108,6 +114,14 @@ export class AquariumFish {
 
   shouldBeActive() {
     return this.enabled && this.fish.length > 0;
+  }
+
+  triggerFeed(durationMs = FEED_MS) {
+    if (!this.shouldBeActive()) return false;
+    const now = this.scene.time.now;
+    this.feedActiveUntil = Math.max(this.feedActiveUntil || 0, now + durationMs);
+    this.publish();
+    return true;
   }
 
   /** Call from applyTimeOfDayLighting — night/evening dims alpha. */
@@ -138,23 +152,43 @@ export class AquariumFish {
   update(time = this.scene.time.now) {
     if (!this.active) return;
 
+    const feedMsLeft = Math.max(0, (this.feedActiveUntil || 0) - time);
+    const feedBlend = Math.min(1, feedMsLeft / FEED_BLEND_MS);
+    const feedActive = feedMsLeft > 0;
     for (const f of this.fish) {
       const wave = Math.sin((time / f.period) * Math.PI * 2 + f.phase);
       const bob = Math.sin((time / f.bobPeriod) * Math.PI * 2 + f.bobPhase);
-      const dx = wave * f.ampX;
-      const x = f.midX + dx;
-      const y = f.midY + bob * f.bobAmp;
+      const restX = f.midX + wave * f.ampX;
+      const restY = f.midY + bob * f.bobAmp;
+      const feedX = f.midX + f.feedOffsetX;
+      const feedY = f.midY + f.feedOffsetY + bob * 0.55;
+      const x = feedActive
+        ? Phaser.Math.Linear(feedX, restX, 1 - feedBlend)
+        : restX;
+      const y = feedActive
+        ? Phaser.Math.Linear(feedY, restY, 1 - feedBlend)
+        : restY;
       f.sprite.setPosition(x, y);
+      f.sprite.setAlpha(
+        this.dim ? Math.max(ALPHA_NIGHT, 0.78) : feedActive ? 1 : ALPHA_DAY,
+      );
       // right-facing texture: flip when swimming left (wave < 0)
-      f.sprite.setFlipX(wave < 0);
+      f.sprite.setFlipX(feedActive ? x < f.midX : wave < 0);
+    }
+    if (this._feedWasActive !== feedActive) {
+      this._feedWasActive = feedActive;
+      this.publish();
     }
   }
 
   snapshot() {
+    const now = this.scene.time.now;
     return {
       enabled: this.enabled,
       active: this.active,
       dim: this.dim,
+      feedActive: now < (this.feedActiveUntil || 0),
+      feedMsLeft: Math.max(0, Math.round((this.feedActiveUntil || 0) - now)),
       fishCount: this.fish.length,
       aquariumTiles: this.tiles.length,
       lighting: this.scene.lightingPreset?.name ?? null,

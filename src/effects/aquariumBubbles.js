@@ -8,6 +8,24 @@ const FREQ_DAY = 680;
 const FREQ_NIGHT = 1100;
 const ALPHA_DAY = 0.28;
 const ALPHA_NIGHT = 0.14;
+const FEED_BOOST_MS = 7000;
+const FEED_FREQ_MULT = 0.42;
+const FEED_ALPHA_BONUS = 0.18;
+
+function feedAlphaFor(base) {
+  return Math.min(0.72, base + FEED_ALPHA_BONUS);
+}
+
+function ensurePelletTexture(scene) {
+  if (scene.textures.exists("fx-pellet")) return;
+  const g = scene.make.graphics({ x: 0, y: 0, add: false });
+  g.fillStyle(0xffd27a, 1);
+  g.fillCircle(3, 3, 2.2);
+  g.lineStyle(1, 0xfff4cf, 0.7);
+  g.strokeCircle(3, 3, 2.2);
+  g.generateTexture("fx-pellet", 6, 6);
+  g.destroy();
+}
 
 /**
  * Query: omit = on. `0`/`off`/`false` = never.
@@ -76,13 +94,17 @@ export class AquariumBubbles {
     this.enabled = aquariumEnabledFromQuery();
     this.tiles = this.enabled ? findAquariumTiles(scene) : [];
     this.emitters = [];
+    this.feedEmitters = [];
     this.active = false;
     this.dim = false;
+    this.feedActiveUntil = 0;
 
     if (this.enabled && this.tiles.length) {
       ensureBubbleTexture(scene);
+      ensurePelletTexture(scene);
       for (const t of this.tiles) {
         this.emitters.push(this._makeEmitter(t.x, t.y - 4));
+        this.feedEmitters.push(this._makeFeedEmitter(t.x, t.y - 10));
       }
     }
 
@@ -107,39 +129,86 @@ export class AquariumBubbles {
     return emitter;
   }
 
+  _makeFeedEmitter(x, y) {
+    const emitter = this.scene.add.particles(x, y, "fx-pellet", {
+      speedX: { min: -10, max: 10 },
+      speedY: { min: 18, max: 34 },
+      gravityY: 14,
+      scale: { start: 0.85, end: 0.55 },
+      alpha: { start: 0.92, end: 0.12 },
+      lifespan: { min: 950, max: 1500 },
+      frequency: 170,
+      quantity: 1,
+    });
+    emitter.setDepth(10);
+    emitter.stop();
+    return emitter;
+  }
+
   shouldBeActive() {
     return this.enabled && this.emitters.length > 0;
   }
 
+  triggerFeed(durationMs = FEED_BOOST_MS) {
+    if (!this.shouldBeActive()) return false;
+    const now = this.scene.time.now;
+    this.feedActiveUntil = Math.max(this.feedActiveUntil, now + durationMs);
+    for (const emitter of this.feedEmitters) emitter.start();
+    this.sync(now);
+    return true;
+  }
+
   /** Call from applyTimeOfDayLighting — night/evening dims alpha. */
-  sync() {
+  sync(time = this.scene.time.now) {
     if (!this.shouldBeActive()) {
       this.active = false;
       this.dim = false;
+      this.feedActiveUntil = 0;
       for (const e of this.emitters) e.stop();
+      for (const e of this.feedEmitters) e.stop();
       this.publish();
       return;
     }
 
     const name = this.scene.lightingPreset?.name ?? "day";
     this.dim = isNightTod(name);
-    const freq = this.dim ? FREQ_NIGHT : FREQ_DAY;
-    const alphaStart = this.dim ? ALPHA_NIGHT : ALPHA_DAY;
+    const feedActive = time < this.feedActiveUntil;
+    const baseFreq = this.dim ? FREQ_NIGHT : FREQ_DAY;
+    const baseAlpha = this.dim ? ALPHA_NIGHT : ALPHA_DAY;
+    const freq = feedActive
+      ? Math.max(150, Math.round(baseFreq * FEED_FREQ_MULT))
+      : baseFreq;
+    const alphaStart = feedActive ? feedAlphaFor(baseAlpha) : baseAlpha;
 
     for (const e of this.emitters) {
       e.setFrequency(freq);
       e.setParticleAlpha({ start: alphaStart, end: 0 });
       if (!this.active) e.start();
     }
+    for (const e of this.feedEmitters) {
+      if (feedActive) e.start();
+      else e.stop();
+    }
     this.active = true;
     this.publish();
   }
 
+  update(time = this.scene.time.now) {
+    if (!this.shouldBeActive()) return;
+    const feedActive = time < this.feedActiveUntil;
+    if (this._feedWasActive === feedActive) return;
+    this._feedWasActive = feedActive;
+    this.sync(time);
+  }
+
   snapshot() {
+    const now = this.scene.time.now;
     return {
       enabled: this.enabled,
       active: this.active,
       dim: this.dim,
+      feedActive: now < this.feedActiveUntil,
+      feedMsLeft: Math.max(0, Math.round(this.feedActiveUntil - now)),
       emitterCount: this.emitters.length,
       aquariumTiles: this.tiles.length,
       lighting: this.scene.lightingPreset?.name ?? null,
@@ -162,7 +231,15 @@ export class AquariumBubbles {
         /* ignore */
       }
     }
+    for (const e of this.feedEmitters) {
+      try {
+        e.destroy();
+      } catch {
+        /* ignore */
+      }
+    }
     this.emitters = [];
+    this.feedEmitters = [];
     this.active = false;
     this.publish();
   }

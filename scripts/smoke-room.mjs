@@ -1,5 +1,5 @@
 /**
- * Smoke: room interactions — coffee 2048, nap, meeting start, lobby welcome, work expand.
+ * Smoke: room interactions — coffee 2048, aquarium feed, nap, meeting start, lobby welcome, work expand.
  * Requires vite on :5173.
  */
 import { chromium } from "playwright";
@@ -78,6 +78,34 @@ const coffee = await page.evaluate(async () => {
   };
 });
 
+const aquarium = await page.evaluate(async () => {
+  const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
+  const tile = sc?.roomInteract?.aquariumTiles?.[0];
+  if (!tile || !sc?.boss?.sprite) return { ok: false, why: "no-aquarium" };
+  sc.boss.sprite.setPosition(tile.x, tile.y + 24);
+  sc.refreshInteractHud?.();
+  const hint = sc.roomInteract.hintLabel();
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { code: "KeyE", bubbles: true }),
+  );
+  await new Promise((r) => setTimeout(r, 120));
+  sc.roomInteract.tryInteract();
+  await new Promise((r) => setTimeout(r, 220));
+  const snap = window.__HERMES_AREA__?.roomInteract;
+  const fish = window.__HERMES_AREA__?.aquariumFish;
+  const bubbles = window.__HERMES_AREA__?.aquarium;
+  return {
+    ok: true,
+    hint,
+    active: !!snap?.aquafeedActive,
+    cooldown: !!snap?.aquafeedCooldown,
+    lastFeedAt: snap?.lastFeedAt ?? null,
+    kind: snap?.lastAction?.kind ?? null,
+    fishFeedActive: !!fish?.feedActive,
+    bubbleFeedActive: !!bubbles?.feedActive,
+  };
+});
+
 const nap = await page.evaluate(async () => {
   const sc = window.__HERMES_GAME__?.scene?.getScene?.("OfficeScene");
   if (!sc?.boss?.sprite) return { ok: false, why: "no-boss" };
@@ -136,13 +164,20 @@ const work = await page.evaluate(() => {
   };
 });
 
-const out = { welcome, coffee, nap, meeting, work, errors };
+const out = { welcome, coffee, aquarium, nap, meeting, work, errors };
 console.log(JSON.stringify(out, null, 2));
 
 const fail =
   !welcome.visitCount ||
   !coffee.open ||
   !coffee.closed ||
+  aquarium.hint !== "E 먹이주기" ||
+  !aquarium.active ||
+  !aquarium.cooldown ||
+  aquarium.kind !== "aquarium_feed_start" ||
+  !aquarium.lastFeedAt ||
+  !aquarium.fishFeedActive ||
+  !aquarium.bubbleFeedActive ||
   !nap.on ||
   !meeting.active ||
   meeting.kind !== "meeting_start" ||
