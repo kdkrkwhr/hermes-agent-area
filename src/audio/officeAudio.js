@@ -3,6 +3,18 @@ import { assetUrl } from "../assets.js";
 
 const MUTE_KEY = "hermes-area-mute";
 const BGM_VOL = 0.12;
+/** Smooth TOD tone morph (lowpass + slight rate) — no BGM restart. */
+const BGM_TOD_FADE_S = 0.85;
+/**
+ * Per TOD_PRESETS name: lowpass cutoff (Hz), Q, volume, playback rate.
+ * Same ambient wav — filter/rate only.
+ */
+const BGM_TOD = {
+  morning: { freq: 11000, q: 0.75, vol: 0.135, rate: 1.035 },
+  day: { freq: 18000, q: 0.7, vol: BGM_VOL, rate: 1 },
+  evening: { freq: 3800, q: 0.95, vol: 0.11, rate: 0.965 },
+  night: { freq: 1600, q: 1.15, vol: 0.085, rate: 0.92 },
+};
 const FOOTSTEP_VOL = 0.045;
 /** Boss walk footstep rate (~3Hz). */
 const FOOTSTEP_MS = 320;
@@ -53,6 +65,12 @@ export class OfficeAudio {
     this._typingByAgent = new Map();
     this._lastTypingGlobalAt = 0;
     this._lastDoorChimeAt = 0;
+    /** @type {BiquadFilterNode | null} */
+    this._bgmFilter = null;
+    /** @type {string | null} */
+    this._todName = null;
+    /** Pending TOD until BGM unlock/start. */
+    this._pendingTod = null;
   }
 
   preload() {
@@ -88,12 +106,114 @@ export class OfficeAudio {
   startBgm() {
     if (this.bgm?.isPlaying) return;
     if (!this.scene.cache.audio.exists("office-ambient")) return;
+    const tod =
+      this._pendingTod ||
+      this.scene.lightingPreset?.name ||
+      "day";
+    const preset = BGM_TOD[tod] || BGM_TOD.day;
     this.bgm = this.scene.sound.add("office-ambient", {
       loop: true,
-      volume: BGM_VOL,
+      volume: preset.vol,
+      rate: preset.rate,
     });
     this.bgm.play();
+    this.ensureBgmFilter();
+    this.applyTodTone(tod, { immediate: true });
     this.applyMute();
+  }
+
+  /**
+   * Insert lowpass between Phaser volumeNode → master (once).
+   * Same loop keeps playing; TOD only morphs filter/rate/vol.
+   */
+  ensureBgmFilter() {
+    if (this._bgmFilter || !this.bgm?.volumeNode) return;
+    const sound = this.scene.sound;
+    const ctx = sound.context;
+    if (!ctx || !sound.destination) return;
+    try {
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.value = BGM_TOD.day.freq;
+      filter.Q.value = BGM_TOD.day.q;
+      const vol = this.bgm.volumeNode;
+      vol.disconnect();
+      vol.connect(filter);
+      filter.connect(sound.destination);
+      this._bgmFilter = filter;
+    } catch {
+      /* HTML5 audio / headless — rate/vol still apply */
+    }
+  }
+
+  /**
+   * Sync ambient tone to morning|day|evening|night.
+   * Call from applyTimeOfDayLighting (L / ?tod= / clock).
+   * @param {string | { name?: string } | null | undefined} tod
+   * @param {{ immediate?: boolean }} [opts]
+   */
+  syncTimeOfDay(tod, opts = {}) {
+    const name = typeof tod === "string" ? tod : tod?.name;
+    if (!name || !BGM_TOD[name]) return;
+    this._pendingTod = name;
+    if (!this.bgm?.isPlaying) return;
+    this.applyTodTone(name, opts);
+  }
+
+  /**
+   * @param {string} name
+   * @param {{ immediate?: boolean }} [opts]
+   */
+  applyTodTone(name, opts = {}) {
+    const preset = BGM_TOD[name];
+    if (!preset) return;
+    const immediate = !!opts.immediate || this._todName == null;
+    if (!immediate && name === this._todName) return;
+    this._todName = name;
+    this._pendingTod = name;
+    this.ensureBgmFilter();
+
+    const ctx = this.scene.sound?.context;
+    const t0 = ctx?.currentTime ?? 0;
+    const fade = immediate ? 0.02 : BGM_TOD_FADE_S;
+
+    if (this._bgmFilter && ctx) {
+      try {
+        const f = this._bgmFilter.frequency;
+        const q = this._bgmFilter.Q;
+        f.cancelScheduledValues(t0);
+        q.cancelScheduledValues(t0);
+        f.setValueAtTime(Math.max(f.value, 40), t0);
+        q.setValueAtTime(Math.max(q.value, 0.1), t0);
+        f.linearRampToValueAtTime(preset.freq, t0 + fade);
+        q.linearRampToValueAtTime(preset.q, t0 + fade);
+      } catch {
+        this._bgmFilter.frequency.value = preset.freq;
+        this._bgmFilter.Q.value = preset.q;
+      }
+    }
+
+    if (this.bgm) {
+      try {
+        if (typeof this.bgm.setRate === "function") this.bgm.setRate(preset.rate);
+        else this.bgm.rate = preset.rate;
+      } catch {
+        /* ignore */
+      }
+      const from = typeof this.bgm.volume === "number" ? this.bgm.volume : preset.vol;
+      if (immediate || Math.abs(from - preset.vol) < 0.001) {
+        if (typeof this.bgm.setVolume === "function") this.bgm.setVolume(preset.vol);
+        else this.bgm.volume = preset.vol;
+      } else {
+        this.scene.tweens.killTweensOf(this.bgm);
+        this.scene.tweens.add({
+          targets: this.bgm,
+          volume: preset.vol,
+          duration: fade * 1000,
+          ease: "Sine.easeInOut",
+        });
+      }
+    }
   }
 
   toggleMute() {
@@ -371,11 +491,21 @@ export class OfficeAudio {
   }
 
   snapshot() {
+    let filterFreq = null;
+    try {
+      filterFreq = this._bgmFilter ? Math.round(this._bgmFilter.frequency.value) : null;
+    } catch {
+      filterFreq = null;
+    }
     return {
       unlocked: this.unlocked,
       muted: this.muted,
       sfxEnabled: this.sfxEnabled,
       bgmPlaying: !!this.bgm?.isPlaying,
+      tod: this._todName ?? this._pendingTod,
+      filterFreq,
+      bgmRate: this.bgm?.rate ?? null,
+      bgmVol: this.bgm?.volume ?? null,
     };
   }
 }

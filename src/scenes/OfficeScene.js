@@ -505,6 +505,7 @@ export class OfficeScene extends Phaser.Scene {
     const preset = resolveTimeOfDay(new Date().getHours(), this.devTimeIndex);
     applyLightingOverlay(this.lightingOverlay, preset);
     this.lightingPreset = preset;
+    this.officeAudio?.syncTimeOfDay?.(preset);
     this.windowRain?.sync();
     this.snowFlakes?.sync();
     this.lampGlow?.sync();

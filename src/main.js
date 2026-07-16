@@ -24,7 +24,7 @@ toolbar.className = "toolbar";
 toolbar.innerHTML = `
   <div class="toolbar__brand">
     <strong>Hermes Agent Area</strong>
-    <span class="toolbar__hint">WASD · F 팔로우 · E 데스크/커피/낮잠/칸반 · M 뮤트</span>
+    <span class="toolbar__hint">WASD · F 팔로우 · E 데스크/커피/낮잠/칸반 · M 뮤트 · L 시간대</span>
   </div>
   <div class="toolbar__actions">
     <button type="button" class="toolbar__btn" data-role="toggle-connect">연결</button>
