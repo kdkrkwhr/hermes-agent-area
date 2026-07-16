@@ -67,6 +67,7 @@ npm install && npm run dev
 | `HERMES_HOME` | (필수, BE) | Hermes 설치 경로 — 프로필·칸반·게이트웨이 |
 | `VITE_WS_URL` | (선택) | FE 빌드 시 WebSocket URL 주입 |
 | `?ws=` / `?api=` | — | URL 쿼리로 런타임 오버라이드 |
+| `?sfx=0` | on | status/발소리/타이핑/게이트·방문 도어차임 SFX 끔 (BGM 유지, `M` 뮤트와 별개) |
 
 ## 📦 기술 스택
 

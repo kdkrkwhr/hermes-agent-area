@@ -185,9 +185,10 @@ export class OfficeScene extends Phaser.Scene {
     // lobby visitor walk-by — ambient only; ?visitor=0 off, ?visitor=1 fast
     this.visitorDirector = new VisitorDirector(this);
 
-    // toast on visitor spawn — random Korean one-liner
+    // toast + door chime on visitor spawn — random Korean one-liner
     this.events.on("visitor-spawned", () => {
       showVisitorToast(randomVisitorToast(), 2800);
+      this.officeAudio?.playDoorChime?.();
     });
 
     // zone labels — room readability without cluttering gameplay

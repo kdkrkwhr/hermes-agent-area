@@ -12,6 +12,8 @@ const TYPING_VOL = 0.03;
 const TYPING_AGENT_MS = 400;
 /** Global floor so many running agents don't click-spam. */
 const TYPING_GLOBAL_MS = 100;
+/** Lobby door-chime throttle when visitors stack. */
+const DOOR_CHIME_MS = 1500;
 
 function readMutePref() {
   try {
@@ -29,7 +31,7 @@ function writeMutePref(muted) {
   }
 }
 
-/** Default on; `?sfx=0|false|off` disables status/footstep/typing SFX (BGM still ok). */
+/** Default on; `?sfx=0|false|off` disables status/footstep/typing/gate/door-chime SFX (BGM still ok). */
 export function sfxQueryEnabled() {
   if (typeof location === "undefined") return true;
   const v = new URLSearchParams(location.search).get("sfx");
@@ -50,6 +52,7 @@ export class OfficeAudio {
     /** @type {Map<string, number>} */
     this._typingByAgent = new Map();
     this._lastTypingGlobalAt = 0;
+    this._lastDoorChimeAt = 0;
   }
 
   preload() {
@@ -233,6 +236,45 @@ export class OfficeAudio {
       gain.connect(ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.1);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Lobby door chime (ding-dong) on visitor-spawned.
+   * Throttled 1.5s; no-ops when muted / locked / ?sfx=0.
+   */
+  playDoorChime() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastDoorChimeAt && now - this._lastDoorChimeAt < DOOR_CHIME_MS) {
+      return;
+    }
+    this._lastDoorChimeAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // classic two-tone door bell: E5 → C5
+      const tones = [
+        { f: 659.25, at: 0, dur: 0.28 },
+        { f: 523.25, at: 0.22, dur: 0.38 },
+      ];
+      for (const { f, at, dur } of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        const t = t0 + at;
+        osc.frequency.setValueAtTime(f, t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(0.1, t + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
     } catch {
       /* autoplay / headless */
     }
