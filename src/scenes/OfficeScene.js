@@ -41,6 +41,7 @@ import { AquariumFish } from "../effects/aquariumFish.js";
 import { MeetingProjector } from "../effects/meetingProjector.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { ThunderFx } from "../effects/thunderFx.js";
+import { WallClock } from "../effects/wallClock.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -474,6 +475,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles = new AquariumBubbles(this);
     this.aquariumFish = new AquariumFish(this);
     this.meetingProjector = new MeetingProjector(this);
+    this.wallClock = new WallClock(this);
     this.plantSway = new PlantSway(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -1038,6 +1040,7 @@ export class OfficeScene extends Phaser.Scene {
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,
       meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
+      wallClock: this.wallClock?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
