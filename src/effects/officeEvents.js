@@ -11,10 +11,14 @@ const RANDOM_KINDS = [
   "printer_jam",
   "parcel_delivery",
   "power_flicker",
+  "fire_drill",
 ];
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
 const FLICKER_MAX_MS = 1200;
+/** fire_drill: red pulse + gather duration range (ms) */
+const FIRE_DRILL_MIN_MS = 8000;
+const FIRE_DRILL_MAX_MS = 12000;
 const COFFEE_GID = 16;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 const PRINTER_GID = 36;
@@ -188,6 +192,7 @@ export class OfficeEvents {
     this.standupGathered = 0;
     this.lunchGathered = 0;
     this.printerGathered = 0;
+    this.fireDrillGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     /** ms timestamp — IdleChatter skips while now < this */
@@ -298,6 +303,7 @@ export class OfficeEvents {
     else if (kind === "printer_jam") this.runPrinterJam();
     else if (kind === "parcel_delivery") this.runParcelDelivery();
     else if (kind === "power_flicker") this.runPowerFlicker();
+    else if (kind === "fire_drill") this.runFireDrill();
 
     this.publish();
   }
@@ -628,6 +634,61 @@ export class OfficeEvents {
     });
   }
 
+  /**
+   * Fire drill: toast + alarm buzz + idle → entrance gather.
+   * Red lighting pulse 8–12s. Skip if another gather is already running.
+   */
+  runFireDrill() {
+    if (this.isGathering()) return;
+
+    this.showToast("화재 대피 훈련", 3200);
+    this.playAlarmBuzz();
+
+    const ent = this.scene.waypoints?.entrance || { x: 20, y: 27 };
+    void this.gatherIdleToMeeting(ent, "fireDrillGathered");
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    if (!overlay || !preset) return;
+
+    const duration =
+      FIRE_DRILL_MIN_MS +
+      Math.floor(Math.random() * (FIRE_DRILL_MAX_MS - FIRE_DRILL_MIN_MS + 1));
+    const redColor = 0xc42828;
+    const redAlpha = 0.14;
+    // keep chatter paused for the full pulse window
+    this.markGathering(duration + 500);
+
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+
+    let on = true;
+    overlay.setFillStyle(redColor, redAlpha);
+
+    const pulse = this.scene.time.addEvent({
+      delay: 380,
+      loop: true,
+      callback: () => {
+        on = !on;
+        if (on) overlay.setFillStyle(redColor, redAlpha);
+        else restoreOverlay();
+      },
+    });
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      pulse.remove(false);
+      restoreOverlay();
+    });
+
+    this.track(() => {
+      pulse.remove(false);
+      restore.remove(false);
+      restoreOverlay();
+    });
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -743,6 +804,35 @@ export class OfficeEvents {
     }
   }
 
+  /** Short alarm chirp for fire_drill — skip if muted/locked. */
+  playAlarmBuzz() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // two quick siren beeps
+      for (let i = 0; i < 2; i++) {
+        const start = t0 + i * 0.14;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(880, start);
+        osc.frequency.exponentialRampToValueAtTime(660, start + 0.1);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.04, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.11);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.12);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   track(cleanup) {
     this._active.push(cleanup);
   }
@@ -757,6 +847,7 @@ export class OfficeEvents {
       standupGathered: this.standupGathered,
       lunchGathered: this.lunchGathered,
       printerGathered: this.printerGathered,
+      fireDrillGathered: this.fireDrillGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       gathering: this.isGathering(),
