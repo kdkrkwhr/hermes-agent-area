@@ -22,6 +22,7 @@
     "smoke:sleeprug": "node scripts/smoke-sleeprug.mjs",
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:vendingidle": "node scripts/smoke-vendingidle.mjs",
+    "smoke:roundtable": "node scripts/smoke-roundtable.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
     "smoke:screensaver": "node scripts/smoke-screensaver.mjs",

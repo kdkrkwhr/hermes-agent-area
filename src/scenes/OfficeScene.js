@@ -58,6 +58,7 @@ import { RugSheen } from "../effects/rugSheen.js";
 import { SleepRugSheen } from "../effects/sleepRugSheen.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
+import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
@@ -531,6 +532,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sleepRugSheen = new SleepRugSheen(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
+    this.roundTableIdle = new RoundTableIdle(this);
     this.napPodBreathe = new NapPodBreathe(this);
     this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
@@ -585,6 +587,7 @@ export class OfficeScene extends Phaser.Scene {
     this.execChairSwivel?.sync();
     this.rugSheen?.sync();
     this.sleepRugSheen?.sync();
+    this.roundTableIdle?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
@@ -667,6 +670,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sleepRugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
+    this.roundTableIdle?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
@@ -1165,6 +1169,7 @@ export class OfficeScene extends Phaser.Scene {
       rug: this.rugSheen?.snapshot?.() ?? null,
       sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
+      roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
