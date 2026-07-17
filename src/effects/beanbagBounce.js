@@ -111,7 +111,9 @@ function makeBeanbagSprite(scene, tile) {
   const frame = tile.index - tileset.firstgid;
   const cx = tile.pixelX + tile.width / 2;
   const cy = tile.pixelY + tile.height;
-  const spr = scene.add.image(cx, cy, tileset.name, frame);
+  // tileset.name="office" (map) ≠ load key "office-tiles" — wrong key = green/black missing tex
+  const texKey = tileset.image?.key ?? "office-tiles";
+  const spr = scene.add.image(cx, cy, texKey, frame);
   spr.setOrigin(0.5, 1);
   spr.setDepth(DEPTH);
   try {
