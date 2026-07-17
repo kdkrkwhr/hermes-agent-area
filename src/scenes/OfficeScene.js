@@ -72,6 +72,7 @@ import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
+import { FocusDndSign } from "../effects/focusDndSign.js";
 import { MonitorCode } from "../effects/monitorCode.js";
 import { MonitorScreensaver } from "../effects/monitorScreensaver.js";
 import { RubberDuck } from "../effects/rubberDuck.js";
@@ -531,6 +532,7 @@ export class OfficeScene extends Phaser.Scene {
     this.wallClock = new WallClock(this);
     this.deskSticky = new DeskSticky(this);
     this.focusHeadphones = new FocusHeadphones(this);
+    this.focusDndSign = new FocusDndSign(this);
     this.monitorCode = new MonitorCode(this);
     this.monitorScreensaver = new MonitorScreensaver(this);
     this.rubberDuck = new RubberDuck(this);
@@ -610,6 +612,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sleepRugSheen?.sync();
     this.roundTableIdle?.sync();
     this.dualDeskIdle?.sync();
+    this.focusDndSign?.sync();
     this.openDeskIdle?.sync();
     this.focusAcVent?.sync();
     this.glassDoorSwing?.sync();
@@ -682,6 +685,7 @@ export class OfficeScene extends Phaser.Scene {
     this.meetingProjector?.update(this.time.now, delta);
     this.deskSticky?.sync();
     this.focusHeadphones?.sync();
+    this.focusDndSign?.update(this.time.now, delta);
     this.monitorCode?.sync(delta);
     this.monitorScreensaver?.sync(this.time.now);
     this.rubberDuck?.sync(this.time.now);
@@ -1218,6 +1222,7 @@ export class OfficeScene extends Phaser.Scene {
       wallClock: this.wallClock?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
+      focusDnd: this.focusDndSign?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
       monitorScreensaver: this.monitorScreensaver?.snapshot?.() ?? null,
       rubberDuck: this.rubberDuck?.snapshot?.() ?? null,

@@ -73,6 +73,7 @@ const BOOKSHELF_TIPS = [
   "?doorswing=force 는 유리문 스윙 스모크용",
   "?exitneon=force 는 야간 EXIT 네온 스모크용",
   "?roundtable=force 는 원탁 머그/서류 bob 스모크용",
+  "?dnd=force 는 Focus 방해금지 사인 스모크용",
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
   "playwright smoke는 ?events=0&sfx=0 추천",
