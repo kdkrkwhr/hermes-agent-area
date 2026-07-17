@@ -1079,6 +1079,7 @@ export class OfficeScene extends Phaser.Scene {
       gate: this.entranceGate?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
       mascotPet: this.roomInteract?.mascotPetSnapshot?.() ?? null,
+      plantWater: this.roomInteract?.plantWaterSnapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,

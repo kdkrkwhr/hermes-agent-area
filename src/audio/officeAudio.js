@@ -28,6 +28,7 @@ const TYPING_GLOBAL_MS = 100;
 const DOOR_CHIME_MS = 1500;
 const BLOOP_MS = 450;
 const MEOW_MS = 700;
+const DRIP_MS = 500;
 
 function readMutePref() {
   try {
@@ -458,6 +459,41 @@ export class OfficeAudio {
         osc.frequency.exponentialRampToValueAtTime(Math.max(80, f1), t + dur);
         gain.gain.setValueAtTime(0.0001, t);
         gain.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Tiny plant drip — respects mute / ?sfx=0. */
+  playPlantDrip() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastDripAt && now - this._lastDripAt < DRIP_MS) return;
+    this._lastDripAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // soft plink + short splash
+      const tones = [
+        { type: "sine", f0: 880, f1: 420, at: 0, dur: 0.08, vol: 0.06 },
+        { type: "triangle", f0: 520, f1: 260, at: 0.05, dur: 0.12, vol: 0.045 },
+      ];
+      for (const { type, f0, f1, at, dur, vol } of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        const t = t0 + at;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(60, f1), t + dur);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(vol, t + 0.008);
         gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         osc.connect(gain);
         gain.connect(ctx.destination);

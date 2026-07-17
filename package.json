@@ -14,6 +14,7 @@
     "smoke:clockout": "node scripts/smoke-clockout.mjs",
     "smoke:room": "node scripts/smoke-room.mjs",
     "smoke:mascotpet": "node scripts/smoke-mascotpet.mjs",
+    "smoke:plantwater": "node scripts/smoke-plantwater.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",

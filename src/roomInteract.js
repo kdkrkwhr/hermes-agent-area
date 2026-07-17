@@ -2,6 +2,7 @@
 
 import { mountMinigame2048 } from "./ui/minigame2048.js";
 import { mountNapMode } from "./ui/napMode.js";
+import { findPlantTiles } from "./effects/plantSway.js";
 
 const COFFEE_GID = 16;
 const AQUARIUM_GID = 37;
@@ -13,9 +14,16 @@ const MASCOTPET_MS_MIN = 4000;
 const MASCOTPET_MS_MAX = 6000;
 const MASCOTPET_COOLDOWN_MS = 12000;
 const MASCOTPET_NEAR_TILES = 2.0;
+/** Plant water: 2–4s drip + sway boost, 12–15s cooldown, ≤2.0 tile. */
+const PLANTWATER_MS_MIN = 2000;
+const PLANTWATER_MS_MAX = 4000;
+const PLANTWATER_COOLDOWN_MS_MIN = 12000;
+const PLANTWATER_COOLDOWN_MS_MAX = 15000;
+const PLANTWATER_NEAR_TILES = 2.0;
 const VISIT_KEY = "hermes-area-visit-count";
 const TYPING_FRAMES = ["·", "··", "···"];
 const HEART_TINTS = [0xff6699, 0xff88aa, 0xff4466, 0xffaacc];
+const DROP_TINTS = [0x6ec8ff, 0x4ab0ee, 0x9ad8ff, 0x3a9ad4];
 
 function tileCenter(scene, tx, ty) {
   const tw = scene.map.tileWidth;
@@ -155,6 +163,43 @@ function nearMascot(scene) {
   return Math.hypot(b.x - m.x, b.y - m.y) <= reach;
 }
 
+/** Default on; `?plantwater=0|false|off` disables. */
+function plantWaterEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("plantwater");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
+function nearPlant(scene, plantTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !plantTiles?.length) return false;
+  const reach = scene.map.tileWidth * PLANTWATER_NEAR_TILES;
+  for (const p of plantTiles) {
+    if (Math.hypot(b.x - p.x, b.y - p.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearestPlant(scene, plantTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !plantTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const p of plantTiles) {
+    const d = Math.hypot(b.x - p.x, b.y - p.y);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
 function ensureHeartTexture(scene) {
   if (scene.textures.exists("fx-heart")) return;
   const g = scene.make.graphics({ add: false });
@@ -164,6 +209,16 @@ function ensureHeartTexture(scene) {
   g.fillCircle(7, 3, 2.2);
   g.fillTriangle(1, 4, 9, 4, 5, 9);
   g.generateTexture("fx-heart", 10, 10);
+  g.destroy();
+}
+
+function ensureDropTexture(scene) {
+  if (scene.textures.exists("fx-waterdrop")) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(3, 2.5, 2.2);
+  g.fillTriangle(1, 3, 5, 3, 3, 7);
+  g.generateTexture("fx-waterdrop", 6, 8);
   g.destroy();
 }
 
@@ -194,6 +249,42 @@ function burstMascotHearts(scene, x, y) {
     }
   });
   return { emitter, qty };
+}
+
+/** Continuous drip for `durationMs` (2–4s), then destroy. */
+function burstPlantWater(scene, x, y, durationMs = 3000) {
+  if (!scene?.add) return null;
+  ensureDropTexture(scene);
+  const emitter = scene.add.particles(x, y - 16, "fx-waterdrop", {
+    speedX: { min: -22, max: 22 },
+    speedY: { min: 18, max: 55 },
+    gravityY: 90,
+    scale: { start: 0.9, end: 0.25 },
+    alpha: { start: 0.9, end: 0 },
+    lifespan: { min: 450, max: 900 },
+    quantity: 1,
+    frequency: 70,
+    tint: DROP_TINTS,
+    blendMode: "NORMAL",
+    rotate: { min: -15, max: 15 },
+  });
+  emitter.setDepth(12);
+  const dur = Math.max(800, durationMs);
+  scene.time.delayedCall(dur, () => {
+    try {
+      emitter.stop();
+    } catch {
+      /* ignore */
+    }
+  });
+  scene.time.delayedCall(dur + 1000, () => {
+    try {
+      emitter.destroy();
+    } catch {
+      /* ignore */
+    }
+  });
+  return { emitter, durationMs: dur };
 }
 
 function loungeAgents(scene) {
@@ -230,6 +321,7 @@ export class RoomInteract {
     this.scene = scene;
     this.coffeeTiles = findCoffeeTiles(scene);
     this.aquariumTiles = findAquariumTiles(scene);
+    this.plantTiles = findPlantTiles(scene);
     this.minigame = null;
     this.nap = null;
     this.lastScore = null;
@@ -252,6 +344,11 @@ export class RoomInteract {
     this.mascotPetCooldownUntil = 0;
     this.lastPetAt = 0;
     this._lastHeartQty = 0;
+    this.plantWaterEnabled = plantWaterEnabledFromQuery();
+    this.plantWaterActiveUntil = 0;
+    this.plantWaterCooldownUntil = 0;
+    this.lastWaterAt = 0;
+    this._lastWaterPlant = null;
   }
 
   /** Call once after map ready — entry welcome. */
@@ -279,7 +376,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > nap > mascotpet > work
+    // priority: coffee > aquafeed > nap > mascotpet > plantwater > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -296,6 +393,13 @@ export class RoomInteract {
       !this.mascotPetActive()
     ) {
       return "mascotpet";
+    }
+    if (
+      this.plantWaterEnabled &&
+      nearPlant(this.scene, this.plantTiles) &&
+      !this.plantWaterActive()
+    ) {
+      return "plantwater";
     }
     const near = this.scene.boss?._nearAgent;
     if (near && isWorking(near)) return "work";
@@ -317,6 +421,12 @@ export class RoomInteract {
         return `쓰다듬기 쿨다운 ${this.mascotPetCooldownLeftSec()}s`;
       }
       return "E 쓰다듬기";
+    }
+    if (k === "plantwater") {
+      if (this.plantWaterCoolingDown()) {
+        return `물주기 쿨다운 ${this.plantWaterCooldownLeftSec()}s`;
+      }
+      return "E 물주기";
     }
     if (k === "work") return "E 작업내용";
     return null;
@@ -343,6 +453,9 @@ export class RoomInteract {
       nearMascot(this.scene)
     ) {
       return this.startMascotPet();
+    }
+    if (this.plantWaterEnabled && nearPlant(this.scene, this.plantTiles)) {
+      return this.startPlantWater();
     }
 
     const near = this.scene.boss?._nearAgent;
@@ -478,6 +591,64 @@ export class RoomInteract {
     return true;
   }
 
+  plantWaterActive() {
+    return this.scene.time.now < this.plantWaterActiveUntil;
+  }
+
+  plantWaterCoolingDown() {
+    return this.scene.time.now < this.plantWaterCooldownUntil;
+  }
+
+  plantWaterCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.plantWaterCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startPlantWater() {
+    if (!this.plantWaterEnabled) return false;
+    if (this.plantWaterActive()) return true;
+    if (this.plantWaterCoolingDown()) {
+      this.showToast(`물주기 쿨다운 ${this.plantWaterCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "plant_water_cooldown",
+        cooldownSec: this.plantWaterCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const plant = nearestPlant(this.scene, this.plantTiles);
+    if (!plant) return false;
+    const now = this.scene.time.now;
+    const dur =
+      PLANTWATER_MS_MIN +
+      Math.floor(Math.random() * (PLANTWATER_MS_MAX - PLANTWATER_MS_MIN + 1));
+    const cool =
+      PLANTWATER_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (PLANTWATER_COOLDOWN_MS_MAX - PLANTWATER_COOLDOWN_MS_MIN + 1),
+      );
+    this.lastWaterAt = now;
+    this.plantWaterActiveUntil = now + dur;
+    this.plantWaterCooldownUntil = now + cool;
+    this._lastWaterPlant = { tx: plant.tx, ty: plant.ty, gid: plant.gid };
+    burstPlantWater(this.scene, plant.x, plant.y, dur);
+    this.scene.plantSway?.boost?.(dur);
+    this.scene.officeAudio?.playPlantDrip?.();
+    this.showToast("물주기 💧");
+    this.lastAction = {
+      kind: "plant_water_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      plant: this._lastWaterPlant,
+    };
+    this.publish();
+    return true;
+  }
+
   openNap() {
     if (this.nap?.isOn?.()) return;
     this.lastAction = { kind: "nap_start" };
@@ -535,6 +706,14 @@ export class RoomInteract {
       this.lastAction = {
         kind: "mascot_pet_end",
         lastPetAt: this.lastPetAt,
+      };
+      this.publish();
+    }
+    if (this.plantWaterActiveUntil && time >= this.plantWaterActiveUntil) {
+      this.plantWaterActiveUntil = 0;
+      this.lastAction = {
+        kind: "plant_water_end",
+        lastWaterAt: this.lastWaterAt,
       };
       this.publish();
     }
@@ -676,6 +855,21 @@ export class RoomInteract {
     };
   }
 
+  plantWaterSnapshot() {
+    return {
+      enabled: !!this.plantWaterEnabled,
+      active: this.plantWaterActive(),
+      cooldown: this.plantWaterCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.plantWaterCooldownUntil - this.scene.time.now),
+      ),
+      lastWaterAt: this.lastWaterAt || null,
+      plantCount: this.plantTiles?.length ?? 0,
+      lastPlant: this._lastWaterPlant,
+    };
+  }
+
   snapshot() {
     return {
       visitCount: this.visitCount || readVisitCount(),
@@ -687,6 +881,11 @@ export class RoomInteract {
       lastAction: this.lastAction,
       coffeeTiles: this.coffeeTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       aquariumTiles: this.aquariumTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
+      plantTiles: this.plantTiles.map((p) => ({
+        tx: p.tx,
+        ty: p.ty,
+        gid: p.gid,
+      })),
       aquafeedEnabled: this.aquariumFeedEnabled,
       aquafeedActive: this.aquaFeedActive(),
       aquafeedCooldown: this.aquaFeedCoolingDown(),
@@ -699,6 +898,10 @@ export class RoomInteract {
       mascotPetActive: this.mascotPetActive(),
       mascotPetCooldown: this.mascotPetCoolingDown(),
       lastPetAt: this.lastPetAt || null,
+      plantWaterEnabled: !!this.plantWaterEnabled,
+      plantWaterActive: this.plantWaterActive(),
+      plantWaterCooldown: this.plantWaterCoolingDown(),
+      lastWaterAt: this.lastWaterAt || null,
     };
   }
 
@@ -708,6 +911,7 @@ export class RoomInteract {
       ...(window.__HERMES_AREA__ || {}),
       roomInteract: this.snapshot(),
       mascotPet: this.mascotPetSnapshot(),
+      plantWater: this.plantWaterSnapshot(),
     };
   }
 }
@@ -721,5 +925,7 @@ export {
   nearAquarium,
   nearSleep,
   nearMascot,
+  nearPlant,
   mascotPetEnabledFromQuery,
+  plantWaterEnabledFromQuery,
 };

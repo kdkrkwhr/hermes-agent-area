@@ -83,10 +83,30 @@ export class PlantSway {
     }));
     this.active = false;
     this.dim = false;
+    /** Watering boost — bigger sway + brighter leaf tint until this time. */
+    this.boostUntil = 0;
+    this.boostMul = 1;
     this.gfx = scene.add.graphics().setDepth(DEPTH).setVisible(false);
 
     scene.events.once("shutdown", () => this.destroy());
     this.sync();
+  }
+
+  /**
+   * Brief watering reaction: amp ×~2.6 + brighter tint for `ms`.
+   * No-op when sway off / no plants.
+   * @param {number} [ms=3000]
+   */
+  boost(ms = 3000) {
+    if (!this.enabled || !this.anchors.length) return;
+    const now = this.scene.time.now;
+    this.boostUntil = now + Math.max(400, ms);
+    this.boostMul = 2.6;
+    this.publish();
+  }
+
+  isBoosted(time = this.scene.time.now) {
+    return this.enabled && time < (this.boostUntil || 0);
   }
 
   shouldBeActive() {
@@ -117,20 +137,33 @@ export class PlantSway {
   update(time = this.scene.time.now) {
     if (!this.active) return;
 
-    const baseA = this.dim ? 0.22 : 0.42;
+    const boosted = this.isBoosted(time);
+    const ampMul = boosted ? this.boostMul || 2.6 : 1;
+    const leaf = boosted ? 0x7ee09a : LEAF;
+    const leafHi = boosted ? 0xb8f5c8 : LEAF_HI;
+    const baseA = boosted
+      ? Math.min(0.72, (this.dim ? 0.22 : 0.42) + 0.28)
+      : this.dim
+        ? 0.22
+        : 0.42;
     const g = this.gfx;
     g.clear();
 
     for (const a of this.anchors) {
       const wave = Math.sin((time / a.period) * Math.PI * 2 + a.phase);
-      const dx = wave * a.amp;
+      const dx = wave * a.amp * ampMul;
       const x = a.x + dx;
       const y = a.y + a.oy;
 
-      g.fillStyle(LEAF, baseA * 0.55);
+      g.fillStyle(leaf, baseA * 0.55);
       g.fillEllipse(x, y, 7, 4.5);
-      g.fillStyle(LEAF_HI, Math.min(0.85, baseA * 1.1));
+      g.fillStyle(leafHi, Math.min(0.92, baseA * 1.15));
       g.fillEllipse(x + dx * 0.2, y - 1, 3.5, 2.2);
+    }
+
+    if (!boosted && this.boostMul !== 1) {
+      this.boostMul = 1;
+      this.publish();
     }
   }
 
@@ -139,6 +172,8 @@ export class PlantSway {
       enabled: this.enabled,
       active: this.active,
       dim: this.dim,
+      boosted: this.isBoosted(),
+      boostUntil: this.boostUntil || 0,
       plantCount: this.anchors.length,
       plantTiles: this.tiles.length,
       lighting: this.scene.lightingPreset?.name ?? null,
