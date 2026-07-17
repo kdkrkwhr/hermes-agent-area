@@ -416,8 +416,33 @@ def make_tileset() -> None:
     px(buf, w, ox + 8, oy + 5, GLASS_AQ)
     rect(buf, w, ox + 2, oy + 2, ox + 14, oy + 14, (200, 230, 240, 255))
 
+    # 37 vending machine (gid 38) — tall snack/drink cabinet, SV open-plan
+    VEND = (72, 88, 108, 255)
+    VEND2 = (52, 64, 82, 255)
+    GLASS_V = (180, 220, 235, 200)
+    CAN_R = (220, 70, 70, 255)
+    CAN_B = (70, 140, 220, 255)
+    SNACK = (240, 190, 90, 255)
+    PANEL = (40, 200, 160, 255)
+    ox, oy = tile_at(5, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, VEND)  # body
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 3, VEND2)  # top lip
+    fill(buf, w, ox + 3, oy + 3, ox + 10, oy + 12, GLASS_V)  # glass door
+    fill(buf, w, ox + 4, oy + 4, ox + 6, oy + 7, CAN_R)  # cola row
+    fill(buf, w, ox + 7, oy + 4, ox + 9, oy + 7, CAN_B)  # blue can
+    fill(buf, w, ox + 4, oy + 8, ox + 6, oy + 11, SNACK)  # snack
+    fill(buf, w, ox + 7, oy + 8, ox + 9, oy + 11, CAN_R)
+    fill(buf, w, ox + 11, oy + 3, ox + 13, oy + 8, VEND2)  # button column
+    fill(buf, w, ox + 11, oy + 4, ox + 13, oy + 5, PANEL)  # LCD
+    px(buf, w, ox + 12, oy + 6, (255, 200, 80, 255))
+    px(buf, w, ox + 12, oy + 7, (255, 200, 80, 255))
+    fill(buf, w, ox + 4, oy + 12, ox + 10, oy + 14, VEND2)  # dispense slot
+    fill(buf, w, ox + 5, oy + 13, ox + 9, oy + 14, (30, 34, 40, 255))
+    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (140, 160, 180, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(5, 4), (6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -445,7 +470,7 @@ def make_map_json() -> None:
       16 coffee  17 glass  18 rug  19 poster  20 lamp  21 napFloor  22 concrete
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
-      34 bookshelf  35 flowerPot  36 printer  37 aquarium
+      34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -671,6 +696,8 @@ def make_map_json() -> None:
     put(15, 16, 10)
     put(23, 16, 10)
     put(24, 16, 36)  # second printer on lounge/corridor edge
+    put(24, 17, 38)  # vending south of printer (lounge edge)
+    put(14, 16, 38)  # vending east of corridor spine @ lounge height
     put(20, 16, 18, False)
 
     # sleep Nap Pod: bed + lamps + rugs
