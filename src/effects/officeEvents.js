@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=all_hands` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=wifi_outage` force. */
 
 import Phaser from "phaser";
 
@@ -19,7 +19,14 @@ const RANDOM_KINDS = [
   "phone_ring",
   "wet_floor",
   "all_hands",
+  "wifi_outage",
 ];
+/** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
+const WIFI_MIN_MS = 2000;
+const WIFI_MAX_MS = 4000;
+const WIFI_LINES = ["와이파이?", "버퍼링…"];
+const WIFI_GRAY = 0x7a7a88;
+const WIFI_ALPHA = 0.22;
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -305,6 +312,12 @@ function isStretchEligible(agent) {
   return kind === "idle" || kind === "running";
 }
 
+/** idle/break only — wifi outage bubbles (mock break → idle kind). */
+function isWifiEligible(agent) {
+  if (!agent?.sprite) return false;
+  return agent.getEffectKind?.() === "idle";
+}
+
 function shuffleInPlace(arr) {
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -347,6 +360,7 @@ export class OfficeEvents {
     this.waterCoolerGathered = 0;
     this.pizzaPartyGathered = 0;
     this.allHandsGathered = 0;
+    this.wifiOutageAffected = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
@@ -486,6 +500,7 @@ export class OfficeEvents {
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
     else if (kind === "all_hands") this.runAllHands();
+    else if (kind === "wifi_outage") this.runWifiOutage();
 
     this.publish();
   }
@@ -587,7 +602,8 @@ export class OfficeEvents {
           agent._workBackup == null &&
           agent._specBackup == null &&
           agent._stretchBackup == null &&
-          agent._waterBackup == null
+          agent._waterBackup == null &&
+          agent._wifiBackup == null
         ) {
           agent.setStatus(agent._phoneBackup);
         }
@@ -1251,10 +1267,11 @@ export class OfficeEvents {
             agent._coffeeBackup == null &&
             agent._workBackup == null &&
             agent._specBackup == null &&
-            agent._stretchBackup == null &&
-            agent._phoneBackup == null
-          ) {
-            agent.setStatus(agent._waterBackup);
+          agent._stretchBackup == null &&
+          agent._phoneBackup == null &&
+          agent._wifiBackup == null
+        ) {
+          agent.setStatus(agent._waterBackup);
           }
           agent._waterBackup = null;
         }
@@ -1546,7 +1563,8 @@ export class OfficeEvents {
             agent._coffeeBackup == null &&
             agent._workBackup == null &&
             agent._specBackup == null &&
-            agent._phoneBackup == null
+            agent._phoneBackup == null &&
+            agent._wifiBackup == null
           ) {
             agent.setStatus(agent._stretchBackup);
           }
@@ -1573,6 +1591,85 @@ export class OfficeEvents {
           /* ignore */
         }
       }
+    });
+  }
+
+  /**
+   * Wifi outage: toast + soft gray overlay 2–4s (not blackout) + idle/break
+   * bubbles on 1–3 agents. Skip if gather is active.
+   */
+  runWifiOutage() {
+    if (this.isGathering()) return;
+
+    this.showToast("와이파이 끊김…", 2800);
+
+    const duration =
+      WIFI_MIN_MS +
+      Math.floor(Math.random() * (WIFI_MAX_MS - WIFI_MIN_MS + 1));
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(WIFI_GRAY, WIFI_ALPHA);
+    }
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 3), // 1–3
+    );
+    const picked = pool.slice(0, want);
+    this.wifiOutageAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._wifiBackup = agent.statusText;
+      agent.setStatus(
+        WIFI_LINES[Math.floor(Math.random() * WIFI_LINES.length)],
+      );
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._wifiBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null
+          ) {
+            agent.setStatus(agent._wifiBackup);
+          }
+          agent._wifiBackup = null;
+        }
+      }
+      this.wifiOutageAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._wifiBackup != null) {
+          agent.setStatus(agent._wifiBackup);
+          agent._wifiBackup = null;
+        }
+      }
+      this.wifiOutageAffected = 0;
     });
   }
 
@@ -1767,6 +1864,7 @@ export class OfficeEvents {
       waterCoolerGathered: this.waterCoolerGathered,
       pizzaPartyGathered: this.pizzaPartyGathered,
       allHandsGathered: this.allHandsGathered,
+      wifiOutageAffected: this.wifiOutageAffected,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,
