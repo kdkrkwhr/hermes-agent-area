@@ -18,6 +18,7 @@
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
+    "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

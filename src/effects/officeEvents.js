@@ -15,6 +15,7 @@ const RANDOM_KINDS = [
   "stretch_break",
   "water_cooler",
   "pizza_party",
+  "paper_airplane",
 ];
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
@@ -40,6 +41,10 @@ const PARCEL_TEX = "fx-parcel";
 const PARCEL_NEAR_TILES = 2.5;
 const PARCEL_MIN_MS = 8000;
 const PARCEL_MAX_MS = 12000;
+/** paper_airplane: open-desk / hallway flyby (ms) */
+const PAPER_TEX = "fx-paper-plane";
+const PAPER_MIN_MS = 4000;
+const PAPER_MAX_MS = 7000;
 /** lunch hours local: higher pick weight for lunch_rush */
 const LUNCH_HOUR_START = 11;
 const LUNCH_HOUR_END = 14;
@@ -124,6 +129,22 @@ function ensureParcelTexture(scene) {
   g.fillStyle(0x8b6914, 1);
   g.fillRect(6, 2, 4, 2);
   g.generateTexture(PARCEL_TEX, 16, 16);
+  g.destroy();
+}
+
+/** Tiny paper-plane diamond / folded triangle. */
+function ensurePaperTexture(scene) {
+  if (scene.textures.exists(PAPER_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xf4f4ee, 1);
+  g.fillTriangle(1, 7, 15, 2, 15, 12);
+  g.fillStyle(0xd8d8d0, 1);
+  g.fillTriangle(5, 7, 15, 5, 15, 9);
+  g.lineStyle(1, 0xb8b8b0, 0.9);
+  g.lineBetween(1, 7, 15, 2);
+  g.lineBetween(1, 7, 15, 12);
+  g.lineBetween(5, 7, 15, 7);
+  g.generateTexture(PAPER_TEX, 16, 14);
   g.destroy();
 }
 
@@ -227,6 +248,7 @@ export class OfficeEvents {
     this.pizzaPartyGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
+    this.paperAirplaneActive = false;
     /** ms timestamp — IdleChatter skips while now < this */
     this._gatherUntil = 0;
     /** Sticky while standup gather/hold runs (lastEvent may become ship_it). */
@@ -349,7 +371,80 @@ export class OfficeEvents {
     else if (kind === "stretch_break") this.runStretchBreak();
     else if (kind === "water_cooler") this.runWaterCooler();
     else if (kind === "pizza_party") this.runPizzaParty();
+    else if (kind === "paper_airplane") this.runPaperAirplane();
 
+    this.publish();
+  }
+
+  /**
+   * Paper airplane flyby: procedural plane + sine path across open desk / hallway.
+   * Visual only (fire() whoosh already respects mute). Skip if gather is active.
+   */
+  runPaperAirplane() {
+    if (this.isGathering()) return;
+
+    this.showToast("누가 비행기 날림", 2600);
+    ensurePaperTexture(this.scene);
+
+    const map = this.scene.map;
+    const mapW = map.widthInPixels;
+    const th = map.tileHeight;
+    const desks = this.scene.waypoints?.desks || [];
+    const open = desks.filter((d) => d.y <= 12);
+    const band = open.length ? open : desks;
+    let midY;
+    if (band.length) {
+      midY =
+        (band.reduce((s, d) => s + d.y, 0) / band.length) * th + th / 2;
+    } else {
+      midY = map.heightInPixels * 0.28;
+    }
+    // occasional hallway band near break/meeting
+    if (Math.random() < 0.35) {
+      const br = this.scene.waypoints?.break || { x: 18, y: 16 };
+      midY = br.y * th + th / 2;
+    }
+
+    const leftToRight = Math.random() < 0.5;
+    const startX = leftToRight ? -18 : mapW + 18;
+    const endX = leftToRight ? mapW + 18 : -18;
+    const amp = 16 + Math.random() * 16;
+    const waves = 2 + Math.random() * 1.2;
+    const life =
+      PAPER_MIN_MS +
+      Math.floor(Math.random() * (PAPER_MAX_MS - PAPER_MIN_MS + 1));
+
+    const plane = this.scene.add.image(startX, midY, PAPER_TEX);
+    plane.setDepth(11);
+    plane.setFlipX(!leftToRight);
+    this.paperAirplaneActive = true;
+
+    const state = { t: 0 };
+    const tween = this.scene.tweens.add({
+      targets: state,
+      t: 1,
+      duration: life,
+      ease: "Linear",
+      onUpdate: () => {
+        const t = state.t;
+        plane.x = startX + (endX - startX) * t;
+        plane.y = midY + Math.sin(t * Math.PI * waves) * amp;
+        plane.setAngle(
+          Math.sin(t * Math.PI * waves) * 14 * (leftToRight ? 1 : -1),
+        );
+      },
+      onComplete: () => {
+        plane.destroy();
+        this.paperAirplaneActive = false;
+        this.publish();
+      },
+    });
+
+    this.track(() => {
+      tween.stop();
+      plane.destroy();
+      this.paperAirplaneActive = false;
+    });
     this.publish();
   }
 
@@ -1235,6 +1330,7 @@ export class OfficeEvents {
       pizzaPartyGathered: this.pizzaPartyGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
+      paperAirplaneActive: this.paperAirplaneActive,
       gathering: this.isGathering(),
       gatherUntil: this._gatherUntil || 0,
       standupGathering: !!this._standupGathering,
