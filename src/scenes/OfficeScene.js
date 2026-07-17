@@ -63,6 +63,7 @@ import { VendingIdle } from "../effects/vendingIdle.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
 import { FocusAcVent } from "../effects/focusAcVent.js";
+import { GlassDoorSwing } from "../effects/glassDoorSwing.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
@@ -545,6 +546,7 @@ export class OfficeScene extends Phaser.Scene {
     this.roundTableIdle = new RoundTableIdle(this);
     this.dualDeskIdle = new DualDeskIdle(this);
     this.focusAcVent = new FocusAcVent(this);
+    this.glassDoorSwing = new GlassDoorSwing(this);
     this.napPodBreathe = new NapPodBreathe(this);
     this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
@@ -604,6 +606,7 @@ export class OfficeScene extends Phaser.Scene {
     this.roundTableIdle?.sync();
     this.dualDeskIdle?.sync();
     this.focusAcVent?.sync();
+    this.glassDoorSwing?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
@@ -690,6 +693,7 @@ export class OfficeScene extends Phaser.Scene {
     this.vendingIdle?.update(this.time.now);
     this.roundTableIdle?.update(this.time.now, delta);
     this.dualDeskIdle?.update(this.time.now, delta);
+    this.glassDoorSwing?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
@@ -1222,6 +1226,7 @@ export class OfficeScene extends Phaser.Scene {
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
       acvent: this.focusAcVent?.snapshot?.() ?? null,
+      doorswing: this.glassDoorSwing?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,

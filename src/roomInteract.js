@@ -70,6 +70,7 @@ const BOOKSHELF_TIPS = [
   "?beanbag=force 는 스모크용",
   "?sofa=force 는 소파 쿠션 스모크용",
   "?chair=force 는 Open Desk 의자 스월 스모크용",
+  "?doorswing=force 는 유리문 스윙 스모크용",
   "?roundtable=force 는 원탁 머그/서류 bob 스모크용",
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
