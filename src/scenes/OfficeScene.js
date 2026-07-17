@@ -71,6 +71,7 @@ import { EntranceGate } from "../ui/entranceGate.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
 import { createDeskBriefPanel } from "../ui/deskBriefPanel.js";
 import { createHelpOverlay } from "../ui/helpOverlay.js";
+import { createActivityTimeline } from "../ui/activityTimeline.js";
 import { showVisitorToast } from "../ui/toastSystem.js";
 import { randomVisitorToast } from "../config/toastMessages.js";
 import { RoomInteract } from "../roomInteract.js";
@@ -269,6 +270,7 @@ export class OfficeScene extends Phaser.Scene {
     this.deskBriefPanel = createDeskBriefPanel({
       onPayload: (payload) => this.weatherFx?.onDeskBriefPayload(payload),
     });
+    this.activityTimeline = createActivityTimeline();
     this.refreshMockKanban();
     this.agents.forEach((agent, i) => {
       agent.idleUntil = this.time.now + 400 + i * 700;
@@ -626,6 +628,7 @@ export class OfficeScene extends Phaser.Scene {
     this.setLive(false);
     this.applySnapshot(mockSnap);
     this.updateKanbanPanel(mockSnap, { live: false, mock: true });
+    this.activityTimeline?.update(mockSnap, { live: false, mock: true });
     this.publishDebug(resolveWsUrl(), mockSnap);
   }
 
@@ -911,6 +914,7 @@ export class OfficeScene extends Phaser.Scene {
         this.lastSnapshot = msg;
         this.applySnapshot(msg);
         this.updateKanbanPanel(msg, { live: this.live, mock: !!msg.mock });
+        this.activityTimeline?.update(msg, { live: this.live, mock: !!msg.mock });
         this.publishDebug(url, msg);
       }
     };

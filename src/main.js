@@ -31,6 +31,7 @@ toolbar.innerHTML = `
     <button type="button" class="toolbar__btn" data-role="toggle-notify">알림</button>
     <button type="button" class="toolbar__btn is-off" data-role="toggle-follow" aria-pressed="false">팔로우</button>
     <button type="button" class="toolbar__btn" data-role="toggle-kanban" aria-pressed="true">칸반</button>
+    <button type="button" class="toolbar__btn" data-role="toggle-timeline">타임라인</button>
   </div>
 `;
 document.body.appendChild(toolbar);
@@ -125,4 +126,9 @@ toolbar.querySelector('[data-role="toggle-kanban"]')?.addEventListener("click", 
   const collapsed = panel.classList.toggle("is-collapsed");
   btn.setAttribute("aria-pressed", collapsed ? "false" : "true");
   btn.classList.toggle("is-off", collapsed);
+});
+
+toolbar.querySelector('[data-role="toggle-timeline"]')?.addEventListener("click", () => {
+  const sc = game.scene.getScene("OfficeScene");
+  sc?.activityTimeline?.toggle();
 });

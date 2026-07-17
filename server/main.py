@@ -570,6 +570,155 @@ def tail_gateway_log(n: int = 30) -> list[str]:
         return []
 
 
+def _profile_gateway_log(profile: str, n: int = 80) -> list[str]:
+    """Read gateway log for a specific profile."""
+    path = _gateway_log_path(profile)
+    if not path:
+        return []
+    try:
+        data = path.read_text(encoding="utf-8", errors="replace").splitlines()
+        return data[-n:]
+    except Exception:
+        return []
+
+
+def build_activity_timeline(
+    profiles: dict[str, dict[str, str]],
+    kanban_tasks: dict[str, dict[str, Any]],
+    max_events: int = 30,
+) -> list[dict[str, Any]]:
+    """Parse gateway logs + kanban completions → chronological activity feed.
+
+    Events produced:
+      - responded: gateway sent a response (from "response ready:" lines)
+      - completed: kanban task moved to done (from kanban DB completed_at)
+      - started: task began (from "inbound message:" + subsequent running task)
+      - offline: gateway disconnected
+    """
+    events: list[dict[str, Any]] = []
+
+    # ── 1. Recent kanban completions ─────────────────────────
+    conn = _kanban_connect()
+    if conn:
+        try:
+            rows = conn.execute(
+                """
+                SELECT id, title, assignee, completed_at, started_at
+                FROM tasks
+                WHERE status = 'done'
+                  AND assignee IS NOT NULL AND assignee != ''
+                  AND completed_at IS NOT NULL
+                ORDER BY completed_at DESC
+                LIMIT ?
+                """,
+                (max_events,),
+            ).fetchall()
+            for row in rows:
+                completed_at = float(row["completed_at"])
+                started_at = row["started_at"]
+                elapsed = None
+                if started_at is not None and completed_at > float(started_at):
+                    elapsed = round(completed_at - float(started_at))
+                assignee = row["assignee"]
+                display_name = resolve_display_name(assignee)
+                events.append(
+                    {
+                        "type": "completed",
+                        "ts": completed_at,
+                        "profile": assignee,
+                        "display_name": display_name,
+                        "task_id": row["id"],
+                        "task_title": row["title"],
+                        "elapsed_sec": elapsed,
+                        "text": f"{display_name} 완료: {row['title'][:50]}",
+                    }
+                )
+        except Exception:
+            pass
+        finally:
+            conn.close()
+
+    # ── 2. Gateway log events ────────────────────────────────
+    for profile_name, pdata in profiles.items():
+        if pdata.get("gateway") != "running":
+            continue
+        lines = _profile_gateway_log(profile_name, 80)
+        display_name = resolve_display_name(profile_name)
+        for i, line in enumerate(lines):
+            ts_match = re.search(
+                r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2})", line
+            )
+            ts = 0.0
+            if ts_match:
+                try:
+                    ts_str = ts_match.group(1).replace("T", " ")
+                    ts = time.mktime(time.strptime(ts_str, "%Y-%m-%d %H:%M:%S"))
+                except Exception:
+                    ts = time.time()
+            else:
+                ts = time.time() - (len(lines) - i) * 5  # heuristic fallback
+
+            if "response ready:" in line and ts > time.time() - 3600:
+                # Extract model hint if available
+                model_match = re.search(r"model[:=]\s*(\S+)", line, re.IGNORECASE)
+                model = model_match.group(1) if model_match else None
+                events.append(
+                    {
+                        "type": "responded",
+                        "ts": ts,
+                        "profile": profile_name,
+                        "display_name": display_name,
+                        "text": f"{display_name} 응답 완료"
+                        + (f" ({model})" if model else ""),
+                    }
+                )
+            elif "inbound message:" in line and ts > time.time() - 3600:
+                events.append(
+                    {
+                        "type": "inbound",
+                        "ts": ts,
+                        "profile": profile_name,
+                        "display_name": display_name,
+                        "text": f"{display_name} 메시지 수신",
+                    }
+                )
+
+    # ── 3. Agent status from current tasks ──────────────────
+    now = time.time()
+    for profile_name, task in kanban_tasks.items():
+        display_name = resolve_display_name(profile_name)
+        status = task.get("status")
+        started_at = task.get("started_at")
+        if status == "running" and started_at is not None:
+            started = float(started_at)
+            elapsed = round(now - started) if now > started else 0
+            events.append(
+                {
+                    "type": "running",
+                    "ts": started,
+                    "profile": profile_name,
+                    "display_name": display_name,
+                    "task_id": task.get("id"),
+                    "task_title": task.get("title"),
+                    "elapsed_sec": elapsed,
+                    "text": f"{display_name} 작업 중: {task.get('title', '')[:50]}",
+                }
+            )
+
+    # ── 4. Dedup + sort + trim ──────────────────────────────
+    seen = set()
+    deduped: list[dict[str, Any]] = []
+    for ev in events:
+        key = f"{ev.get('type')}|{ev.get('profile')}|{ev.get('task_id', '')}|{ev.get('ts', 0):.0f}"
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(ev)
+
+    deduped.sort(key=lambda e: e.get("ts", 0), reverse=True)
+    return deduped[:max_events]
+
+
 @dataclass
 class AgentState:
     id: str
@@ -773,6 +922,7 @@ class OfficeSim:
         self.poll_error: str | None = None
         self.desk_kanban: dict[str, Any] = read_kanban_desk_board()
         self.desk_brief = DeskBrief()
+        self.activity_timeline: list[dict[str, Any]] = []
         self._clients: set[WebSocket] = set()
         self._desk_brief_clients: set[WebSocket] = set()
         self._lock = asyncio.Lock()
@@ -824,6 +974,7 @@ class OfficeSim:
             "hermes_home": str(HERMES_HOME),
             "deskKanban": self.desk_kanban,
             "deskBrief": self.desk_brief.to_dict(),
+            "activityTimeline": self.activity_timeline,
         }
 
     def apply_hermes(self, profiles: dict[str, dict[str, str]], tasks: dict[str, dict[str, Any]]) -> None:
@@ -1312,6 +1463,7 @@ async def poll_loop() -> None:
                 office.logs = logs
                 office.poll_error = err
                 office.desk_kanban = desk_kanban
+                office.activity_timeline = build_activity_timeline(profiles, tasks)
                 office.last_poll_at = time.time()
                 office.sync_agents_from_defs(defs)
                 office.apply_hermes(profiles, tasks)
