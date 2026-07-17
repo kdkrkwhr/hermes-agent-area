@@ -20,6 +20,7 @@
     "smoke:execchair": "node scripts/smoke-execchair.mjs",
     "smoke:rug": "node scripts/smoke-rug.mjs",
     "smoke:vending": "node scripts/smoke-vending.mjs",
+    "smoke:vendingidle": "node scripts/smoke-vendingidle.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
     "smoke:screensaver": "node scripts/smoke-screensaver.mjs",
