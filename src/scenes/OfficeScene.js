@@ -54,11 +54,13 @@ import { BeanbagBounce } from "../effects/beanbagBounce.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
 import { ChairSwivel } from "../effects/chairSwivel.js";
 import { ExecChairSwivel } from "../effects/execChairSwivel.js";
+import { MahoDeskGleam } from "../effects/mahoDeskGleam.js";
 import { RugSheen } from "../effects/rugSheen.js";
 import { SleepRugSheen } from "../effects/sleepRugSheen.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
+import { DualDeskIdle } from "../effects/dualDeskIdle.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
@@ -528,11 +530,13 @@ export class OfficeScene extends Phaser.Scene {
     this.sofaCushion = new SofaCushion(this);
     this.chairSwivel = new ChairSwivel(this);
     this.execChairSwivel = new ExecChairSwivel(this);
+    this.mahoDeskGleam = new MahoDeskGleam(this);
     this.rugSheen = new RugSheen(this);
     this.sleepRugSheen = new SleepRugSheen(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
     this.roundTableIdle = new RoundTableIdle(this);
+    this.dualDeskIdle = new DualDeskIdle(this);
     this.napPodBreathe = new NapPodBreathe(this);
     this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
@@ -585,9 +589,11 @@ export class OfficeScene extends Phaser.Scene {
     this.sofaCushion?.sync();
     this.chairSwivel?.sync();
     this.execChairSwivel?.sync();
+    this.mahoDeskGleam?.sync();
     this.rugSheen?.sync();
     this.sleepRugSheen?.sync();
     this.roundTableIdle?.sync();
+    this.dualDeskIdle?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
@@ -666,11 +672,13 @@ export class OfficeScene extends Phaser.Scene {
     this.sofaCushion?.update(this.time.now, delta);
     this.chairSwivel?.update(this.time.now, delta);
     this.execChairSwivel?.update(this.time.now, delta);
+    this.mahoDeskGleam?.update(this.time.now, delta);
     this.rugSheen?.update(this.time.now, delta);
     this.sleepRugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
     this.roundTableIdle?.update(this.time.now, delta);
+    this.dualDeskIdle?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
@@ -1166,10 +1174,12 @@ export class OfficeScene extends Phaser.Scene {
       sofa: this.sofaCushion?.snapshot?.() ?? null,
       chair: this.chairSwivel?.snapshot?.() ?? null,
       execChair: this.execChairSwivel?.snapshot?.() ?? null,
+      maho: this.mahoDeskGleam?.snapshot?.() ?? null,
       rug: this.rugSheen?.snapshot?.() ?? null,
       sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
+      dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
