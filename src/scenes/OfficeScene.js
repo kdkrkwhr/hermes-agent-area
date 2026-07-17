@@ -50,6 +50,7 @@ import { AquariumFish } from "../effects/aquariumFish.js";
 import { MeetingProjector } from "../effects/meetingProjector.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { BeanbagBounce } from "../effects/beanbagBounce.js";
+import { SofaCushion } from "../effects/sofaCushion.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
@@ -510,6 +511,7 @@ export class OfficeScene extends Phaser.Scene {
     this.trophyShelf.start();
     this.plantSway = new PlantSway(this);
     this.beanbagBounce = new BeanbagBounce(this);
+    this.sofaCushion = new SofaCushion(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
@@ -557,6 +559,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumFish?.sync();
     this.plantSway?.sync();
     this.beanbagBounce?.sync();
+    this.sofaCushion?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -627,6 +630,7 @@ export class OfficeScene extends Phaser.Scene {
     this.printerScan?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);
     this.beanbagBounce?.update(this.time.now, delta);
+    this.sofaCushion?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
     this.umbrellaStand?.update();
@@ -1115,6 +1119,7 @@ export class OfficeScene extends Phaser.Scene {
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       beanbag: this.beanbagBounce?.snapshot?.() ?? null,
+      sofa: this.sofaCushion?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
