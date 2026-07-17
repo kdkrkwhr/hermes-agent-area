@@ -1,113 +1,143 @@
 # 🍄 Hermes Agent Area
 
-Hermes 멀티 에이전트를 ZEP 스타일 2D 가상 사무실에서 실시간 모니터링
+> Hermes 멀티 에이전트를 2D 가상 사무실에서 실시간으로 만나보세요.
+
+당신의 Hermes 에이전트들이 각자의 업무를 수행하는 모습을 귀여운 픽셀아트 사무실에서 지켜볼 수 있습니다. 회장실 데스크에서 날씨·뉴스·주식·칸반 현황을 확인하고, 휴게실에서 미니게임도 즐겨보세요.
+
+**[👉 데모 보러가기](https://kdkrkwhr.github.io/hermes-agent-area/)** (설치 없이 바로 체험)
+
+> ⚡ **이 프로젝트는 Hermes 에이전트들이 매시간 자동으로 개선하고 있습니다.**  
+> 새로운 기능·이펙트·이벤트가 cron을 통해 주기적으로 업데이트됩니다.
+
+---
 
 ## 🎥 미리보기
 
-| 전체 맵 | 회장실 + 데스크 |
-|:---:|:---:|
-| ![전체 사무실](public/assets/screenshots/01-office-full.png) | ![회장실 데스크 패널](public/assets/screenshots/02-ceo-desk-panel.png) |
+| 전체 맵 | 회장실 데스크 | 에이전트 말풍선 |
+|:---:|:---:|:---:|
+| ![전체](public/assets/screenshots/01-office-full.png) | ![데스크](public/assets/screenshots/02-ceo-desk-panel.png) | ![말풍선](public/assets/screenshots/05-agent-bubbles.png) |
 
-| 휴게실 미니게임 | 회의실 |
-|:---:|:---:|
-| ![2048 커피브레이크](public/assets/screenshots/03-lounge-minigame.png) | ![War Room](public/assets/screenshots/04-war-room.png) |
+| 휴게실 미니게임 | 날씨 이펙트 | 고양이 마스코트 |
+|:---:|:---:|:---:|
+| ![휴게실](public/assets/screenshots/03-lounge-minigame.png) | ![날씨](public/assets/screenshots/06-weather-effects.png) | ![고양이](public/assets/screenshots/08-cat-mascot.png) |
 
-데모(mock): https://kdkrkwhr.github.io/hermes-agent-area/
+| 회의실 | 칸반 패널 | 나이트 모드 |
+|:---:|:---:|:---:|
+| ![회의실](public/assets/screenshots/04-war-room.png) | ![칸반](public/assets/screenshots/10-kanban-panel.png) | ![나이트](public/assets/screenshots/12-night-mode.png) |
 
-> Pages만 열면 mock/오프라인입니다. HTTPS → `ws://localhost`는 브라우저가 막아서,
-> **실시간**은 아래처럼 로컬 FE + BE가 필요합니다.
+| 미니맵 | 퇴근 | 도움말 |
+|:---:|:---:|:---:|
+| ![미니맵](public/assets/screenshots/07-minimap.png) | ![퇴근](public/assets/screenshots/09-clockout.png) | ![도움말](public/assets/screenshots/11-help-overlay.png) |
 
-## 🚀 설치
+---
+
+## 🚀 3분 만에 시작하기
+
+### 1. 데모만 구경 (30초)
+
+```
+https://kdkrkwhr.github.io/hermes-agent-area/
+```
+
+브라우저에서 열기만 하면 됩니다. 예시 데이터로 모든 기능을 체험할 수 있어요.
+
+### 2. 내 Hermes 연동하기 (실시간)
 
 ```bash
-# 1. 클론
+# 클론
 git clone https://github.com/kdkrkwhr/hermes-agent-area.git
 cd hermes-agent-area
 
-# 2. BE 실행 (Hermes 설치 필요)
-# Windows
-set HERMES_HOME=C:\Users\<사용자>\.hermes
+# BE 실행
+export HERMES_HOME=~/.hermes          # Windows: set HERMES_HOME=C:\Users\<사용자>\.hermes
 pip install -r server/requirements.txt
 python server/main.py
 
-# Mac/Linux
-export HERMES_HOME=~/.hermes
-pip install -r server/requirements.txt
-python server/main.py
-
-# 3. FE (실시간)
+# FE 실행
 npm install && npm run dev
-# → http://localhost:5173/hermes-agent-area/
-
-# 4. Pages 데모(mock)만 보려면
-# https://kdkrkwhr.github.io/hermes-agent-area/
+# → http://localhost:5173
 ```
 
-툴바 **연결**으로 BE WebSocket을 잡거나, 기본값(`localhost` `/ws` 프록시)을 쓰면 됩니다.
+끝! 당신의 Hermes 프로필들이 사무실에서 움직이기 시작합니다.
 
-터널을 쓸 때만 Pages에 `?ws=wss://xxxx.trycloudflare.com/ws` 를 붙이세요.
+---
 
 ## ✨ 기능
 
-- 🏢 공간: Open Desk · 사장실 · War Room · Focus · Lounge · Nap Pod · Lobby
-- 🤖 실시간 에이전트 상태 (Hermes Kanban / 게이트웨이 연동)
-- 👔 대장님 전용 회장실 (날씨·뉴스·주식·칸반 데스크 패널)
-- 🎮 휴게실 미니게임 (커피 옆 2048)
-- 🐱 라운지 마스코트 NPC
-- 🎵 BGM + SFX (`M` 뮤트) — 시간대(`L` / `?tod=`)에 맞춰 BGM 톤(필터) 변경
-- 🌓 시간대별 조명 / 램프 글로우
-- ⌨️ WASD 이동 · `F` 팔로우 · `E` 인터랙션
-- 🚪 로비 퇴근(클락아웃)
-- 📱 PWA 설치 가능 (Chrome 「앱으로 설치」)
+### 🏢 공간
+| 공간 | 설명 |
+|------|------|
+| Open Desk | 에이전트 작업 공간 |
+| 사장실 | 날씨·뉴스·주식·칸반 대시보드 (`E`키) |
+| War Room | 칸반 티커 화이트보드 |
+| Focus Zone | 딥워크 전용 데스크 |
+| Lounge | 커피머신 + 미니게임(2048) + 마스코트 고양이 |
+| Nap Pod | 오프라인 에이전트 Zzz |
+| Lobby | 디지털 사이니지 + 퇴근(클락아웃) |
 
-## 🔧 환경변수
+### 🎮 인터랙션
+| 키 | 동작 |
+|:--:|------|
+| `WASD` | 이동 |
+| `F` | 카메라 팔로우 |
+| `E` | 데스크/커피/낮잠 인터랙션 |
+| `M` | 오디오 뮤트 |
+| `L` | 시간대 순환 (조명 + BGM 변화) |
 
-| 변수 | 기본값 | 설명 |
-|------|--------|------|
-| `HERMES_HOME` | (필수, BE) | Hermes 설치 경로 — 프로필·칸반·게이트웨이 |
-| `VITE_WS_URL` | (선택) | FE 빌드 시 WebSocket URL 주입 |
-| `?ws=` / `?api=` | — | URL 쿼리로 런타임 오버라이드 |
-| `?sfx=0` | on | status/발소리/타이핑/게이트·방문 도어차임 SFX 끔 (BGM 유지, `M` 뮤트와 별개) |
+### 🎨 이펙트
+- 🌓 시간대별 조명 & 램프 글로우
+- 🎵 BGM + SFX (발소리, 도어차임, 완료 효과음)
+- 🌧️ 날씨 연동 (비/눈/맑음 파티클)
+- 🎉 이벤트 (프린터잼, 택배도착, 런치러시, 정전)
+- 💬 에이전트 말풍선 & 작업 타이핑 이펙트
+
+---
+
+## 🖥️ 내 Hermes에 100% 호환
+
+> 이 프로젝트는 **하드코딩이 전혀 없습니다.**
+
+```bash
+export HERMES_HOME=/아무/경로/.hermes
+python server/main.py
+```
+
+당신의 프로필, 칸반, 게이트웨이 로그를 실시간으로 읽어서 자동으로 사무실을 구성합니다.  
+누구든 자기 Hermes로 바로 쓸 수 있어요.
+
+---
 
 ## 📦 기술 스택
 
-- FE: Phaser 3 + Vite
-- BE: Python FastAPI + WebSocket
-- Hermes Kanban DB 연동
+| 구분 | 기술 |
+|:--:|------|
+| FE | Phaser 3 + Vite |
+| BE | Python FastAPI + WebSocket |
+| 데이터 | Hermes Kanban DB · Gateway Log |
+| 배포 | GitHub Pages (FE) + Local BE |
 
-## 조작
+---
 
-| 키 / UI | 동작 |
-|---------|------|
-| `WASD` | 대장님 이동 |
-| `F` / **팔로우** | 카메라가 플레이어 추적 |
-| `E` | 데스크 / 커피 / 낮잠 / 작업 버블 |
-| `M` | 오디오 뮤트 |
-| `L` | 시간대 순환 (조명 + BGM 톤) |
-| **연결** | BE WebSocket URL 설정 |
-| **칸반** | 사이드 패널 토글 |
+## 🔧 에이전트 자동 개선
 
-## 에이전트 이름
+```
+cron (1시간) → 코드 분석 → Kanban 태스크 생성
+  → 양파쿵야(Cursor)가 자동 구현 → 배포
+```
 
-표시 이름 우선순위:
+사무실이 스스로 진화합니다. 새 파티클, 이벤트, UI가 매일 추가돼요.
 
-1. `$HERMES_HOME[/profiles/<name>]/area.json` → `displayName`
-2. 프로필 `gateway.log`의 마지막 `Connected as …`
-3. `SOUL.md` 첫 헤딩
+---
+
+## 🌐 에이전트 이름
+
+BE는 다음 순서로 에이전트 이름을 자동 결정합니다:
+
+1. `area.json` → `displayName`
+2. `gateway.log` → Discord `Connected as`
+3. `SOUL.md` → 첫 헤딩
 4. 프로필 폴더명
 
 ```json
-{ "displayName": "양파쿵야", "sheet": "char-onion" }
+{ "displayName": "내에이전트", "sheet": "char-onion" }
 ```
-
-## 개발 / 배포
-
-```bash
-npm install
-npm run dev
-npm run build
-# README 스크린샷 재캡처 (vite :5173 필요)
-node scripts/capture-readme.mjs
-```
-
-`main` 푸시 시 GitHub Actions가 `dist/`를 Pages에 배포합니다.
