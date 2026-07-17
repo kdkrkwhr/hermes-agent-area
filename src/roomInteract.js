@@ -69,6 +69,7 @@ const BOOKSHELF_TIPS = [
   "L키로 시간대·BGM 톤 바꿔보기",
   "?beanbag=force 는 스모크용",
   "?sofa=force 는 소파 쿠션 스모크용",
+  "?chair=force 는 Open Desk 의자 스월 스모크용",
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
   "playwright smoke는 ?events=0&sfx=0 추천",

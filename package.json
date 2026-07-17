@@ -16,6 +16,7 @@
     "smoke:mascotpet": "node scripts/smoke-mascotpet.mjs",
     "smoke:plantwater": "node scripts/smoke-plantwater.mjs",
     "smoke:beanbag": "node scripts/smoke-beanbag.mjs",
+    "smoke:chair": "node scripts/smoke-chair.mjs",
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
