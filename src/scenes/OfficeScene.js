@@ -55,6 +55,7 @@ import { SofaCushion } from "../effects/sofaCushion.js";
 import { ChairSwivel } from "../effects/chairSwivel.js";
 import { ExecChairSwivel } from "../effects/execChairSwivel.js";
 import { RugSheen } from "../effects/rugSheen.js";
+import { SleepRugSheen } from "../effects/sleepRugSheen.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
@@ -527,6 +528,7 @@ export class OfficeScene extends Phaser.Scene {
     this.chairSwivel = new ChairSwivel(this);
     this.execChairSwivel = new ExecChairSwivel(this);
     this.rugSheen = new RugSheen(this);
+    this.sleepRugSheen = new SleepRugSheen(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
     this.napPodBreathe = new NapPodBreathe(this);
@@ -582,6 +584,7 @@ export class OfficeScene extends Phaser.Scene {
     this.chairSwivel?.sync();
     this.execChairSwivel?.sync();
     this.rugSheen?.sync();
+    this.sleepRugSheen?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
@@ -661,6 +664,7 @@ export class OfficeScene extends Phaser.Scene {
     this.chairSwivel?.update(this.time.now, delta);
     this.execChairSwivel?.update(this.time.now, delta);
     this.rugSheen?.update(this.time.now, delta);
+    this.sleepRugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
     this.napPodBreathe?.update(this.time.now);
@@ -1159,6 +1163,7 @@ export class OfficeScene extends Phaser.Scene {
       chair: this.chairSwivel?.snapshot?.() ?? null,
       execChair: this.execChairSwivel?.snapshot?.() ?? null,
       rug: this.rugSheen?.snapshot?.() ?? null,
+      sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,

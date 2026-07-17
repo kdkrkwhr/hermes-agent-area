@@ -19,6 +19,7 @@
     "smoke:chair": "node scripts/smoke-chair.mjs",
     "smoke:execchair": "node scripts/smoke-execchair.mjs",
     "smoke:rug": "node scripts/smoke-rug.mjs",
+    "smoke:sleeprug": "node scripts/smoke-sleeprug.mjs",
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:vendingidle": "node scripts/smoke-vendingidle.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
