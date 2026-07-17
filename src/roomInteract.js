@@ -3,6 +3,11 @@
 import { mountMinigame2048 } from "./ui/minigame2048.js";
 import { mountNapMode } from "./ui/napMode.js";
 import { findPlantTiles } from "./effects/plantSway.js";
+import {
+  findLobbyPosterTiles,
+  posterEnabledFromQuery,
+} from "./effects/lobbyPoster.js";
+import { findBookshelfTiles } from "./effects/bookshelfPages.js";
 
 const COFFEE_GID = 16;
 const AQUARIUM_GID = 37;
@@ -27,6 +32,50 @@ const VENDING_MS_MAX = 2000;
 const VENDING_COOLDOWN_MS_MIN = 12000;
 const VENDING_COOLDOWN_MS_MAX = 20000;
 const VENDING_NEAR_TILES = 2.0;
+/** Poster quote: 8s cooldown, ≤2.0 tile. */
+const POSTER_COOLDOWN_MS = 8000;
+const POSTER_NEAR_TILES = 2.0;
+const POSTER_QUOTES = [
+  "출근은 선택, 퇴근은 필수",
+  "일단 커밋부터",
+  "이거 어제 됐는데?",
+  "재현 안 됨 = 버그 아님",
+  "회의 한 번 더 하죠",
+  "PR 리뷰 부탁 (아님)",
+  "로컬에선 되는데요",
+  "약속의 월요일",
+  "오늘도 야근 각",
+  "LGTM 👍",
+  "빌드 깨졌네 ㅋㅋ",
+  "커피 없인 못 살아",
+  "버그는 피처다",
+  "일단 머지하고 보자",
+  "스프린트 끝났다구요?",
+  "WIP라고 써놨잖아",
+];
+/** Bookshelf tip: 3–5s toast, 12–18s cooldown, ≤2.0 tile. */
+const BOOKSHELF_MS_MIN = 3000;
+const BOOKSHELF_MS_MAX = 5000;
+const BOOKSHELF_COOLDOWN_MS_MIN = 12000;
+const BOOKSHELF_COOLDOWN_MS_MAX = 18000;
+const BOOKSHELF_NEAR_TILES = 2.0;
+const BOOKSHELF_TIPS = [
+  "Hermes 스킬은 SKILL.md 한 장이면 충분함",
+  "cron no_agent면 LLM 토큰 안 씀",
+  "?help=0 으로 도움말 끄기",
+  "kanban_complete 전 smoke 한 번 돌리기",
+  "delegate_task는 배경에서 끝남",
+  "메모리엔 선호·환경만 — 작업 로그 X",
+  "L키로 시간대·BGM 톤 바꿔보기",
+  "?beanbag=force 는 스모크용",
+  "WS 끊기면 mock 에이전트로 폴백",
+  "skills_list → skill_view 로 절차 로드",
+  "playwright smoke는 ?events=0&sfx=0 추천",
+  "가상사무실 FX 대부분 ?쿼리=0 로 끔",
+  "칸반 blocked면 clarify 말고 kanban_block",
+  "Hermes gateway 8642 — tunnel 바뀌면 PWA 주소 갱신",
+  "대장님 = Boss WASD · E로 상호작용",
+];
 const VENDING_TOASTS = [
   "딸깍… 콜라!",
   "딸깍… 사이다!",
@@ -219,6 +268,18 @@ function vendingEnabledFromQuery() {
   }
 }
 
+/** Default on; `?bookshelftip=0|false|off` disables E-tip only (ambient FX still on). */
+function bookshelfTipEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("bookshelftip");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
 function nearPlant(scene, plantTiles) {
   const b = scene.boss?.sprite;
   if (!b || !scene.map || !plantTiles?.length) return false;
@@ -237,6 +298,31 @@ function nearVending(scene, vendingTiles) {
     if (Math.hypot(b.x - v.x, b.y - v.y) <= reach) return true;
   }
   return false;
+}
+
+function nearPoster(scene, posterTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !posterTiles?.length) return false;
+  const reach = scene.map.tileWidth * POSTER_NEAR_TILES;
+  for (const p of posterTiles) {
+    if (Math.hypot(b.x - p.x, b.y - p.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearestPoster(scene, posterTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !posterTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const p of posterTiles) {
+    const d = Math.hypot(b.x - p.x, b.y - p.y);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
 }
 
 function nearestVending(scene, vendingTiles) {
@@ -264,6 +350,31 @@ function nearestPlant(scene, plantTiles) {
     if (d < bestD) {
       bestD = d;
       best = p;
+    }
+  }
+  return best;
+}
+
+function nearBookshelf(scene, bookshelfTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !bookshelfTiles?.length) return false;
+  const reach = scene.map.tileWidth * BOOKSHELF_NEAR_TILES;
+  for (const s of bookshelfTiles) {
+    if (Math.hypot(b.x - s.x, b.y - s.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearestBookshelf(scene, bookshelfTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !bookshelfTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const s of bookshelfTiles) {
+    const d = Math.hypot(b.x - s.x, b.y - s.y);
+    if (d < bestD) {
+      bestD = d;
+      best = s;
     }
   }
   return best;
@@ -442,6 +553,8 @@ export class RoomInteract {
     this.aquariumTiles = findAquariumTiles(scene);
     this.vendingTiles = findVendingTiles(scene);
     this.plantTiles = findPlantTiles(scene);
+    this.posterTiles = findLobbyPosterTiles(scene);
+    this.bookshelfTiles = findBookshelfTiles(scene);
     this.minigame = null;
     this.nap = null;
     this.lastScore = null;
@@ -476,6 +589,17 @@ export class RoomInteract {
     this._lastVendTile = null;
     this._lastVendToast = null;
     this._lastSnackQty = 0;
+    this.posterEnabled = posterEnabledFromQuery();
+    this.posterCooldownUntil = 0;
+    this.lastPosterAt = 0;
+    this._lastPosterQuote = null;
+    this._lastPosterTile = null;
+    this.bookshelfTipEnabled = bookshelfTipEnabledFromQuery();
+    this.bookshelfActiveUntil = 0;
+    this.bookshelfCooldownUntil = 0;
+    this.lastBookshelfAt = 0;
+    this._lastBookshelfTip = null;
+    this._lastBookshelfTile = null;
   }
 
   /** Call once after map ready — entry welcome. */
@@ -503,7 +627,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > vending > nap > mascotpet > plantwater > work
+    // priority: coffee > aquafeed > vending > nap > mascotpet > plantwater > poster > bookshelf > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -534,6 +658,20 @@ export class RoomInteract {
       !this.plantWaterActive()
     ) {
       return "plantwater";
+    }
+    if (
+      this.posterEnabled &&
+      nearPoster(this.scene, this.posterTiles) &&
+      !this.posterCoolingDown()
+    ) {
+      return "poster";
+    }
+    if (
+      this.bookshelfTipEnabled &&
+      nearBookshelf(this.scene, this.bookshelfTiles) &&
+      !this.bookshelfActive()
+    ) {
+      return "bookshelf";
     }
     const near = this.scene.boss?._nearAgent;
     if (near && isWorking(near)) return "work";
@@ -568,6 +706,18 @@ export class RoomInteract {
       }
       return "E 물주기";
     }
+    if (k === "poster") {
+      if (this.posterCoolingDown()) {
+        return `포스터 쿨다운 ${this.posterCooldownLeftSec()}s`;
+      }
+      return "E 한마디";
+    }
+    if (k === "bookshelf") {
+      if (this.bookshelfCoolingDown()) {
+        return `책장 쿨다운 ${this.bookshelfCooldownLeftSec()}s`;
+      }
+      return "E Hermes 팁";
+    }
     if (k === "work") return "E 작업내용";
     return null;
   }
@@ -599,6 +749,15 @@ export class RoomInteract {
     }
     if (this.plantWaterEnabled && nearPlant(this.scene, this.plantTiles)) {
       return this.startPlantWater();
+    }
+    if (this.posterEnabled && nearPoster(this.scene, this.posterTiles)) {
+      return this.startPosterQuote();
+    }
+    if (
+      this.bookshelfTipEnabled &&
+      nearBookshelf(this.scene, this.bookshelfTiles)
+    ) {
+      return this.startBookshelfTip();
     }
 
     const near = this.scene.boss?._nearAgent;
@@ -792,6 +951,50 @@ export class RoomInteract {
     return true;
   }
 
+  posterCoolingDown() {
+    return this.scene.time.now < this.posterCooldownUntil;
+  }
+
+  posterCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.posterCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startPosterQuote() {
+    if (!this.posterEnabled) return false;
+    if (this.posterCoolingDown()) {
+      this.showToast(`포스터 쿨다운 ${this.posterCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "poster_cooldown",
+        cooldownSec: this.posterCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const poster = nearestPoster(this.scene, this.posterTiles);
+    if (!poster) return false;
+    const now = this.scene.time.now;
+    const quote =
+      POSTER_QUOTES[Math.floor(Math.random() * POSTER_QUOTES.length)] ??
+      POSTER_QUOTES[0];
+    this.lastPosterAt = now;
+    this.posterCooldownUntil = now + POSTER_COOLDOWN_MS;
+    this._lastPosterQuote = quote;
+    this._lastPosterTile = { tx: poster.tx, ty: poster.ty };
+    this.showToast(quote);
+    this.lastAction = {
+      kind: "poster_quote",
+      startedAt: now,
+      quote,
+      poster: this._lastPosterTile,
+      cooldownMs: POSTER_COOLDOWN_MS,
+    };
+    this.publish();
+    return true;
+  }
+
   vendingActive() {
     return this.scene.time.now < this.vendingActiveUntil;
   }
@@ -850,6 +1053,66 @@ export class RoomInteract {
       toast,
       snacks: this._lastSnackQty,
       machine: this._lastVendTile,
+    };
+    this.publish();
+    return true;
+  }
+
+  bookshelfActive() {
+    return this.scene.time.now < this.bookshelfActiveUntil;
+  }
+
+  bookshelfCoolingDown() {
+    return this.scene.time.now < this.bookshelfCooldownUntil;
+  }
+
+  bookshelfCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.bookshelfCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startBookshelfTip() {
+    if (!this.bookshelfTipEnabled) return false;
+    if (this.bookshelfActive()) return true;
+    if (this.bookshelfCoolingDown()) {
+      this.showToast(`책장 쿨다운 ${this.bookshelfCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "bookshelf_tip_cooldown",
+        cooldownSec: this.bookshelfCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const shelf = nearestBookshelf(this.scene, this.bookshelfTiles);
+    if (!shelf) return false;
+    const now = this.scene.time.now;
+    const dur =
+      BOOKSHELF_MS_MIN +
+      Math.floor(Math.random() * (BOOKSHELF_MS_MAX - BOOKSHELF_MS_MIN + 1));
+    const cool =
+      BOOKSHELF_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (BOOKSHELF_COOLDOWN_MS_MAX - BOOKSHELF_COOLDOWN_MS_MIN + 1),
+      );
+    const tip =
+      BOOKSHELF_TIPS[Math.floor(Math.random() * BOOKSHELF_TIPS.length)];
+    this.lastBookshelfAt = now;
+    this.bookshelfActiveUntil = now + dur;
+    this.bookshelfCooldownUntil = now + cool;
+    this._lastBookshelfTip = tip;
+    this._lastBookshelfTile = { tx: shelf.tx, ty: shelf.ty };
+    this.scene.bookshelfPages?.triggerPageTurn?.();
+    this.showToast(`📚 ${tip}`, Math.max(3200, dur));
+    this.lastAction = {
+      kind: "bookshelf_tip_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      tip,
+      shelf: this._lastBookshelfTile,
     };
     this.publish();
     return true;
@@ -928,6 +1191,14 @@ export class RoomInteract {
       this.lastAction = {
         kind: "vending_end",
         lastVendAt: this.lastVendAt,
+      };
+      this.publish();
+    }
+    if (this.bookshelfActiveUntil && time >= this.bookshelfActiveUntil) {
+      this.bookshelfActiveUntil = 0;
+      this.lastAction = {
+        kind: "bookshelf_tip_end",
+        lastBookshelfAt: this.lastBookshelfAt,
       };
       this.publish();
     }
@@ -1084,6 +1355,22 @@ export class RoomInteract {
     };
   }
 
+  bookshelfSnapshot() {
+    return {
+      enabled: !!this.bookshelfTipEnabled,
+      active: this.bookshelfActive(),
+      cooldown: this.bookshelfCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.bookshelfCooldownUntil - this.scene.time.now),
+      ),
+      lastBookshelfAt: this.lastBookshelfAt || null,
+      shelfCount: this.bookshelfTiles?.length ?? 0,
+      lastTip: this._lastBookshelfTip,
+      lastShelf: this._lastBookshelfTile,
+    };
+  }
+
   vendingSnapshot() {
     return {
       enabled: !!this.vendingEnabled,
@@ -1098,6 +1385,21 @@ export class RoomInteract {
       lastMachine: this._lastVendTile,
       lastToast: this._lastVendToast,
       snacks: this._lastSnackQty || 0,
+    };
+  }
+
+  posterSnapshot() {
+    return {
+      enabled: !!this.posterEnabled,
+      cooldown: this.posterCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.posterCooldownUntil - this.scene.time.now),
+      ),
+      lastPosterAt: this.lastPosterAt || null,
+      posterCount: this.posterTiles?.length ?? 0,
+      lastQuote: this._lastPosterQuote,
+      lastPoster: this._lastPosterTile,
     };
   }
 
@@ -1118,6 +1420,12 @@ export class RoomInteract {
         ty: p.ty,
         gid: p.gid,
       })),
+      bookshelfTiles: this.bookshelfTiles.map((s) => ({
+        tx: s.tx,
+        ty: s.ty,
+        gid: s.gid,
+      })),
+      posterTiles: this.posterTiles.map((p) => ({ tx: p.tx, ty: p.ty })),
       aquafeedEnabled: this.aquariumFeedEnabled,
       aquafeedActive: this.aquaFeedActive(),
       aquafeedCooldown: this.aquaFeedCoolingDown(),
@@ -1138,6 +1446,10 @@ export class RoomInteract {
       vendingActive: this.vendingActive(),
       vendingCooldown: this.vendingCoolingDown(),
       lastVendAt: this.lastVendAt || null,
+      posterEnabled: !!this.posterEnabled,
+      posterCooldown: this.posterCoolingDown(),
+      lastPosterAt: this.lastPosterAt || null,
+      lastPosterQuote: this._lastPosterQuote,
     };
   }
 
@@ -1149,6 +1461,8 @@ export class RoomInteract {
       mascotPet: this.mascotPetSnapshot(),
       plantWater: this.plantWaterSnapshot(),
       vending: this.vendingSnapshot(),
+      posterQuote: this.posterSnapshot(),
+      bookshelfTip: this.bookshelfSnapshot(),
     };
   }
 }
@@ -1169,4 +1483,7 @@ export {
   mascotPetEnabledFromQuery,
   plantWaterEnabledFromQuery,
   vendingEnabledFromQuery,
+  bookshelfTipEnabledFromQuery,
+  nearBookshelf,
+  BOOKSHELF_TIPS,
 };

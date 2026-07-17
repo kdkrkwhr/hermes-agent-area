@@ -41,6 +41,7 @@ import { NightFlashlight } from "../effects/nightFlashlight.js";
 import { WindowBirds } from "../effects/windowBirds.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
 import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
+import { LobbyPoster } from "../effects/lobbyPoster.js";
 import { AgentHighFive } from "../effects/agentHighFive.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { PrinterScan } from "../effects/printerScan.js";
@@ -48,6 +49,8 @@ import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
 import { MeetingProjector } from "../effects/meetingProjector.js";
 import { PlantSway } from "../effects/plantSway.js";
+import { BeanbagBounce } from "../effects/beanbagBounce.js";
+import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
@@ -487,6 +490,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.seasonalDrift = new SeasonalDrift(this);
     this.umbrellaStand = new LobbyUmbrellaStand(this);
+    this.lobbyPoster = new LobbyPoster(this);
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
     this.nightFlashlight = new NightFlashlight(this);
@@ -505,6 +509,8 @@ export class OfficeScene extends Phaser.Scene {
     this.trophyShelf = new AchievementShelf(this);
     this.trophyShelf.start();
     this.plantSway = new PlantSway(this);
+    this.beanbagBounce = new BeanbagBounce(this);
+    this.bookshelfPages = new BookshelfPages(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
@@ -540,6 +546,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dustMotes?.sync();
     this.seasonalDrift?.sync();
     this.umbrellaStand?.sync();
+    this.lobbyPoster?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
     this.nightFlashlight?.sync();
@@ -549,6 +556,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles?.sync();
     this.aquariumFish?.sync();
     this.plantSway?.sync();
+    this.beanbagBounce?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -618,6 +626,9 @@ export class OfficeScene extends Phaser.Scene {
     this.monitorCode?.sync(delta);
     this.printerScan?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);
+    this.beanbagBounce?.update(this.time.now, delta);
+    this.bookshelfPages?.update(this.time.now, delta);
+    this.lobbyPoster?.update(this.time.now, delta);
     this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
@@ -1085,6 +1096,7 @@ export class OfficeScene extends Phaser.Scene {
       dust: this.dustMotes?.snapshot?.() ?? null,
       season: this.seasonalDrift?.snapshot?.() ?? null,
       umbrella: this.umbrellaStand?.snapshot?.() ?? null,
+      poster: this.lobbyPoster?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
       flashlight: this.nightFlashlight?.snapshot?.() ?? null,
@@ -1102,6 +1114,7 @@ export class OfficeScene extends Phaser.Scene {
       printerScan: this.printerScan?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
+      beanbag: this.beanbagBounce?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
@@ -1111,6 +1124,7 @@ export class OfficeScene extends Phaser.Scene {
       mascotPet: this.roomInteract?.mascotPetSnapshot?.() ?? null,
       plantWater: this.roomInteract?.plantWaterSnapshot?.() ?? null,
       vending: this.roomInteract?.vendingSnapshot?.() ?? null,
+      posterQuote: this.roomInteract?.posterSnapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,
