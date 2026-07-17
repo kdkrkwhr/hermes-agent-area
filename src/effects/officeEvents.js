@@ -44,7 +44,7 @@ const PIZZA_HOLD_MIN_MS = 8000;
 const PIZZA_HOLD_MAX_MS = 12000;
 const COFFEE_GID = 16;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
-const PRINTER_GID = 36;
+export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
 const PARCEL_NEAR_TILES = 2.5;
 const PARCEL_MIN_MS = 8000;
@@ -224,7 +224,7 @@ function bossTileDist(scene, tx, ty) {
 }
 
 /** tile coords of printer furniture, else lobby/entrance. */
-function findPrinterTile(scene) {
+export function findPrinterTile(scene) {
   const layer = scene.furniture;
   if (layer?.getTileAt) {
     for (let ty = 0; ty < scene.map.height; ty++) {

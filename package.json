@@ -18,6 +18,7 @@
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
+    "smoke:printerscan": "node scripts/smoke-printerscan.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",

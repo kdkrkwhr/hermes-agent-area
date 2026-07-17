@@ -43,6 +43,7 @@ import { WindowBlinds } from "../effects/windowBlinds.js";
 import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
 import { AgentHighFive } from "../effects/agentHighFive.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
+import { PrinterScan } from "../effects/printerScan.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
 import { MeetingProjector } from "../effects/meetingProjector.js";
@@ -493,6 +494,7 @@ export class OfficeScene extends Phaser.Scene {
     this.windowBlinds = new WindowBlinds(this);
     this.agentHighFive = new AgentHighFive(this);
     this.coffeeSteam = new CoffeeSteam(this);
+    this.printerScan = new PrinterScan(this);
     this.aquariumBubbles = new AquariumBubbles(this);
     this.aquariumFish = new AquariumFish(this);
     this.meetingProjector = new MeetingProjector(this);
@@ -614,6 +616,7 @@ export class OfficeScene extends Phaser.Scene {
     this.deskSticky?.sync();
     this.focusHeadphones?.sync();
     this.monitorCode?.sync(delta);
+    this.printerScan?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);
     this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
@@ -1096,6 +1099,7 @@ export class OfficeScene extends Phaser.Scene {
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
+      printerScan: this.printerScan?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
