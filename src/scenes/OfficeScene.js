@@ -59,6 +59,7 @@ import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
 import { MonitorCode } from "../effects/monitorCode.js";
+import { RubberDuck } from "../effects/rubberDuck.js";
 import { AchievementShelf } from "../effects/achievementShelf.js";
 import {
   burstTaskCelebrate,
@@ -509,6 +510,7 @@ export class OfficeScene extends Phaser.Scene {
     this.deskSticky = new DeskSticky(this);
     this.focusHeadphones = new FocusHeadphones(this);
     this.monitorCode = new MonitorCode(this);
+    this.rubberDuck = new RubberDuck(this);
     this.trophyShelf = new AchievementShelf(this);
     this.trophyShelf.start();
     this.plantSway = new PlantSway(this);
