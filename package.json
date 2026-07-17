@@ -25,6 +25,7 @@
     "smoke:vendingidle": "node scripts/smoke-vendingidle.mjs",
     "smoke:roundtable": "node scripts/smoke-roundtable.mjs",
     "smoke:dualdesk": "node scripts/smoke-dualdesk.mjs",
+    "smoke:acvent": "node scripts/smoke-acvent.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
     "smoke:screensaver": "node scripts/smoke-screensaver.mjs",

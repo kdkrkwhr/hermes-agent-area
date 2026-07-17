@@ -62,6 +62,7 @@ import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
+import { FocusAcVent } from "../effects/focusAcVent.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
@@ -540,6 +541,7 @@ export class OfficeScene extends Phaser.Scene {
     this.vendingIdle = new VendingIdle(this);
     this.roundTableIdle = new RoundTableIdle(this);
     this.dualDeskIdle = new DualDeskIdle(this);
+    this.focusAcVent = new FocusAcVent(this);
     this.napPodBreathe = new NapPodBreathe(this);
     this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
@@ -598,6 +600,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sleepRugSheen?.sync();
     this.roundTableIdle?.sync();
     this.dualDeskIdle?.sync();
+    this.focusAcVent?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
@@ -1213,6 +1216,7 @@ export class OfficeScene extends Phaser.Scene {
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
+      acvent: this.focusAcVent?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
