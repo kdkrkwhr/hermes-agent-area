@@ -62,6 +62,7 @@ import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
+import { OpenDeskIdle } from "../effects/openDeskIdle.js";
 import { FocusAcVent } from "../effects/focusAcVent.js";
 import { GlassDoorSwing } from "../effects/glassDoorSwing.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
@@ -545,6 +546,7 @@ export class OfficeScene extends Phaser.Scene {
     this.vendingIdle = new VendingIdle(this);
     this.roundTableIdle = new RoundTableIdle(this);
     this.dualDeskIdle = new DualDeskIdle(this);
+    this.openDeskIdle = new OpenDeskIdle(this);
     this.focusAcVent = new FocusAcVent(this);
     this.glassDoorSwing = new GlassDoorSwing(this);
     this.napPodBreathe = new NapPodBreathe(this);
@@ -605,6 +607,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sleepRugSheen?.sync();
     this.roundTableIdle?.sync();
     this.dualDeskIdle?.sync();
+    this.openDeskIdle?.sync();
     this.focusAcVent?.sync();
     this.glassDoorSwing?.sync();
     this.napPodBreathe?.sync();
@@ -693,6 +696,7 @@ export class OfficeScene extends Phaser.Scene {
     this.vendingIdle?.update(this.time.now);
     this.roundTableIdle?.update(this.time.now, delta);
     this.dualDeskIdle?.update(this.time.now, delta);
+    this.openDeskIdle?.update(this.time.now, delta);
     this.glassDoorSwing?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
@@ -1225,6 +1229,7 @@ export class OfficeScene extends Phaser.Scene {
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
+      openDeskIdle: this.openDeskIdle?.snapshot?.() ?? null,
       acvent: this.focusAcVent?.snapshot?.() ?? null,
       doorswing: this.glassDoorSwing?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
