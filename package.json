@@ -17,6 +17,7 @@
     "smoke:plantwater": "node scripts/smoke-plantwater.mjs",
     "smoke:beanbag": "node scripts/smoke-beanbag.mjs",
     "smoke:chair": "node scripts/smoke-chair.mjs",
+    "smoke:execchair": "node scripts/smoke-execchair.mjs",
     "smoke:rug": "node scripts/smoke-rug.mjs",
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",

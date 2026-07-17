@@ -53,8 +53,10 @@ import { PlantSway } from "../effects/plantSway.js";
 import { BeanbagBounce } from "../effects/beanbagBounce.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
 import { ChairSwivel } from "../effects/chairSwivel.js";
+import { ExecChairSwivel } from "../effects/execChairSwivel.js";
 import { RugSheen } from "../effects/rugSheen.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
+import { VendingIdle } from "../effects/vendingIdle.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
@@ -523,8 +525,10 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce = new BeanbagBounce(this);
     this.sofaCushion = new SofaCushion(this);
     this.chairSwivel = new ChairSwivel(this);
+    this.execChairSwivel = new ExecChairSwivel(this);
     this.rugSheen = new RugSheen(this);
     this.bookshelfPages = new BookshelfPages(this);
+    this.vendingIdle = new VendingIdle(this);
     this.napPodBreathe = new NapPodBreathe(this);
     this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
@@ -576,6 +580,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce?.sync();
     this.sofaCushion?.sync();
     this.chairSwivel?.sync();
+    this.execChairSwivel?.sync();
     this.rugSheen?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
@@ -654,8 +659,10 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce?.update(this.time.now, delta);
     this.sofaCushion?.update(this.time.now, delta);
     this.chairSwivel?.update(this.time.now, delta);
+    this.execChairSwivel?.update(this.time.now, delta);
     this.rugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
+    this.vendingIdle?.update(this.time.now);
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
@@ -1150,7 +1157,9 @@ export class OfficeScene extends Phaser.Scene {
       beanbag: this.beanbagBounce?.snapshot?.() ?? null,
       sofa: this.sofaCushion?.snapshot?.() ?? null,
       chair: this.chairSwivel?.snapshot?.() ?? null,
+      execChair: this.execChairSwivel?.snapshot?.() ?? null,
       rug: this.rugSheen?.snapshot?.() ?? null,
+      vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
