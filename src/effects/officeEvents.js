@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=all_hands` force. */
 
 import Phaser from "phaser";
 
@@ -18,6 +18,7 @@ const RANDOM_KINDS = [
   "paper_airplane",
   "phone_ring",
   "wet_floor",
+  "all_hands",
 ];
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
@@ -42,6 +43,9 @@ const WATER_COOLER_LINES = ["오늘 blocked 많네", "커피?", "standup 언제?
 /** pizza_party: lounge gather hold (ms) */
 const PIZZA_HOLD_MIN_MS = 8000;
 const PIZZA_HOLD_MAX_MS = 12000;
+/** all_hands: War Room meeting gather hold (ms) */
+const ALL_HANDS_HOLD_MIN_MS = 8000;
+const ALL_HANDS_HOLD_MAX_MS = 12000;
 const COFFEE_GID = 16;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
@@ -76,13 +80,18 @@ function parseEventsMode() {
   try {
     const raw = new URLSearchParams(location.search).get("events");
     if (raw === "0" || raw === "off" || raw === "false") {
-      return { enabled: false, fast: false };
+      return { enabled: false, fast: false, forceKind: null };
     }
-    if (raw === "1" || raw === "fast") return { enabled: true, fast: true };
+    if (raw === "1" || raw === "fast") {
+      return { enabled: true, fast: true, forceKind: null };
+    }
+    if (raw && RANDOM_KINDS.includes(raw)) {
+      return { enabled: true, fast: false, forceKind: raw };
+    }
   } catch {
     /* ignore */
   }
-  return { enabled: true, fast: false };
+  return { enabled: true, fast: false, forceKind: null };
 }
 
 function tileCenter(scene, tx, ty) {
@@ -264,6 +273,31 @@ function isStandupGatherable(agent) {
   return agent.getEffectKind?.() === "idle";
 }
 
+/** idle + waiting (ready/review) — all-hands company meeting. */
+function isAllHandsGatherable(agent) {
+  if (!agent?.sprite) return false;
+  const s = agent?.serverStatus;
+  if (
+    s === "running" ||
+    s === "blocked" ||
+    s === "chatting" ||
+    s === "offline" ||
+    s === "todo"
+  ) {
+    return false;
+  }
+  if (agent.live) {
+    return s === "idle" || s === "ready" || s === "review";
+  }
+  const kind = agent.getEffectKind?.();
+  return (
+    kind === "idle" ||
+    kind === "ready" ||
+    agent.currentKind === "review" ||
+    agent.currentKind === "queue"
+  );
+}
+
 /** idle or running (desk/focus) — stretch in place, no gather move. */
 function isStretchEligible(agent) {
   if (!agent?.sprite) return false;
@@ -297,6 +331,7 @@ export class OfficeEvents {
     const mode = parseEventsMode();
     this.enabled = mode.enabled;
     this.fast = mode.fast;
+    this.forceKind = mode.forceKind || null;
     this.eventCount = 0;
     this.lastEvent = null;
     this.lastAt = 0;
@@ -311,6 +346,7 @@ export class OfficeEvents {
     this.stretchAffected = 0;
     this.waterCoolerGathered = 0;
     this.pizzaPartyGathered = 0;
+    this.allHandsGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
@@ -340,6 +376,12 @@ export class OfficeEvents {
       return;
     }
     this.ensureToastHost();
+    if (this.forceKind) {
+      const delay = this.fast ? 200 : 600;
+      this.scene.time.delayedCall(delay, () => {
+        if (this.enabled && this.forceKind) this.fire(this.forceKind);
+      });
+    }
     this.scheduleNext(this.fast ? 800 : 2000);
     this.scene.events.once("shutdown", () => this.destroy());
     this.publish();
@@ -443,6 +485,7 @@ export class OfficeEvents {
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
+    else if (kind === "all_hands") this.runAllHands();
 
     this.publish();
   }
@@ -779,6 +822,8 @@ export class OfficeEvents {
   }
 
   runStandup() {
+    if (this.isGathering()) return;
+
     this.showToast("스탠드업 타임");
     this._standupGathering = true;
     const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
@@ -1347,6 +1392,109 @@ export class OfficeEvents {
   }
 
   /**
+   * All-hands: toast + bell + idle/ready/review → War Room meeting 8–12s.
+   * Skip if another gather is already running.
+   */
+  runAllHands() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      ALL_HANDS_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (ALL_HANDS_HOLD_MAX_MS - ALL_HANDS_HOLD_MIN_MS + 1),
+      );
+    // lock early so standup/fire/pizza don't race during pathfind
+    this.markGathering(holdMs + 12000);
+    this.showToast("올핸즈!", 3200);
+    this.playBellChime();
+
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const { x, y } = tileCenter(this.scene, meet.x, meet.y);
+    const glow = this.scene.add.circle(x, y, 64, 0x7eb8ff, 0.38);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.4,
+      duration: Math.min(3600, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToAllHands(holdMs);
+  }
+
+  /** Idle + ready/review → meeting ±1 ring; hold 8–12s → wander restore. */
+  async gatherIdleToAllHands(holdMs) {
+    const agents = this.scene.agents || [];
+    const candidates = shuffleInPlace(
+      agents.filter((a) => isAllHandsGatherable(a)),
+    );
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const spots = meetingOffsets(meet);
+    const hold =
+      holdMs ??
+      ALL_HANDS_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (ALL_HANDS_HOLD_MAX_MS - ALL_HANDS_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.allHandsGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isAllHandsGatherable(agent) && !isStandupGatherable(agent)) {
+          continue;
+        }
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /**
    * Stretch break: toast + idle/running desk bubbles + y-scale pulse.
    * No gather move. Skip if standup/lunch/printer/fire_drill gather is active.
    */
@@ -1572,6 +1720,34 @@ export class OfficeEvents {
     }
   }
 
+  /** Short bell/chime for all_hands — skip if muted/locked. */
+  playBellChime() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const notes = [784, 1046.5]; // G5 → C6
+      for (let i = 0; i < notes.length; i++) {
+        const start = t0 + i * 0.09;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(notes[i], start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.045, start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.3);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   track(cleanup) {
     this._active.push(cleanup);
   }
@@ -1590,6 +1766,7 @@ export class OfficeEvents {
       stretchAffected: this.stretchAffected,
       waterCoolerGathered: this.waterCoolerGathered,
       pizzaPartyGathered: this.pizzaPartyGathered,
+      allHandsGathered: this.allHandsGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,
