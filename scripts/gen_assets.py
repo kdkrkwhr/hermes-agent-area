@@ -13,7 +13,8 @@ OUT = ROOT / "public" / "assets"
 OUT.mkdir(parents=True, exist_ok=True)
 
 DRAW_TILE = 16
-EXPORT_TILE = 32
+# 48px export → sharper overview on HiDPI (was 32; looked muddy when stretched)
+EXPORT_TILE = 48
 ASSET_SCALE = EXPORT_TILE // DRAW_TILE
 TILE = DRAW_TILE
 
@@ -183,12 +184,14 @@ def make_tileset() -> None:
     fill(buf, w, ox + 4, oy + 0, ox + 12, oy + 4, (56, 150, 96, 255))
     px(buf, w, ox + 8, oy + 1, (40, 120, 70, 255))
 
-    # 10 glass door
+    # 10 glass door — bright opening so exits read clearly
     ox, oy = tile_at(2, 1)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, WALL)
-    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, DOOR)
-    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, WALL_TOP)
-    px(buf, w, ox + 12, oy + 8, (80, 200, 180, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (242, 246, 250, 255))
+    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, DOOR)
+    rect(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, (64, 180, 160, 255))
+    fill(buf, w, ox + 3, oy + 3, ox + 13, oy + 13, (200, 230, 236, 255))
+    px(buf, w, ox + 12, oy + 8, (40, 200, 170, 255))
+    px(buf, w, ox + 4, oy + 8, (40, 200, 170, 255))
 
     # 11 bright window + sky
     ox, oy = tile_at(3, 1)
@@ -261,10 +264,19 @@ def make_tileset() -> None:
     for i in range(0, TILE, 4):
         px(buf, w, ox + i, oy + (i * 2) % TILE, SLEEP_FLOOR2)
 
-    # 21 polished concrete path
+    # 21 corridor path — bright lane + teal edge so halls read at a glance (GID 22)
+    PATH = (242, 246, 250, 255)
+    PATH_MID = (228, 236, 244, 255)
+    PATH_EDGE = (120, 148, 168, 255)
+    PATH_TEAL = (64, 180, 160, 255)
     ox, oy = tile_at(5, 2)
-    fill(buf, w, ox, oy, ox + TILE, oy + TILE, (200, 204, 210, 255))
-    fill(buf, w, ox + 1, oy + 1, ox + 15, oy + 15, (188, 194, 202, 255))
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, PATH)
+    fill(buf, w, ox + 2, oy + 2, ox + TILE - 2, oy + TILE - 2, PATH_MID)
+    rect(buf, w, ox, oy, ox + TILE, oy + TILE, PATH_EDGE)
+    rect(buf, w, ox + 1, oy + 1, ox + TILE - 1, oy + TILE - 1, PATH_TEAL)
+    # center dash (works for both hall orientations)
+    fill(buf, w, ox + 7, oy + 3, ox + 9, oy + 6, PATH_TEAL)
+    fill(buf, w, ox + 7, oy + 10, ox + 9, oy + 13, PATH_TEAL)
 
     # 22 round table center BIG
     ox, oy = tile_at(6, 2)
@@ -728,34 +740,11 @@ def make_map_json() -> None:
     put(17, 26, 20)
     put(22, 26, 20)
 
-    # corridor plants / posters (edges + hall sides; keep 2-tile spine walkable)
-    for x, y in [
-        (12, 3),
-        (13, 10),
-        (12, 17),
-        (13, 24),
-        (18, 13),
-        (25, 13),
-        (12, 7),
-        (13, 14),
-        (12, 21),
-        (22, 13),
-        (28, 13),
-        (33, 13),
-    ]:
+    # corridor decor — sparse corners only (dense props hid open paths)
+    for x, y in [(12, 2), (13, 28), (36, 13)]:
         if decor[y][x] == 0:
             put(x, y, 10)
-    for x, y in [
-        (12, 5),
-        (13, 8),
-        (12, 12),
-        (13, 19),
-        (12, 25),
-        (16, 14),
-        (24, 14),
-        (30, 14),
-        (35, 13),
-    ]:
+    for x, y in [(12, 28), (2, 13)]:
         if decor[y][x] == 0:
             put(x, y, 19, False)
 

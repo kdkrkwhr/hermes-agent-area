@@ -58,6 +58,9 @@ const parent = document.getElementById("app");
 const preferCanvas =
   typeof navigator !== "undefined" && /HeadlessChrome|Headless|Playwright/i.test(navigator.userAgent);
 
+const dpr =
+  typeof window !== "undefined" ? Math.min(Math.max(window.devicePixelRatio || 1, 1), 2) : 1;
+
 const game = new Phaser.Game({
   type: preferCanvas ? Phaser.CANVAS : Phaser.AUTO,
   parent,
@@ -67,6 +70,7 @@ const game = new Phaser.Game({
   pixelArt: true,
   roundPixels: true,
   antialias: false,
+  resolution: dpr,
   scene: [OfficeScene],
   scale: {
     // RESIZE: canvas = viewport; overview zoom computed in OfficeScene (no FIT letterbox)

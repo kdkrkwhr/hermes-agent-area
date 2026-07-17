@@ -1,5 +1,5 @@
 /* Hermes Agent Area — runtime cache SW (Vite hashed assets OK) */
-const CACHE = "hermes-agent-area-v3";
+const CACHE = "hermes-agent-area-v4";
 const PRECACHE = [
   "./",
   "./index.html",

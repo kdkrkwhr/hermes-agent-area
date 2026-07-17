@@ -223,6 +223,7 @@ export class OfficeScene extends Phaser.Scene {
 
     // zone labels — room readability without cluttering gameplay
     this.addZoneLabels();
+    this.addWalkPathHints();
 
     this.cameras.main.setBounds(0, 0, this.map.widthInPixels, this.map.heightInPixels);
     this.cameras.main.roundPixels = true;
@@ -920,26 +921,54 @@ export class OfficeScene extends Phaser.Scene {
   addZoneLabels() {
     const tw = this.map.tileWidth;
     const zones = [
-      { name: "Open Desk", tx: 8, ty: 2 },
+      { name: "Open Desk", tx: 6, ty: 2 },
       { name: "사장실", tx: 30, ty: 2 },
       { name: "War Room", tx: 19, ty: 5 },
-      { name: "Focus", tx: 8, ty: 16 },
-      { name: "Lounge", tx: 18, ty: 14 },
-      { name: "Nap Pod", tx: 31, ty: 16 },
+      { name: "Focus", tx: 6, ty: 16 },
+      { name: "Lounge", tx: 18, ty: 15 },
+      { name: "Nap Pod", tx: 31, ty: 17 },
       { name: "Lobby", tx: 20, ty: 26 },
+      { name: "↕ 복도", tx: 12, ty: 9 },
+      { name: "↔ 복도", tx: 22, ty: 13 },
     ];
     for (const z of zones) {
+      const isHall = z.name.includes("복도");
       this.add
         .text(z.tx * tw + tw / 2, z.ty * tw + 2, z.name, {
           fontFamily: "Segoe UI, sans-serif",
-          fontSize: "18px",
-          color: "#5a7a6a",
-          stroke: "#f4f0ea",
-          strokeThickness: 5,
+          fontSize: isHall ? "20px" : "18px",
+          color: isHall ? "#2a9a88" : "#4a6a5a",
+          stroke: "#f8f6f0",
+          strokeThickness: isHall ? 6 : 5,
         })
         .setOrigin(0.5, 0)
         .setDepth(5)
-        .setAlpha(0.85);
+        .setAlpha(isHall ? 0.95 : 0.8);
+    }
+  }
+
+  /** Soft teal wash on walkable corridor / door tiles so open paths pop. */
+  addWalkPathHints() {
+    if (!this.ground || !this.collision) return;
+    const tw = this.map.tileWidth;
+    const th = this.map.tileHeight;
+    const g = this.add.graphics().setDepth(1.5);
+    // GID 22 = corridor path, 11 = glass door opening
+    const PATH_GIDS = new Set([11, 22]);
+    for (let ty = 0; ty < this.map.height; ty++) {
+      for (let tx = 0; tx < this.map.width; tx++) {
+        const blocked = this.collision.getTileAt(tx, ty);
+        if (blocked && blocked.index > 0) continue;
+        const gt = this.ground.getTileAt(tx, ty);
+        if (!gt || !PATH_GIDS.has(gt.index)) continue;
+        const isDoor = gt.index === 11;
+        g.fillStyle(isDoor ? 0x40c8b0 : 0x5ec8b0, isDoor ? 0.22 : 0.12);
+        g.fillRect(tx * tw + 2, ty * th + 2, tw - 4, th - 4);
+        if (isDoor) {
+          g.lineStyle(2, 0x2a9a88, 0.55);
+          g.strokeRect(tx * tw + 3, ty * th + 3, tw - 6, th - 6);
+        }
+      }
     }
   }
 

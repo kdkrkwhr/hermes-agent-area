@@ -48,6 +48,8 @@ body,
   max-height: none;
   border-radius: 0;
   box-shadow: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
 }
 
 .toolbar {
@@ -1472,6 +1474,73 @@ body,
 @media (max-width: 800px) {
   .kpi-cards { grid-template-columns: repeat(2, 1fr); }
   .kpi-grid { grid-template-columns: 1fr; }
+}
+
+/* ── Skills Display ────────────────────────────────────────── */
+
+.dbp__skills-agent {
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  background: rgba(22, 32, 44, 0.6);
+  border: 1px solid #2a3a4a;
+  border-radius: 8px;
+}
+
+.dbp__skills-agent-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #d0e0f0;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dbp__skills-count {
+  font-size: 10px;
+  color: #6a8a9a;
+  font-weight: 400;
+}
+
+.dbp__skills-cat {
+  margin-bottom: 6px;
+}
+
+.dbp__skills-cat:last-child {
+  margin-bottom: 0;
+}
+
+.dbp__skills-cat-label {
+  font-size: 10px;
+  color: #5a7a8a;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 3px;
+  display: block;
+}
+
+.dbp__skills-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dbp__skills-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: rgba(110, 207, 186, 0.12);
+  border: 1px solid rgba(110, 207, 186, 0.25);
+  border-radius: 4px;
+  color: #7ed8c4;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.dbp__skills-tag:hover {
+  background: rgba(110, 207, 186, 0.22);
+  border-color: rgba(110, 207, 186, 0.5);
+  cursor: default;
 }
 
 @media (max-width: 640px) {

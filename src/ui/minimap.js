@@ -61,6 +61,10 @@ function bakeBackground(scene, miniW, miniH) {
       if (ct && ct.index > 0) {
         g.fillStyle(0x5a7088, 1);
         g.fillRect(px, py, pw, ph);
+      } else if (gt && (gt.index === 22 || gt.index === 11)) {
+        // corridor / door — bright so minimap shows open paths
+        g.fillStyle(gt.index === 11 ? 0x40c8b0 : 0x6ecfba, 1);
+        g.fillRect(px, py, pw, ph);
       } else if (gt && gt.index > 0) {
         g.fillStyle(0x243040, 1);
         g.fillRect(px, py, pw, ph);
