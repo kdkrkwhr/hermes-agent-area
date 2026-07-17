@@ -17,6 +17,7 @@ const RANDOM_KINDS = [
   "pizza_party",
   "paper_airplane",
   "phone_ring",
+  "wet_floor",
 ];
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
@@ -64,6 +65,12 @@ const WATER_WEIGHT = 3;
 const PIZZA_HOUR_START = 16;
 const PIZZA_HOUR_END = 18;
 const PIZZA_WEIGHT = 3;
+/** while raining: higher pick weight for wet_floor */
+const WET_FLOOR_RAIN_WEIGHT = 3;
+/** wet_floor: yellow caution sign + toast (ms) */
+const WET_FLOOR_MIN_MS = 6000;
+const WET_FLOOR_MAX_MS = 10000;
+const WET_FLOOR_TEX = "fx-wet-floor";
 
 function parseEventsMode() {
   try {
@@ -153,6 +160,57 @@ function ensurePaperTexture(scene) {
   g.lineBetween(5, 7, 15, 7);
   g.generateTexture(PAPER_TEX, 16, 14);
   g.destroy();
+}
+
+/** Yellow A-frame wet-floor caution sign. */
+function ensureWetFloorTexture(scene) {
+  if (scene.textures.exists(WET_FLOOR_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  // A-frame body
+  g.fillStyle(0xf0c830, 1);
+  g.fillTriangle(12, 2, 2, 26, 22, 26);
+  g.fillStyle(0xe0b020, 1);
+  g.fillTriangle(12, 6, 5, 24, 19, 24);
+  // black caution glyph
+  g.fillStyle(0x1a1a14, 1);
+  g.fillTriangle(12, 9, 8, 17, 16, 17);
+  g.fillRect(11, 18, 2, 3);
+  g.generateTexture(WET_FLOOR_TEX, 24, 28);
+  g.destroy();
+}
+
+/**
+ * Lobby west / hallway junction — avoid parcel center + entranceGate west stack.
+ * @param {Phaser.Scene} scene
+ */
+function findWetFloorSpot(scene) {
+  const lob = scene.waypoints?.lobby;
+  const ent = scene.waypoints?.entrance || { x: 20, y: 27 };
+  if (
+    lob &&
+    Number.isFinite(lob.xMin) &&
+    Number.isFinite(lob.yMin) &&
+    Number.isFinite(lob.yMax)
+  ) {
+    // west lobby edge toward corridor — empty walk tile
+    const tx = lob.xMin + 0.6;
+    const ty = (lob.yMin + lob.yMax) / 2;
+    return {
+      x: tx * scene.map.tileWidth + scene.map.tileWidth / 2,
+      y: ty * scene.map.tileHeight + scene.map.tileHeight / 2,
+      tx,
+      ty,
+    };
+  }
+  // hallway north of entrance
+  const c = tileCenter(scene, ent.x - 4, ent.y - 1);
+  return { ...c, tx: ent.x - 4, ty: ent.y - 1 };
+}
+
+function isRainingNow(scene) {
+  if (scene.windowRain?.active) return true;
+  if (scene.weatherFx?.classification?.raining) return true;
+  return false;
 }
 
 function bossTileDist(scene, tx, ty) {
@@ -257,6 +315,7 @@ export class OfficeEvents {
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
     this.phoneRingTarget = null;
+    this.wetFloorActive = false;
     /** ms timestamp — IdleChatter skips while now < this */
     this._gatherUntil = 0;
     /** Sticky while standup gather/hold runs (lastEvent may become ship_it). */
@@ -334,6 +393,7 @@ export class OfficeEvents {
       weekday && hour >= WATER_HOUR_START && hour < WATER_HOUR_END;
     const pizzaWindow =
       weekday && hour >= PIZZA_HOUR_START && hour < PIZZA_HOUR_END;
+    const raining = isRainingNow(this.scene);
     const pool = [];
     for (const k of RANDOM_KINDS) {
       if (k === "quiet_hours" && !night) continue;
@@ -341,6 +401,7 @@ export class OfficeEvents {
       if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
       else if (k === "water_cooler" && waterWindow) weight = WATER_WEIGHT;
       else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
+      else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -381,7 +442,54 @@ export class OfficeEvents {
     else if (kind === "pizza_party") this.runPizzaParty();
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
+    else if (kind === "wet_floor") this.runWetFloor();
 
+    this.publish();
+  }
+
+  /**
+   * Wet floor: yellow caution sign in lobby/hallway + toast 6–10s.
+   * Skip if gather is active. Visual only (no agent move).
+   */
+  runWetFloor() {
+    if (this.isGathering()) return;
+
+    const spot = findWetFloorSpot(this.scene);
+    ensureWetFloorTexture(this.scene);
+    this.wetFloorActive = true;
+    this.showToast("미끄럼 주의!", 3200);
+
+    const sign = this.scene.add.image(spot.x, spot.y - 2, WET_FLOOR_TEX);
+    sign.setDepth(9);
+    sign.setScale(1.35);
+    sign.setAlpha(1);
+
+    const life =
+      WET_FLOOR_MIN_MS +
+      Math.floor(Math.random() * (WET_FLOOR_MAX_MS - WET_FLOOR_MIN_MS + 1));
+    const fadeMs = 700;
+
+    const fade = this.scene.time.delayedCall(life, () => {
+      this.scene.tweens.add({
+        targets: sign,
+        alpha: 0,
+        y: sign.y - 6,
+        duration: fadeMs,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          sign.destroy();
+          this.wetFloorActive = false;
+          this.publish();
+        },
+      });
+    });
+
+    this.track(() => {
+      fade.remove(false);
+      this.scene.tweens.killTweensOf(sign);
+      sign.destroy();
+      this.wetFloorActive = false;
+    });
     this.publish();
   }
 
@@ -1486,6 +1594,7 @@ export class OfficeEvents {
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,
       phoneRingTarget: this.phoneRingTarget,
+      wetFloorActive: this.wetFloorActive,
       gathering: this.isGathering(),
       gatherUntil: this._gatherUntil || 0,
       standupGathering: !!this._standupGathering,

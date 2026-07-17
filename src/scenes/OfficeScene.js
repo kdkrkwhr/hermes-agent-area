@@ -480,6 +480,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampMoths = new LampMoths(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.seasonalDrift = new SeasonalDrift(this);
+    this.umbrellaStand = new LobbyUmbrellaStand(this);
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
     this.windowBirds = new WindowBirds(this);
@@ -529,6 +530,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampMoths?.sync();
     this.dustMotes?.sync();
     this.seasonalDrift?.sync();
+    this.umbrellaStand?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
     this.windowBirds?.sync();
@@ -603,6 +605,7 @@ export class OfficeScene extends Phaser.Scene {
     this.focusHeadphones?.sync();
     this.monitorCode?.sync(delta);
     this.plantSway?.update(this.time.now);
+    this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -1066,6 +1069,7 @@ export class OfficeScene extends Phaser.Scene {
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
       season: this.seasonalDrift?.snapshot?.() ?? null,
+      umbrella: this.umbrellaStand?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
@@ -1088,6 +1092,7 @@ export class OfficeScene extends Phaser.Scene {
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
       mascotPet: this.roomInteract?.mascotPetSnapshot?.() ?? null,
       plantWater: this.roomInteract?.plantWaterSnapshot?.() ?? null,
+      vending: this.roomInteract?.vendingSnapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,
