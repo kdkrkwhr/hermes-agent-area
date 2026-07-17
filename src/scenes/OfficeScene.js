@@ -44,6 +44,7 @@ import { WindowBirds } from "../effects/windowBirds.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
 import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
 import { LobbyPoster } from "../effects/lobbyPoster.js";
+import { ExitNeon } from "../effects/exitNeon.js";
 import { AgentHighFive } from "../effects/agentHighFive.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { PrinterScan } from "../effects/printerScan.js";
@@ -514,6 +515,7 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonalDrift = new SeasonalDrift(this);
     this.umbrellaStand = new LobbyUmbrellaStand(this);
     this.lobbyPoster = new LobbyPoster(this);
+    this.exitNeon = new ExitNeon(this);
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
     this.ceoCityWindow = new CeoCityWindow(this);
@@ -588,6 +590,7 @@ export class OfficeScene extends Phaser.Scene {
     this.seasonalDrift?.sync();
     this.umbrellaStand?.sync();
     this.lobbyPoster?.sync();
+    this.exitNeon?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
     this.ceoCityWindow?.sync();
@@ -701,6 +704,7 @@ export class OfficeScene extends Phaser.Scene {
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
+    this.exitNeon?.update(this.time.now);
     this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
@@ -1199,6 +1203,7 @@ export class OfficeScene extends Phaser.Scene {
       season: this.seasonalDrift?.snapshot?.() ?? null,
       umbrella: this.umbrellaStand?.snapshot?.() ?? null,
       poster: this.lobbyPoster?.snapshot?.() ?? null,
+      exitNeon: this.exitNeon?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
       ceoWindow: this.ceoCityWindow?.snapshot?.() ?? null,

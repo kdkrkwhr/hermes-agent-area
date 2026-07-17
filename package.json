@@ -41,6 +41,7 @@
     "smoke:scribble": "node scripts/smoke-scribble.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
     "smoke:allhands": "node scripts/smoke-allhands.mjs",
+    "smoke:exitneon": "node scripts/smoke-exitneon.mjs",
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
