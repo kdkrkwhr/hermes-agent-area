@@ -23,6 +23,7 @@
     "smoke:poster": "node scripts/smoke-poster.mjs",
     "smoke:bookshelf": "node scripts/smoke-bookshelf.mjs",
     "smoke:nappod": "node scripts/smoke-nappod.mjs",
+    "smoke:vacuum": "node scripts/smoke-vacuum.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",

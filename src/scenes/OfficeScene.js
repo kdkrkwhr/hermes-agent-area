@@ -53,6 +53,7 @@ import { BeanbagBounce } from "../effects/beanbagBounce.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
+import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
@@ -515,6 +516,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sofaCushion = new SofaCushion(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.napPodBreathe = new NapPodBreathe(this);
+    this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
@@ -563,6 +565,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce?.sync();
     this.sofaCushion?.sync();
     this.napPodBreathe?.sync();
+    this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -630,12 +633,14 @@ export class OfficeScene extends Phaser.Scene {
     this.deskSticky?.sync();
     this.focusHeadphones?.sync();
     this.monitorCode?.sync(delta);
+    this.rubberDuck?.sync(this.time.now);
     this.printerScan?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);
     this.beanbagBounce?.update(this.time.now, delta);
     this.sofaCushion?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
+    this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
     this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
@@ -1119,12 +1124,14 @@ export class OfficeScene extends Phaser.Scene {
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
+      rubberDuck: this.rubberDuck?.snapshot?.() ?? null,
       printerScan: this.printerScan?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       beanbag: this.beanbagBounce?.snapshot?.() ?? null,
       sofa: this.sofaCushion?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
+      vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
