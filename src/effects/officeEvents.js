@@ -16,7 +16,14 @@ const RANDOM_KINDS = [
   "water_cooler",
   "pizza_party",
   "paper_airplane",
+  "phone_ring",
 ];
+/** phone_ring: bubble + ring SFX + green pulse (ms) */
+const PHONE_MIN_MS = 3000;
+const PHONE_MAX_MS = 5000;
+const PHONE_LINES = ["여보세요?", "네 듣고 있어요"];
+/** green tone — distinct from chatPing cyan (0x88aaff) */
+const PHONE_PULSE_COLOR = 0x44dd88;
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
 const FLICKER_MAX_MS = 1200;
@@ -249,6 +256,7 @@ export class OfficeEvents {
     this.parcelActive = false;
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
+    this.phoneRingTarget = null;
     /** ms timestamp — IdleChatter skips while now < this */
     this._gatherUntil = 0;
     /** Sticky while standup gather/hold runs (lastEvent may become ship_it). */
@@ -372,8 +380,152 @@ export class OfficeEvents {
     else if (kind === "water_cooler") this.runWaterCooler();
     else if (kind === "pizza_party") this.runPizzaParty();
     else if (kind === "paper_airplane") this.runPaperAirplane();
+    else if (kind === "phone_ring") this.runPhoneRing();
 
     this.publish();
+  }
+
+  /**
+   * Phone ring: one idle/running agent bubble + green pulse + ring SFX.
+   * Skip if gather is active. Does not mark gathering.
+   */
+  runPhoneRing() {
+    if (this.isGathering()) return;
+
+    const agents = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isStretchEligible(a)),
+    );
+    const agent = agents[0];
+    if (!agent?.sprite) return;
+
+    this.showToast("전화 왔어요", 2600);
+    this.playPhoneRing();
+
+    const duration =
+      PHONE_MIN_MS +
+      Math.floor(Math.random() * (PHONE_MAX_MS - PHONE_MIN_MS + 1));
+    const pulses = 1 + Math.floor(Math.random() * 2); // 1–2
+    const spr = agent.sprite;
+    const x = spr.x;
+    const y = spr.y - 6;
+
+    this.phoneRingTarget = agent.def?.id ?? agent.def?.name ?? "agent";
+    this.publish();
+
+    agent._phoneBackup = agent.statusText;
+    agent.setStatus(
+      PHONE_LINES[Math.floor(Math.random() * PHONE_LINES.length)],
+    );
+
+    const pulseCleanups = [];
+    for (let i = 0; i < pulses; i++) {
+      const delay = i * 420;
+      const call = this.scene.time.delayedCall(delay, () => {
+        const cleanup = this.spawnPhonePulse(x, y);
+        if (cleanup) pulseCleanups.push(cleanup);
+      });
+      pulseCleanups.push(() => call.remove(false));
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      if (agent._phoneBackup != null) {
+        if (
+          !agent._expandTimer &&
+          agent._bossGreetBackup == null &&
+          agent._coffeeBackup == null &&
+          agent._workBackup == null &&
+          agent._specBackup == null &&
+          agent._stretchBackup == null &&
+          agent._waterBackup == null
+        ) {
+          agent.setStatus(agent._phoneBackup);
+        }
+        agent._phoneBackup = null;
+      }
+      this.phoneRingTarget = null;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      for (const fn of pulseCleanups) {
+        try {
+          fn();
+        } catch {
+          /* ignore */
+        }
+      }
+      if (agent._phoneBackup != null) {
+        agent.setStatus(agent._phoneBackup);
+        agent._phoneBackup = null;
+      }
+      this.phoneRingTarget = null;
+    });
+  }
+
+  /** Short green ADD stroke ring — slower/greener than chatPing cyan. */
+  spawnPhonePulse(x, y) {
+    const gfx = this.scene.add.graphics().setDepth(11);
+    gfx.setBlendMode("ADD");
+    const state = { r: 5, alpha: 0.95 };
+    const draw = () => {
+      gfx.clear();
+      if (state.alpha <= 0.01) return;
+      gfx.lineStyle(2.2, PHONE_PULSE_COLOR, state.alpha);
+      gfx.strokeCircle(x, y, state.r);
+    };
+    draw();
+    const tween = this.scene.tweens.add({
+      targets: state,
+      r: 32,
+      alpha: 0,
+      duration: 700,
+      ease: "Sine.easeOut",
+      onUpdate: draw,
+      onComplete: () => {
+        try {
+          gfx.destroy();
+        } catch {
+          /* ignore */
+        }
+      },
+    });
+    return () => {
+      tween.stop();
+      try {
+        gfx.destroy();
+      } catch {
+        /* ignore */
+      }
+    };
+  }
+
+  /** Two short ring beeps — skip if muted/locked. */
+  playPhoneRing() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      for (let i = 0; i < 2; i++) {
+        const start = t0 + i * 0.16;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(740, start);
+        osc.frequency.setValueAtTime(880, start + 0.05);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.045, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.12);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.13);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /**
@@ -946,7 +1098,8 @@ export class OfficeEvents {
             agent._coffeeBackup == null &&
             agent._workBackup == null &&
             agent._specBackup == null &&
-            agent._stretchBackup == null
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null
           ) {
             agent.setStatus(agent._waterBackup);
           }
@@ -1136,7 +1289,8 @@ export class OfficeEvents {
             agent._bossGreetBackup == null &&
             agent._coffeeBackup == null &&
             agent._workBackup == null &&
-            agent._specBackup == null
+            agent._specBackup == null &&
+            agent._phoneBackup == null
           ) {
             agent.setStatus(agent._stretchBackup);
           }
@@ -1331,6 +1485,7 @@ export class OfficeEvents {
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,
+      phoneRingTarget: this.phoneRingTarget,
       gathering: this.isGathering(),
       gatherUntil: this._gatherUntil || 0,
       standupGathering: !!this._standupGathering,
