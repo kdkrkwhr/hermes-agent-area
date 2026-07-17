@@ -34,6 +34,7 @@ import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { LampMoths } from "../effects/lampMoths.js";
 import { DustMotes } from "../effects/dustMotes.js";
+import { FogMist } from "../effects/fogMist.js";
 import { SeasonalDrift } from "../effects/seasonalDrift.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
@@ -503,6 +504,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow = new LampGlow(this);
     this.lampMoths = new LampMoths(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
+    this.fogMist = new FogMist(this, { mapW, mapH });
     this.seasonalDrift = new SeasonalDrift(this);
     this.umbrellaStand = new LobbyUmbrellaStand(this);
     this.lobbyPoster = new LobbyPoster(this);
@@ -573,6 +575,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.sync();
     this.lampMoths?.sync();
     this.dustMotes?.sync();
+    this.fogMist?.sync();
     this.seasonalDrift?.sync();
     this.umbrellaStand?.sync();
     this.lobbyPoster?.sync();
@@ -1176,6 +1179,7 @@ export class OfficeScene extends Phaser.Scene {
         this.visitorDirector?.visitor,
       ].filter(Boolean)),
       dust: this.dustMotes?.snapshot?.() ?? null,
+      fog: this.fogMist?.snapshot?.() ?? null,
       season: this.seasonalDrift?.snapshot?.() ?? null,
       umbrella: this.umbrellaStand?.snapshot?.() ?? null,
       poster: this.lobbyPoster?.snapshot?.() ?? null,

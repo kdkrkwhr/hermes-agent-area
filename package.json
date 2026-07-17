@@ -35,6 +35,7 @@
     "smoke:ceowindow": "node scripts/smoke-ceowindow.mjs",
     "smoke:vacuum": "node scripts/smoke-vacuum.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
+    "smoke:fog": "node scripts/smoke-fog.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",

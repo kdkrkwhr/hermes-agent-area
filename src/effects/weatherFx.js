@@ -84,7 +84,7 @@ export function classifyWeather(weather) {
     !snowing &&
     !clear &&
     (/흐림|구름|안개|fog|mist|overcast|cloud/i.test(sky) ||
-      /흐림|구름|overcast|cloud/i.test(blob));
+      /흐림|구름|안개|fog|mist|overcast|cloud/i.test(blob));
 
   let label = "unknown";
   if (snowing) label = "snow";
@@ -199,6 +199,7 @@ export class WeatherFx {
     }
 
     this.scene.dustMotes?.setCloudy(!!cls.cloudy);
+    this.scene.fogMist?.setCloudy(!!cls.cloudy);
 
     this.scene.windowBirds?.sync();
 
@@ -266,6 +267,7 @@ export class WeatherFx {
     this.scene.windowRain?.setWeatherForceOn(false);
     this.scene.snowFlakes?.setWeatherForceOn(false);
     this.scene.dustMotes?.setCloudy(false);
+    this.scene.fogMist?.setCloudy(false);
     this.cloudOverlay?.setFillStyle(0x6a7a8a, 0);
     this.scene.windowBirds?.sync();
   }
@@ -289,6 +291,7 @@ export class WeatherFx {
       weatherFx: this.snapshot(),
       rain: this.scene.windowRain?.snapshot?.() ?? null,
       snow: this.scene.snowFlakes?.snapshot?.() ?? null,
+      fog: this.scene.fogMist?.snapshot?.() ?? null,
     };
   }
 
