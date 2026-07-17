@@ -37,6 +37,7 @@ import { DustMotes } from "../effects/dustMotes.js";
 import { SeasonalDrift } from "../effects/seasonalDrift.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
+import { CeoCityWindow } from "../effects/ceoCityWindow.js";
 import { NightFlashlight } from "../effects/nightFlashlight.js";
 import { WindowBirds } from "../effects/windowBirds.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
@@ -52,6 +53,7 @@ import { PlantSway } from "../effects/plantSway.js";
 import { BeanbagBounce } from "../effects/beanbagBounce.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
 import { ChairSwivel } from "../effects/chairSwivel.js";
+import { RugSheen } from "../effects/rugSheen.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
@@ -499,6 +501,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lobbyPoster = new LobbyPoster(this);
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
+    this.ceoCityWindow = new CeoCityWindow(this);
     this.nightFlashlight = new NightFlashlight(this);
     this.windowBirds = new WindowBirds(this);
     this.windowBlinds = new WindowBlinds(this);
@@ -520,6 +523,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce = new BeanbagBounce(this);
     this.sofaCushion = new SofaCushion(this);
     this.chairSwivel = new ChairSwivel(this);
+    this.rugSheen = new RugSheen(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.napPodBreathe = new NapPodBreathe(this);
     this.robotVacuum = new RobotVacuum(this);
@@ -561,6 +565,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lobbyPoster?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
+    this.ceoCityWindow?.sync();
     this.nightFlashlight?.sync();
     this.windowBirds?.sync();
     this.windowBlinds?.sync();
@@ -571,6 +576,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce?.sync();
     this.sofaCushion?.sync();
     this.chairSwivel?.sync();
+    this.rugSheen?.sync();
     this.napPodBreathe?.sync();
     this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
@@ -633,6 +639,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.update(this.time.now);
     this.lampMoths?.update(this.time.now);
     this.cityLights?.update(this.time.now);
+    this.ceoCityWindow?.update(this.time.now);
     this.nightFlashlight?.update(this.time.now);
     this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
@@ -647,6 +654,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce?.update(this.time.now, delta);
     this.sofaCushion?.update(this.time.now, delta);
     this.chairSwivel?.update(this.time.now, delta);
+    this.rugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.robotVacuum?.update(this.time.now, delta);
@@ -1121,6 +1129,7 @@ export class OfficeScene extends Phaser.Scene {
       poster: this.lobbyPoster?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
+      ceoWindow: this.ceoCityWindow?.snapshot?.() ?? null,
       flashlight: this.nightFlashlight?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
       blinds: this.windowBlinds?.snapshot?.() ?? null,
@@ -1141,6 +1150,7 @@ export class OfficeScene extends Phaser.Scene {
       beanbag: this.beanbagBounce?.snapshot?.() ?? null,
       sofa: this.sofaCushion?.snapshot?.() ?? null,
       chair: this.chairSwivel?.snapshot?.() ?? null,
+      rug: this.rugSheen?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
