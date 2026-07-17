@@ -52,6 +52,7 @@ import { PlantSway } from "../effects/plantSway.js";
 import { BeanbagBounce } from "../effects/beanbagBounce.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
+import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
@@ -513,6 +514,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce = new BeanbagBounce(this);
     this.sofaCushion = new SofaCushion(this);
     this.bookshelfPages = new BookshelfPages(this);
+    this.napPodBreathe = new NapPodBreathe(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.thunderFx = new ThunderFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
@@ -560,6 +562,7 @@ export class OfficeScene extends Phaser.Scene {
     this.plantSway?.sync();
     this.beanbagBounce?.sync();
     this.sofaCushion?.sync();
+    this.napPodBreathe?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -632,6 +635,7 @@ export class OfficeScene extends Phaser.Scene {
     this.beanbagBounce?.update(this.time.now, delta);
     this.sofaCushion?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
+    this.napPodBreathe?.update(this.time.now);
     this.lobbyPoster?.update(this.time.now, delta);
     this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
@@ -1120,6 +1124,7 @@ export class OfficeScene extends Phaser.Scene {
       plantSway: this.plantSway?.snapshot?.() ?? null,
       beanbag: this.beanbagBounce?.snapshot?.() ?? null,
       sofa: this.sofaCushion?.snapshot?.() ?? null,
+      nappod: this.napPodBreathe?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,

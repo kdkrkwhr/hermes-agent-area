@@ -22,6 +22,7 @@
     "smoke:printerscan": "node scripts/smoke-printerscan.mjs",
     "smoke:poster": "node scripts/smoke-poster.mjs",
     "smoke:bookshelf": "node scripts/smoke-bookshelf.mjs",
+    "smoke:nappod": "node scripts/smoke-nappod.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
