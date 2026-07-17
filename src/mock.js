@@ -13,6 +13,11 @@ export const AGENTS = [
     sheet: "char-onion",
     homeDesk: 0,
     statuses: ["코드 작업 중...", "PR 올리는 중", "버그 고치는 중"],
+    skills: [
+      { name: "hermes-agent-area", description: "Phaser office viz + local Python BE", category: "software-development" },
+      { name: "kanban-worker", description: "Kanban automation and review pipeline", category: "hermes" },
+      { name: "github-pr-workflow", description: "GitHub PR lifecycle: branch, commit, open, CI, merge", category: "github" },
+    ],
   },
   {
     id: "profile-2",
@@ -21,6 +26,11 @@ export const AGENTS = [
     sheet: "char-mushroom",
     homeDesk: 1,
     statuses: ["칸반 검토 중", "코드 분석 중...", "스펙 정리 중"],
+    skills: [
+      { name: "code-review-graph", description: "Token-efficient code review via Tree-sitter", category: "software-development" },
+      { name: "test-driven-development", description: "TDD: RED-GREEN-REFACTOR, tests before code", category: "software-development" },
+      { name: "systematic-debugging", description: "4-phase root cause debugging", category: "software-development" },
+    ],
   },
   {
     id: "profile-3",
@@ -29,6 +39,11 @@ export const AGENTS = [
     sheet: "char-claude",
     homeDesk: 2,
     statuses: ["리뷰 작성 중", "조언 중...", "휴식 중"],
+    skills: [
+      { name: "plan", description: "Write an actionable markdown plan", category: "software-development" },
+      { name: "spike", description: "Throwaway experiments to validate an idea", category: "software-development" },
+      { name: "github-code-review", description: "Review PRs: diffs, inline comments", category: "github" },
+    ],
   },
 ];
 
@@ -63,9 +78,10 @@ export function defFromServerAgent(raw, index = 0) {
     displayName: raw.displayName || profile,
     profile,
     sheet: raw.sheet || sheetForIndex(index),
-    homeDesk: typeof raw.homeDesk === "number" ? raw.homeDesk : index,
-    statuses: ["작업 중..."],
-  };
+        homeDesk: typeof raw.homeDesk === "number" ? raw.homeDesk : index,
+        statuses: ["작업 중..."],
+        skills: raw.skills || [],
+      };
 }
 
 const LS_WS = "hermes-area-ws";
@@ -229,9 +245,10 @@ export function buildMockAgents() {
       task_title: titles[i],
       task_started_at: taskStarted,
       task_elapsed_s: taskElapsed,
-      task_progress: taskProgress,
-      gateway: "running",
-      x,
+            task_progress: taskProgress,
+            gateway: "running",
+            skills: def.skills || [],
+            x,
       y,
       dest_x: atFocus ? focusPx.x : status === "ready" ? queuePx.x : x,
       dest_y: atFocus ? focusPx.y : status === "ready" ? queuePx.y : y,
@@ -258,9 +275,10 @@ export function buildDisconnectedAgents() {
       task_title: null,
       task_started_at: null,
       task_elapsed_s: null,
-      task_progress: null,
-      gateway: "stopped",
-      x: sleepPx.x,
+            task_progress: null,
+            gateway: "stopped",
+            skills: def.skills || [],
+            x: sleepPx.x,
       y: sleepPx.y,
       dest_x: sleepPx.x,
       dest_y: sleepPx.y,

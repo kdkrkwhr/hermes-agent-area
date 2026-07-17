@@ -10,7 +10,8 @@ import re
 import sqlite3
 import subprocess
 import time
-from dataclasses import dataclass
+import yaml
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +139,70 @@ def _skills_blob(skills: Any) -> str:
                 parts.append(str(s))
         return " ".join(parts)
     return str(skills)
+
+
+def _read_agent_skills(profile: str, max_skills: int = 6) -> list[dict[str, str]]:
+    """Read agent skills from HERMES_HOME/skills/ and profile-specific skills/ directories.
+
+    Parses SKILL.md frontmatter (name, description, category).
+    Returns up to max_skills entries, prioritizing profile-specific skills,
+    then global ones. Each entry: {name, description, category}.
+    """
+    skills: list[dict[str, str]] = []
+    seen: set[str] = set()
+
+    def _scan_dir(skills_dir: Path) -> None:
+        if not skills_dir.is_dir():
+            return
+        for category_dir in sorted(skills_dir.iterdir()):
+            if not category_dir.is_dir() or category_dir.name.startswith("."):
+                continue
+            for skill_dir in sorted(category_dir.iterdir()):
+                if not skill_dir.is_dir() or skill_dir.name.startswith("."):
+                    continue
+                skill_md = skill_dir / "SKILL.md"
+                if not skill_md.exists():
+                    continue
+                try:
+                    text = skill_md.read_text(encoding="utf-8", errors="replace")
+                except Exception:
+                    continue
+                # Extract YAML frontmatter
+                fm: dict[str, Any] = {}
+                if text.startswith("---"):
+                    end = text.find("---", 3)
+                    if end > 0:
+                        try:
+                            fm = yaml.safe_load(text[3:end]) or {}
+                        except Exception:
+                            pass
+                name = fm.get("name") or skill_dir.name
+                if name in seen:
+                    continue
+                seen.add(name)
+                desc = str(fm.get("description", "")).strip()
+                # Normalize description: remove multiline/extra whitespace, truncate
+                desc = " ".join(desc.split())
+                if len(desc) > 80:
+                    desc = desc[:77] + "..."
+                skills.append({
+                    "name": name,
+                    "description": desc or name,
+                    "category": fm.get("category") or category_dir.name,
+                })
+                if len(skills) >= max_skills:
+                    return
+
+    # 1. Profile-specific skills first
+    profile_skills_dir = _profile_root(profile) / "skills"
+    _scan_dir(profile_skills_dir)
+
+    # 2. Global HERMES_HOME skills
+    if len(skills) < max_skills:
+        global_dir = HERMES_HOME / "skills"
+        _scan_dir(global_dir)
+
+    return skills[:max_skills]
 
 
 def _is_deep_work(task: dict[str, Any] | None) -> bool:
@@ -738,6 +803,7 @@ class AgentState:
     task_started_at: float | None = None
     task_max_runtime_s: float | None = None
     gateway: str = "unknown"
+    skills: list[dict[str, str]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         elapsed: float | None = None
@@ -765,6 +831,7 @@ class AgentState:
             "task_elapsed_s": round(elapsed, 1) if elapsed is not None else None,
             "task_progress": round(progress, 3) if progress is not None else None,
             "gateway": self.gateway,
+            "skills": self.skills,
         }
 
 
@@ -982,6 +1049,9 @@ class OfficeSim:
             pdata = profiles.get(a.profile, {})
             gw = pdata.get("gateway", "stopped")
             a.gateway = gw
+            # Read skills from Hermes skills directory (once per profile, cached)
+            if not a.skills:
+                a.skills = _read_agent_skills(a.profile)
             if gw != "running":
                 status = "offline"
                 task = None

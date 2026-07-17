@@ -1677,3 +1677,50 @@ body,
     max-height: 42vh;
   }
 }
+
+/* ── Skill badges (kanban detail) ──────────────────────────────── */
+
+.kb-muted {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.kb-skill-badge {
+  display: inline-block;
+  background: rgba(110, 207, 186, 0.12);
+  border: 1px solid rgba(110, 207, 186, 0.25);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin: 1px 2px;
+  font-size: 10px;
+  color: var(--accent);
+  white-space: nowrap;
+  cursor: default;
+  transition: background 0.15s;
+}
+
+.kb-skill-badge:hover {
+  background: rgba(110, 207, 186, 0.22);
+  border-color: rgba(110, 207, 186, 0.45);
+}
+
+.kanban-detail__skills {
+  max-width: 240px;
+  line-height: 1.8;
+}
+
+/* ── Agent skills subtitle (name label extension) ──────────────── */
+
+.agent-skill-subtitle {
+  position: absolute;
+  font-family: "Segoe UI", system-ui, sans-serif;
+  font-size: 9px;
+  color: #8aa0b8;
+  text-align: center;
+  pointer-events: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 96px;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+}

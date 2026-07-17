@@ -99,6 +99,7 @@ export function createKanbanPanel({ onLocate } = {}) {
         <dt>말풍선</dt><dd>${escapeHtml(agent.bubble || "—")}</dd>
         <dt>게이트웨이</dt><dd>${escapeHtml(agent.gateway || "—")}</dd>
         <dt>프로필</dt><dd><code>${escapeHtml(agent.profile || "—")}</code></dd>
+        <dt>스킬</dt><dd class="kanban-detail__skills">${renderSkillsBadges(agent.skills)}</dd>
       </dl>
       <button type="button" class="kanban-panel__locate" data-role="locate">찾아가기</button>
     `;
@@ -223,6 +224,19 @@ function escapeHtml(s) {
 
 function escapeAttr(s) {
   return escapeHtml(s).replace(/'/g, "&#39;");
+}
+
+function renderSkillsBadges(skills) {
+  if (!Array.isArray(skills) || !skills.length) return '<span class="kb-muted">—</span>';
+  return skills
+    .slice(0, 8)
+    .map(function (s) {
+      var name = typeof s === "string" ? s : s.name || "";
+      var desc = typeof s === "string" ? "" : s.description || "";
+      var title = name + (desc ? ": " + desc : "");
+      return '<span class="kb-skill-badge" title="' + escapeAttr(title) + '">' + escapeHtml(name) + '</span>';
+    })
+    .join(" ");
 }
 
 export { parseKanbanStats, statusLabel };
