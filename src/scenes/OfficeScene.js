@@ -38,6 +38,7 @@ import { SeasonalDrift } from "../effects/seasonalDrift.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
 import { WindowBirds } from "../effects/windowBirds.js";
+import { AgentHighFive } from "../effects/agentHighFive.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
@@ -482,6 +483,7 @@ export class OfficeScene extends Phaser.Scene {
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
     this.windowBirds = new WindowBirds(this);
+    this.agentHighFive = new AgentHighFive(this);
     this.coffeeSteam = new CoffeeSteam(this);
     this.aquariumBubbles = new AquariumBubbles(this);
     this.aquariumFish = new AquariumFish(this);
@@ -601,6 +603,7 @@ export class OfficeScene extends Phaser.Scene {
     this.focusHeadphones?.sync();
     this.monitorCode?.sync(delta);
     this.plantSway?.update(this.time.now);
+    this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
       if (this._lightMinute !== minute) {
@@ -1066,6 +1069,7 @@ export class OfficeScene extends Phaser.Scene {
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
+      highFive: this.agentHighFive?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,

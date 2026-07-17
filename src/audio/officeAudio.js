@@ -29,6 +29,7 @@ const DOOR_CHIME_MS = 1500;
 const BLOOP_MS = 450;
 const MEOW_MS = 700;
 const DRIP_MS = 500;
+const HIGHFIVE_MS = 400;
 
 function readMutePref() {
   try {
@@ -500,6 +501,61 @@ export class OfficeAudio {
         osc.start(t);
         osc.stop(t + dur + 0.02);
       }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Soft high-five slap — procedural WebAudio.
+   * Respects mute / ?sfx=0. Ambient pair pass only.
+   */
+  playHighFiveSfx() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastHighFiveAt && now - this._lastHighFiveAt < HIGHFIVE_MS) {
+      return;
+    }
+    this._lastHighFiveAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // soft palm slap: noise burst + brief mid thump
+      const n = Math.floor(ctx.sampleRate * 0.045);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      }
+      const noise = ctx.createBufferSource();
+      const noiseGain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(900, t0);
+      filter.Q.setValueAtTime(0.8, t0);
+      noise.buffer = buf;
+      noiseGain.gain.setValueAtTime(0.0001, t0);
+      noiseGain.gain.exponentialRampToValueAtTime(0.11, t0 + 0.004);
+      noiseGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.05);
+      noise.connect(filter);
+      filter.connect(noiseGain);
+      noiseGain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + 0.055);
+
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(220, t0);
+      osc.frequency.exponentialRampToValueAtTime(90, t0 + 0.07);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.07, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.1);
     } catch {
       /* autoplay / headless */
     }
