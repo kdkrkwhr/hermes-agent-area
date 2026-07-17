@@ -37,6 +37,7 @@ import { DustMotes } from "../effects/dustMotes.js";
 import { SeasonalDrift } from "../effects/seasonalDrift.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
+import { NightFlashlight } from "../effects/nightFlashlight.js";
 import { WindowBirds } from "../effects/windowBirds.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
 import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
@@ -487,6 +488,7 @@ export class OfficeScene extends Phaser.Scene {
     this.umbrellaStand = new LobbyUmbrellaStand(this);
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
+    this.nightFlashlight = new NightFlashlight(this);
     this.windowBirds = new WindowBirds(this);
     this.windowBlinds = new WindowBlinds(this);
     this.agentHighFive = new AgentHighFive(this);
@@ -538,6 +540,7 @@ export class OfficeScene extends Phaser.Scene {
     this.umbrellaStand?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
+    this.nightFlashlight?.sync();
     this.windowBirds?.sync();
     this.windowBlinds?.sync();
     this.coffeeSteam?.sync();
@@ -604,6 +607,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.update(this.time.now);
     this.lampMoths?.update(this.time.now);
     this.cityLights?.update(this.time.now);
+    this.nightFlashlight?.update(this.time.now);
     this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
     this.meetingProjector?.update(this.time.now, delta);
@@ -1080,6 +1084,7 @@ export class OfficeScene extends Phaser.Scene {
       umbrella: this.umbrellaStand?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
+      flashlight: this.nightFlashlight?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
       blinds: this.windowBlinds?.snapshot?.() ?? null,
       highFive: this.agentHighFive?.snapshot?.() ?? null,
