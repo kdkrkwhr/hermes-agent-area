@@ -32,6 +32,7 @@ import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
 import { WeatherFx } from "../effects/weatherFx.js";
 import { LampGlow } from "../effects/lampGlow.js";
+import { LampMoths } from "../effects/lampMoths.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
@@ -472,6 +473,7 @@ export class OfficeScene extends Phaser.Scene {
     this.windowRain = new WindowRain(this);
     this.snowFlakes = new SnowFlakes(this);
     this.lampGlow = new LampGlow(this);
+    this.lampMoths = new LampMoths(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
@@ -516,6 +518,7 @@ export class OfficeScene extends Phaser.Scene {
     this.windowRain?.sync();
     this.snowFlakes?.sync();
     this.lampGlow?.sync();
+    this.lampMoths?.sync();
     this.dustMotes?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
@@ -581,6 +584,7 @@ export class OfficeScene extends Phaser.Scene {
       }
     }
     this.lampGlow?.update(this.time.now);
+    this.lampMoths?.update(this.time.now);
     this.cityLights?.update(this.time.now);
     this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
@@ -1035,6 +1039,7 @@ export class OfficeScene extends Phaser.Scene {
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       thunder: this.thunderFx?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
+      moths: this.lampMoths?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([
         ...(this.agents || []),
