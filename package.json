@@ -19,6 +19,7 @@
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",
     "smoke:monitorcode": "node scripts/smoke-monitorcode.mjs",
+    "smoke:screensaver": "node scripts/smoke-screensaver.mjs",
     "smoke:printerscan": "node scripts/smoke-printerscan.mjs",
     "smoke:poster": "node scripts/smoke-poster.mjs",
     "smoke:bookshelf": "node scripts/smoke-bookshelf.mjs",

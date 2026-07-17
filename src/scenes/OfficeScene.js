@@ -59,6 +59,7 @@ import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
 import { MonitorCode } from "../effects/monitorCode.js";
+import { MonitorScreensaver } from "../effects/monitorScreensaver.js";
 import { RubberDuck } from "../effects/rubberDuck.js";
 import { AchievementShelf } from "../effects/achievementShelf.js";
 import {
@@ -510,6 +511,7 @@ export class OfficeScene extends Phaser.Scene {
     this.deskSticky = new DeskSticky(this);
     this.focusHeadphones = new FocusHeadphones(this);
     this.monitorCode = new MonitorCode(this);
+    this.monitorScreensaver = new MonitorScreensaver(this);
     this.rubberDuck = new RubberDuck(this);
     this.trophyShelf = new AchievementShelf(this);
     this.trophyShelf.start();
@@ -635,6 +637,7 @@ export class OfficeScene extends Phaser.Scene {
     this.deskSticky?.sync();
     this.focusHeadphones?.sync();
     this.monitorCode?.sync(delta);
+    this.monitorScreensaver?.sync(this.time.now);
     this.rubberDuck?.sync(this.time.now);
     this.printerScan?.update(this.time.now, delta);
     this.plantSway?.update(this.time.now);
@@ -1126,6 +1129,7 @@ export class OfficeScene extends Phaser.Scene {
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
+      monitorScreensaver: this.monitorScreensaver?.snapshot?.() ?? null,
       rubberDuck: this.rubberDuck?.snapshot?.() ?? null,
       printerScan: this.printerScan?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
