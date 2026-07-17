@@ -89,6 +89,7 @@ import {
 } from "../effects/chatPing.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
+import { WhiteboardScribble } from "../effects/whiteboardScribble.js";
 import { LobbySignage } from "../ui/lobbySignage.js";
 import { EntranceGate } from "../ui/entranceGate.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -312,8 +313,10 @@ export class OfficeScene extends Phaser.Scene {
 
     this.minimap = new Minimap(this);
     this.whiteboardTicker = new WhiteboardTicker(this);
+    this.whiteboardScribble = new WhiteboardScribble(this);
     if (this.lastSnapshot) {
       this.whiteboardTicker.updateFromSnapshot(this.lastSnapshot);
+      this.whiteboardScribble.updateFromSnapshot(this.lastSnapshot);
     }
     // lobby wall TV — kanban counts; ?signage=0 off
     this.lobbySignage = new LobbySignage(this);
@@ -683,6 +686,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rugSheen?.update(this.time.now, delta);
     this.sleepRugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
+    this.whiteboardScribble?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
     this.roundTableIdle?.update(this.time.now, delta);
     this.dualDeskIdle?.update(this.time.now, delta);
@@ -725,6 +729,7 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.kanbanPanel || !snapshot) return;
     const panelState = this.kanbanPanel.update(snapshot, opts);
     this.whiteboardTicker?.updateFromSnapshot(snapshot);
+    this.whiteboardScribble?.updateFromSnapshot(snapshot);
     this.lobbySignage?.updateFromSnapshot(snapshot);
     this.trophyShelf?.updateFromSnapshot(snapshot);
     if (typeof window !== "undefined") {
@@ -1222,6 +1227,7 @@ export class OfficeScene extends Phaser.Scene {
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
+      whiteboardScribble: this.whiteboardScribble?.snapshot?.() ?? null,
       signage: this.lobbySignage?.snapshot?.() ?? null,
       gate: this.entranceGate?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
