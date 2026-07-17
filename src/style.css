@@ -1262,6 +1262,218 @@ body,
   text-align: center;
 }
 
+/* ── KPI Dashboard ────────────────────────────────────────────── */
+
+.kpi-dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* KPI cards row */
+.kpi-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.kpi-card {
+  background: rgba(22, 32, 44, 0.8);
+  border: 1px solid #2a3a4a;
+  border-radius: 6px;
+  padding: 10px 8px;
+  text-align: center;
+  min-width: 0;
+}
+
+.kpi-card__icon {
+  font-size: 18px;
+  margin-bottom: 2px;
+}
+
+.kpi-card__value {
+  font-size: 20px;
+  font-weight: 700;
+  color: #e8eef4;
+  font-variant-numeric: tabular-nums;
+  transition: color 0.3s;
+}
+
+.kpi-card__value.is-fast { color: #5be0c8; }
+.kpi-card__value.is-mid { color: #f0c860; }
+.kpi-card__value.is-slow { color: #f08080; }
+
+.kpi-card__value-dim {
+  font-size: 14px;
+  font-weight: 400;
+  color: #6a7a8a;
+  margin-left: 2px;
+}
+
+.kpi-card__label {
+  font-size: 10px;
+  color: #8aa0b8;
+  margin-top: 2px;
+}
+
+.kpi-card__sub {
+  font-size: 10px;
+  color: #5a8a6a;
+  margin-top: 1px;
+}
+
+.kpi-card__bar-bg {
+  height: 3px;
+  background: #1a2a38;
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.kpi-card__bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #4aa894, #6ecfba);
+  border-radius: 2px;
+  transition: width 0.6s ease-out;
+}
+
+.kpi-card__bar-fill--blue {
+  background: linear-gradient(90deg, #4a7aba, #6e9fcf);
+}
+
+/* KPI grid (ranking + gauge) */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+/* Ranking */
+.kpi-ranking {
+  background: rgba(22, 32, 44, 0.7);
+  border: 1px solid #2a3a4a;
+  border-radius: 6px;
+  padding: 10px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+.kpi-rank-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 4px;
+  border-bottom: 1px solid #1a2a38;
+  font-size: 11px;
+}
+
+.kpi-rank-row:last-child { border-bottom: none; }
+
+.kpi-rank__pos {
+  width: 24px;
+  text-align: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.kpi-rank__name {
+  color: #c8d8e8;
+  font-weight: 600;
+  flex: 0 0 auto;
+  min-width: 60px;
+}
+
+.kpi-rank__stat {
+  color: #6ecfba;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.kpi-rank__speed {
+  color: #a0b8d0;
+  font-size: 10px;
+  flex-shrink: 0;
+}
+
+.kpi-rank__recent {
+  display: none;
+  color: #6a7a8a;
+  font-size: 10px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+
+@media (min-width: 640px) {
+  .kpi-rank__recent { display: inline; }
+}
+
+/* Speed gauge */
+.kpi-gauge-section {
+  background: rgba(22, 32, 44, 0.7);
+  border: 1px solid #2a3a4a;
+  border-radius: 6px;
+  padding: 10px;
+  text-align: center;
+}
+
+.kpi-gauge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 0;
+}
+
+.kpi-gauge__ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+}
+
+.kpi-gauge__svg {
+  width: 100%;
+  height: 100%;
+}
+
+.kpi-gauge__arc {
+  transition: stroke-dasharray 0.8s ease-out;
+  transform-origin: center;
+}
+
+.kpi-gauge__center {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.kpi-gauge__value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #e8eef4;
+}
+
+.kpi-gauge__label {
+  font-size: 10px;
+  color: #8aa0b8;
+  margin-top: 1px;
+}
+
+.kpi-gauge__trend {
+  font-size: 10px;
+  color: #6a8a7a;
+  margin-top: 4px;
+}
+
+/* responsive KPI */
+@media (max-width: 800px) {
+  .kpi-cards { grid-template-columns: repeat(2, 1fr); }
+  .kpi-grid { grid-template-columns: 1fr; }
+}
+
 @media (max-width: 640px) {
   #app {
     top: 40px;

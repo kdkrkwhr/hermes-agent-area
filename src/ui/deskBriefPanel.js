@@ -1,6 +1,8 @@
 /** DOM overlay: CEO desk 4-tab bookmark panel — weather/news, stock, kanban, files.
  *  WebSocket live updates from local BE; mock data fallback for GitHub Pages. */
 
+import { buildKpiPane, buildMockKpi, renderKpi } from "./kpiDashboard.js";
+
 function escapeHtml(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -83,7 +85,7 @@ async function fetchJson(url) {
 export async function loadDeskBrief() {
   try {
     const local = await fetchJson("/api/desk-brief");
-    if (local?.weather || local?.news || local?.stock || local?.kanban || local?.files) {
+    if (local?.weather || local?.news || local?.stock || local?.kanban || local?.kpi || local?.files) {
       return { ...local, source: local.source || "be" };
     }
   } catch {
@@ -194,6 +196,7 @@ function buildMockPayload() {
       },
       source: "demo",
     },
+    kpi: buildMockKpi(),
     source: "demo",
   };
 }
@@ -220,6 +223,7 @@ export function createDeskBriefPanel(opts) {
         <button class="dbp__tab" data-tab="stock">📊<br>주식</button>
         <button class="dbp__tab" data-tab="kanban">📋<br>칸반</button>
         <button class="dbp__tab" data-tab="files">💻<br>내PC</button>
+        <button class="dbp__tab" data-tab="kpi">📊<br>KPI</button>
       </nav>
       <div class="dbp__content" data-role="content">
         <!-- weather/news pane -->
@@ -270,6 +274,14 @@ export function createDeskBriefPanel(opts) {
             </div>
           </div>
         </div>
+        <!-- kpi pane -->
+        <div class="dbp__pane" data-pane="kpi">
+          <div class="dbp__card dbp__card--kpi">
+            <div data-pane-content="kpi">
+              <p class="dbp__muted">연결 대기 중…</p>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
     <footer class="dbp__foot" data-role="foot"></footer>
@@ -289,6 +301,7 @@ export function createDeskBriefPanel(opts) {
   const elKanbanBody = root.querySelector('[data-pane-content="kanban"]');
   const elFilesTree = root.querySelector('[data-role="files-tree"]');
   const elFilesPreview = root.querySelector('[data-role="files-preview"]');
+  const elKpiBody = root.querySelector('[data-pane-content="kpi"]');
 
   let open = false;
   let activeTab = "weather";
@@ -540,6 +553,11 @@ export function createDeskBriefPanel(opts) {
     renderKanban(payload?.kanban);
     renderFilesTree(payload?.files);
 
+    // KPI pane: always build structure on first render, update when tab is active
+    if (payload?.kpi) {
+      _renderKpiContent(payload.kpi);
+    }
+
     var wAt = payload?.weather?.generatedAt || payload?.weather?.date || payload?.generated_at || "";
     var nAt = payload?.news?.generatedAt || payload?.news?.date || "";
     var src = payload?.source || (wAt || nAt ? "ws" : "—");
@@ -564,6 +582,18 @@ export function createDeskBriefPanel(opts) {
     elNewsBody.innerHTML = '<p class="dbp__muted">' + m + '</p>';
     elStockBody.innerHTML = '<p class="dbp__muted">' + m + '</p>';
     elKanbanBody.innerHTML = '<p class="dbp__muted">' + m + '</p>';
+    if (elKpiBody) elKpiBody.innerHTML = '<p class="dbp__muted">' + m + '</p>';
+  }
+
+  // ── KPI rendering ─────────────────────────────────────────
+  var _kpiBuilt = false;
+  function _renderKpiContent(kpiData) {
+    if (!elKpiBody) return;
+    if (!_kpiBuilt) {
+      elKpiBody.innerHTML = buildKpiPane();
+      _kpiBuilt = true;
+    }
+    renderKpi(elKpiBody, kpiData);
   }
 
   function applyDemo() {

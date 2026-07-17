@@ -619,12 +619,134 @@ class AgentState:
         }
 
 
+def build_kpi_from_kanban() -> dict[str, Any]:
+    """Build KPI metrics from kanban DB: completion counts, rates, agent rankings."""
+    now = time.time()
+    week_ago = now - 7 * 86400
+    kpi: dict[str, Any] = {
+        "total_completed": 0,
+        "completion_rate": 0,
+        "avg_response_sec": 0,
+        "active_agents": 0,
+        "total_agents": 0,
+        "agent_ranking": [],
+        "weekly": {"completed": 0, "avg_speed_sec": 0},
+        "generated_at": now,
+        "source": "be",
+    }
+
+    conn = _kanban_connect()
+    if not conn:
+        kpi["source"] = "empty"
+        return kpi
+
+    try:
+        # Total completed (all time)
+        total_done = conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status = 'done'"
+        ).fetchone()
+        kpi["total_completed"] = total_done[0] if total_done else 0
+
+        # Total tasks (non-archived)
+        total_tasks = conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status != 'archived'"
+        ).fetchone()
+        total_count = total_tasks[0] if total_tasks else 0
+
+        # Completion rate
+        done_count = conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status = 'done'"
+        ).fetchone()
+        done = done_count[0] if done_count else 0
+        all_count = conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status != 'archived' AND status != 'todo'"
+        ).fetchone()
+        all_t = all_count[0] if all_count else 1
+        kpi["completion_rate"] = round((done / max(all_t, 1)) * 100, 1)
+
+        # Active agents (distinct assignees with non-done/archived tasks)
+        active = conn.execute(
+            "SELECT COUNT(DISTINCT assignee) FROM tasks WHERE status IN ('running','chatting','blocked','ready','review') AND assignee IS NOT NULL AND assignee != ''"
+        ).fetchone()
+        kpi["active_agents"] = active[0] if active else 0
+
+        # Total agent count (distinct assignees ever)
+        total_assignees = conn.execute(
+            "SELECT COUNT(DISTINCT assignee) FROM tasks WHERE assignee IS NOT NULL AND assignee != ''"
+        ).fetchone()
+        kpi["total_agents"] = total_assignees[0] if total_assignees else 0
+
+        # Average response time (completed_at - started_at for recently done tasks)
+        avg_res = conn.execute(
+            "SELECT AVG(completed_at - started_at) FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL AND started_at IS NOT NULL AND completed_at > started_at AND completed_at > ?",
+            (now - 30 * 86400,),
+        ).fetchone()
+        avg_sec = avg_res[0] if avg_res and avg_res[0] else 0
+        kpi["avg_response_sec"] = round(float(avg_sec))
+
+        # Weekly completed
+        weekly_done = conn.execute(
+            "SELECT COUNT(*) FROM tasks WHERE status = 'done' AND completed_at > ?",
+            (week_ago,),
+        ).fetchone()
+        kpi["weekly"]["completed"] = weekly_done[0] if weekly_done else 0
+
+        # Weekly avg speed
+        weekly_avg = conn.execute(
+            "SELECT AVG(completed_at - started_at) FROM tasks WHERE status = 'done' AND completed_at IS NOT NULL AND started_at IS NOT NULL AND completed_at > started_at AND completed_at > ?",
+            (week_ago,),
+        ).fetchone()
+        kpi["weekly"]["avg_speed_sec"] = round(float(weekly_avg[0])) if weekly_avg and weekly_avg[0] else 0
+
+        # Agent ranking: per-assignee completed count + avg speed
+        agent_rows = conn.execute(
+            """
+            SELECT assignee,
+                   COUNT(*) as completed,
+                   ROUND(AVG(completed_at - started_at)) as avg_speed
+            FROM tasks
+            WHERE status = 'done'
+              AND assignee IS NOT NULL AND assignee != ''
+              AND completed_at IS NOT NULL
+              AND started_at IS NOT NULL
+              AND completed_at > started_at
+            GROUP BY assignee
+            ORDER BY completed DESC
+            LIMIT 10
+            """
+        ).fetchall()
+
+        for row in agent_rows:
+            assignee, completed, avg_speed = row
+            # Get recent task titles for this assignee
+            recent = conn.execute(
+                "SELECT id, title FROM tasks WHERE assignee = ? AND status = 'done' ORDER BY completed_at DESC LIMIT 3",
+                (assignee,),
+            ).fetchall()
+            kpi["agent_ranking"].append({
+                "profile": assignee,
+                "display_name": resolve_display_name(assignee),
+                "completed": completed,
+                "avg_speed_sec": int(avg_speed) if avg_speed else 0,
+                "recent_tasks": [{"id": r[0], "title": r[1]} for r in recent],
+            })
+
+    except Exception as e:
+        kpi["error"] = str(e)
+        kpi["source"] = "error"
+    finally:
+        conn.close()
+
+    return kpi
+
+
 @dataclass
 class DeskBrief:
     weather: dict[str, Any] | None = None
     news: dict[str, Any] | None = None
     stock: dict[str, Any] | None = None
     kanban: dict[str, Any] | None = None
+    kpi: dict[str, Any] | None = None
     weather_mtime: float | None = None
     news_mtime: float | None = None
     stock_mtime: float | None = None
@@ -636,6 +758,7 @@ class DeskBrief:
             "news": self.news,
             "stock": self.stock,
             "kanban": self.kanban,
+            "kpi": self.kpi,
             "generated_at": self.generated_at,
         }
 
@@ -804,6 +927,7 @@ class OfficeSim:
                 "news": self.desk_brief.news,
                 "stock": self.desk_brief.stock,
                 "kanban": self.desk_brief.kanban,
+                "kpi": self.desk_brief.kpi,
                 "generated_at": self.desk_brief.generated_at,
             },
             ensure_ascii=False,
@@ -829,6 +953,7 @@ class OfficeSim:
                     "news": self.desk_brief.news,
                     "stock": self.desk_brief.stock,
                     "kanban": self.desk_brief.kanban,
+                    "kpi": self.desk_brief.kpi,
                     "generated_at": self.desk_brief.generated_at,
                 },
                 ensure_ascii=False,
@@ -858,6 +983,7 @@ class OfficeSim:
             self.desk_brief.news = news
             self.desk_brief.stock = stock
             self.desk_brief.kanban = kanban
+            self.desk_brief.kpi = build_kpi_from_kanban()
             self.desk_brief.weather_mtime = w_mtime
             self.desk_brief.news_mtime = n_mtime
             self.desk_brief.stock_mtime = s_mtime
@@ -1071,6 +1197,7 @@ def api_desk_brief():
         "news": news,
         "stock": stock,
         "kanban": kanban,
+        "kpi": build_kpi_from_kanban(),
         "files": files,
         "source": "be-pwa" if weather or news or kanban.get("by_assignee") else "empty",
         "paths": {
