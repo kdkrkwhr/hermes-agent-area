@@ -36,6 +36,7 @@ import { LampMoths } from "../effects/lampMoths.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { CityLights } from "../effects/cityLights.js";
+import { WindowBirds } from "../effects/windowBirds.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
@@ -478,6 +479,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.sunBeams = new SunBeams(this);
     this.cityLights = new CityLights(this);
+    this.windowBirds = new WindowBirds(this);
     this.coffeeSteam = new CoffeeSteam(this);
     this.aquariumBubbles = new AquariumBubbles(this);
     this.aquariumFish = new AquariumFish(this);
@@ -524,6 +526,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dustMotes?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
+    this.windowBirds?.sync();
     this.coffeeSteam?.sync();
     this.aquariumBubbles?.sync();
     this.aquariumFish?.sync();
@@ -1058,6 +1061,7 @@ export class OfficeScene extends Phaser.Scene {
       dust: this.dustMotes?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
+      birds: this.windowBirds?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,

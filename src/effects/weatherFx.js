@@ -200,6 +200,8 @@ export class WeatherFx {
 
     this.scene.dustMotes?.setCloudy(!!cls.cloudy);
 
+    this.scene.windowBirds?.sync();
+
     this._applyCloudOverlay(cls);
     this._maybeToast(cls);
     this.publish();
@@ -265,6 +267,7 @@ export class WeatherFx {
     this.scene.snowFlakes?.setWeatherForceOn(false);
     this.scene.dustMotes?.setCloudy(false);
     this.cloudOverlay?.setFillStyle(0x6a7a8a, 0);
+    this.scene.windowBirds?.sync();
   }
 
   snapshot() {
