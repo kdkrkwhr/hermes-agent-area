@@ -45,6 +45,7 @@ import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
+import { MonitorCode } from "../effects/monitorCode.js";
 import { AchievementShelf } from "../effects/achievementShelf.js";
 import {
   burstTaskCelebrate,
@@ -484,6 +485,7 @@ export class OfficeScene extends Phaser.Scene {
     this.wallClock = new WallClock(this);
     this.deskSticky = new DeskSticky(this);
     this.focusHeadphones = new FocusHeadphones(this);
+    this.monitorCode = new MonitorCode(this);
     this.trophyShelf = new AchievementShelf(this);
     this.trophyShelf.start();
     this.plantSway = new PlantSway(this);
@@ -591,6 +593,7 @@ export class OfficeScene extends Phaser.Scene {
     this.meetingProjector?.update(this.time.now, delta);
     this.deskSticky?.sync();
     this.focusHeadphones?.sync();
+    this.monitorCode?.sync(delta);
     this.plantSway?.update(this.time.now);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -1062,6 +1065,7 @@ export class OfficeScene extends Phaser.Scene {
       wallClock: this.wallClock?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
+      monitorCode: this.monitorCode?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
