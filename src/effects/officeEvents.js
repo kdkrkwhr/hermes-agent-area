@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -35,6 +35,7 @@ const RANDOM_KINDS = [
   "hotfix_scramble",
   "build_fail",
   "code_freeze",
+  "sprint_retro",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -102,6 +103,17 @@ const REVIEW_AM_END = 12;
 const REVIEW_PM_START = 14;
 const REVIEW_PM_END = 17;
 const REVIEW_WEIGHT = 3;
+/** sprint_retro: War Room whiteboard gather + pastel sticky notes (ms) */
+const RETRO_HOLD_MIN_MS = 6000;
+const RETRO_HOLD_MAX_MS = 10000;
+const RETRO_TOASTS = ["회고 각!", "레트로!", "Keep/Problem/Try"];
+const RETRO_STICKY_TEX = "fx-retro-sticky";
+/** soft pastel sticky — pale yellow / pink / mint */
+const RETRO_TINTS = [0xfff3a0, 0xffb8d0, 0xa8f0d0, 0xffe8b0, 0xd8f5e8];
+/** weekday 16–18: higher pick weight */
+const RETRO_HOUR_START = 16;
+const RETRO_HOUR_END = 18;
+const RETRO_WEIGHT = 3;
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -402,6 +414,19 @@ function ensureReviewChalkTexture(scene) {
   g.fillStyle(0xffffff, 0.5);
   g.fillRect(1, 5, 5, 1.5);
   g.generateTexture(REVIEW_CHALK_TEX, 8, 8);
+  g.destroy();
+}
+
+/** Soft rounded sticky note for sprint_retro (pastel tint at emit). */
+function ensureRetroStickyTexture(scene) {
+  if (scene.textures.exists(RETRO_STICKY_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillRoundedRect(1, 1, 10, 10, 1.5);
+  g.fillStyle(0xffffff, 0.45);
+  g.fillRect(3, 4, 6, 1.2);
+  g.fillRect(3, 7, 4.5, 1.2);
+  g.generateTexture(RETRO_STICKY_TEX, 12, 12);
   g.destroy();
 }
 
@@ -799,6 +824,7 @@ export class OfficeEvents {
     this.deployCelebrateGathered = 0;
     this.birthdayBalloonsGathered = 0;
     this.reviewHuddleGathered = 0;
+    this.sprintRetroGathered = 0;
     this.pairProgrammingGathered = 0;
     this.mergeConflictGathered = 0;
     this.hotfixScrambleGathered = 0;
@@ -909,6 +935,8 @@ export class OfficeEvents {
       weekday &&
       ((hour >= REVIEW_AM_START && hour < REVIEW_AM_END) ||
         (hour >= REVIEW_PM_START && hour < REVIEW_PM_END));
+    const retroWindow =
+      weekday && hour >= RETRO_HOUR_START && hour < RETRO_HOUR_END;
     const coffeeSpillWindow =
       hour >= COFFEE_SPILL_HOUR_START && hour < COFFEE_SPILL_HOUR_END;
     const pairWindow =
@@ -936,6 +964,7 @@ export class OfficeEvents {
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
       else if (k === "review_huddle" && reviewWindow) weight = REVIEW_WEIGHT;
+      else if (k === "sprint_retro" && retroWindow) weight = RETRO_WEIGHT;
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       else if (k === "coffee_spill" && coffeeSpillWindow)
         weight = COFFEE_SPILL_WEIGHT;
@@ -993,6 +1022,7 @@ export class OfficeEvents {
     else if (kind === "mascot_zoomies") this.runMascotZoomies();
     else if (kind === "birthday_balloons") this.runBirthdayBalloons();
     else if (kind === "review_huddle") this.runReviewHuddle();
+    else if (kind === "sprint_retro") this.runSprintRetro();
     else if (kind === "coffee_spill") this.runCoffeeSpill();
     else if (kind === "pair_programming") this.runPairProgramming();
     else if (kind === "merge_conflict") this.runMergeConflict();
@@ -3205,6 +3235,182 @@ export class OfficeEvents {
     }
   }
 
+  /**
+   * Sprint retro: toast + pastel sticky notes at War Room whiteboard +
+   * idle-only 2–4 → meeting ring 6–10s. Skip if gathering. No running/blocked.
+   */
+  runSprintRetro() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      RETRO_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (RETRO_HOLD_MAX_MS - RETRO_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      RETRO_TOASTS[Math.floor(Math.random() * RETRO_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playRetroRustle();
+
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const anchor = findWhiteboardAnchor(this.scene);
+    const px = Number.isFinite(anchor?.x)
+      ? anchor.x
+      : tileCenter(this.scene, meet.x, meet.y).x;
+    const py = Number.isFinite(anchor?.y)
+      ? anchor.y
+      : tileCenter(this.scene, meet.x, meet.y).y;
+    this.spawnRetroStickies(px, py, Math.min(5000, holdMs));
+
+    const glow = this.scene.add.circle(px, py + 8, 48, 0xfff3a0, 0.28);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.35,
+      duration: Math.min(3200, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToSprintRetro(holdMs);
+  }
+
+  /** Soft pastel sticky-note flecks at whiteboard. */
+  spawnRetroStickies(x, y, ms = 4000) {
+    ensureRetroStickyTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, RETRO_STICKY_TEX, {
+      speedX: { min: -26, max: 26 },
+      speedY: { min: -28, max: 6 },
+      gravityY: 22,
+      scale: { start: 0.95, end: 0.35 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 800, max: 1400 },
+      frequency: 75,
+      quantity: 1,
+      tint: RETRO_TINTS,
+      rotate: { min: -25, max: 25 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle only 2–4 → War Room meeting ±1; hold 6–10s → restore. */
+  async gatherIdleToSprintRetro(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const spots = meetingOffsets(meet);
+    const hold =
+      holdMs ??
+      RETRO_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (RETRO_HOLD_MAX_MS - RETRO_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.sprintRetroGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft paper rustle — skip if muted/locked. */
+  playRetroRustle() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const bufferSize = Math.floor(ctx.sampleRate * 0.08);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        const env = 1 - i / bufferSize;
+        data[i] = (Math.random() * 2 - 1) * 0.35 * env * env;
+      }
+      const src = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      src.buffer = buffer;
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1800, t0);
+      filter.Q.setValueAtTime(0.7, t0);
+      gain.gain.setValueAtTime(0.028, t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(t0);
+      src.stop(t0 + 0.1);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
 
   /**
    * Pair programming: toast + cyan/teal monitor sparkle at dualDesk +
@@ -4043,6 +4249,7 @@ export class OfficeEvents {
       deployCelebrateGathered: this.deployCelebrateGathered,
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
       reviewHuddleGathered: this.reviewHuddleGathered,
+      sprintRetroGathered: this.sprintRetroGathered,
       pairProgrammingGathered: this.pairProgrammingGathered,
       mergeConflictGathered: this.mergeConflictGathered,
       hotfixScrambleGathered: this.hotfixScrambleGathered,

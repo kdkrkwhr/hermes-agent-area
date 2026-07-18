@@ -62,6 +62,7 @@
     "smoke:birthdayballoons": "node scripts/smoke-birthdayballoons.mjs",
     "smoke:coffeespill": "node scripts/smoke-coffeespill.mjs",
     "smoke:reviewhuddle": "node scripts/smoke-reviewhuddle.mjs",
+    "smoke:sprintretro": "node scripts/smoke-sprintretro.mjs",
     "smoke:pairprogramming": "node scripts/smoke-pairprogramming.mjs",
     "smoke:mergeconflict": "node scripts/smoke-mergeconflict.mjs",
     "smoke:hotfixscramble": "node scripts/smoke-hotfixscramble.mjs",

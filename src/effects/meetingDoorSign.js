@@ -139,7 +139,7 @@ function meetingGatherActive(scene) {
   // Prefer sticky flag — ship_it can overwrite lastEvent mid-gather.
   if (oe._standupGathering) return true;
   if (!oe.isGathering?.()) return false;
-  return oe.lastEvent === "standup" || oe.lastEvent === "all_hands" || oe.lastEvent === "review_huddle";
+  return oe.lastEvent === "standup" || oe.lastEvent === "all_hands" || oe.lastEvent === "review_huddle" || oe.lastEvent === "sprint_retro";
 }
 
 /**
@@ -217,7 +217,9 @@ export class MeetingDoorSign {
           ? "standup"
           : oe?.lastEvent === "review_huddle"
             ? "review_huddle"
-            : "all_hands";
+            : oe?.lastEvent === "sprint_retro"
+              ? "sprint_retro"
+              : "all_hands";
       return { want: true, reason: kind };
     }
     this.meetingCount = countAgentsInMeeting(this.scene);
