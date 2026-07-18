@@ -1,6 +1,7 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` / `?events=birthday_balloons` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` / `?events=review_huddle` force. */
 
 import Phaser from "phaser";
+import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
 
 const RANDOM_KINDS = [
   "standup",
@@ -25,6 +26,7 @@ const RANDOM_KINDS = [
   "deploy_celebrate",
   "mascot_zoomies",
   "birthday_balloons",
+  "review_huddle",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -67,6 +69,19 @@ const BIRTHDAY_TOASTS = ["생일이다!", "생일 ㅊㅋ", "케이크 각?"];
 const BIRTHDAY_BALLOON_TEX = "fx-balloon";
 /** pastel pink / sky / lavender */
 const BIRTHDAY_TINTS = [0xff8eb8, 0x7ec8ff, 0xc9a0ff];
+/** review_huddle: War Room whiteboard gather + soft amber chalk (ms) */
+const REVIEW_HOLD_MIN_MS = 6000;
+const REVIEW_HOLD_MAX_MS = 10000;
+const REVIEW_TOASTS = ["리뷰 허들!", "PR 각?", "리뷰 ㄱㄱ"];
+const REVIEW_CHALK_TEX = "fx-chalk";
+/** soft amber chalk dust */
+const REVIEW_TINTS = [0xe8b060, 0xd4a050, 0xf0c878, 0xffe8c0];
+/** weekday 10–12 · 14–17: higher pick weight */
+const REVIEW_AM_START = 10;
+const REVIEW_AM_END = 12;
+const REVIEW_PM_START = 14;
+const REVIEW_PM_END = 17;
+const REVIEW_WEIGHT = 3;
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -233,6 +248,18 @@ function ensureBirthdayBalloonTexture(scene) {
   g.fillStyle(0xe8e0d8, 0.9);
   g.fillRect(7, 14, 2, 4);
   g.generateTexture(BIRTHDAY_BALLOON_TEX, 16, 20);
+  g.destroy();
+}
+
+/** Soft chalk speck for review_huddle (tinted amber at emit). */
+function ensureReviewChalkTexture(scene) {
+  if (scene.textures.exists(REVIEW_CHALK_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 0.95);
+  g.fillCircle(3, 3, 2.5);
+  g.fillStyle(0xffffff, 0.5);
+  g.fillRect(1, 5, 5, 1.5);
+  g.generateTexture(REVIEW_CHALK_TEX, 8, 8);
   g.destroy();
 }
 
@@ -417,6 +444,25 @@ function isAllHandsGatherable(agent) {
   );
 }
 
+/** idle + review + blocked — PR review huddle at War Room. */
+function isReviewHuddleGatherable(agent) {
+  if (!agent?.sprite) return false;
+  const s = agent?.serverStatus;
+  if (s === "running" || s === "chatting" || s === "offline" || s === "todo") {
+    return false;
+  }
+  if (agent.live) {
+    return s === "idle" || s === "review" || s === "blocked";
+  }
+  const kind = agent.getEffectKind?.();
+  return (
+    kind === "idle" ||
+    agent.currentKind === "review" ||
+    agent.currentKind === "blocked" ||
+    agent.currentKind === "queue"
+  );
+}
+
 /** idle or running (desk/focus) — stretch in place, no gather move. */
 function isStretchEligible(agent) {
   if (!agent?.sprite) return false;
@@ -476,6 +522,7 @@ export class OfficeEvents {
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
     this.birthdayBalloonsGathered = 0;
+    this.reviewHuddleGathered = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -576,6 +623,10 @@ export class OfficeEvents {
       weekday &&
       ((hour >= DEPLOY_AM_START && hour < DEPLOY_AM_END) ||
         (hour >= DEPLOY_PM_START && hour < DEPLOY_PM_END));
+    const reviewWindow =
+      weekday &&
+      ((hour >= REVIEW_AM_START && hour < REVIEW_AM_END) ||
+        (hour >= REVIEW_PM_START && hour < REVIEW_PM_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -590,6 +641,7 @@ export class OfficeEvents {
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
+      else if (k === "review_huddle" && reviewWindow) weight = REVIEW_WEIGHT;
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
@@ -639,6 +691,7 @@ export class OfficeEvents {
     else if (kind === "deploy_celebrate") this.runDeployCelebrate();
     else if (kind === "mascot_zoomies") this.runMascotZoomies();
     else if (kind === "birthday_balloons") this.runBirthdayBalloons();
+    else if (kind === "review_huddle") this.runReviewHuddle();
 
     this.publish();
   }
@@ -2446,6 +2499,178 @@ export class OfficeEvents {
     }
   }
 
+  /**
+   * Review huddle: toast + soft amber chalk at War Room whiteboard +
+   * idle/review/blocked 2–4 → meeting ring 6–10s. Skip if gathering.
+   */
+  runReviewHuddle() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      REVIEW_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (REVIEW_HOLD_MAX_MS - REVIEW_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      REVIEW_TOASTS[Math.floor(Math.random() * REVIEW_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playReviewChalk();
+
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const anchor = findWhiteboardAnchor(this.scene);
+    const px = Number.isFinite(anchor?.x)
+      ? anchor.x
+      : tileCenter(this.scene, meet.x, meet.y).x;
+    const py = Number.isFinite(anchor?.y)
+      ? anchor.y
+      : tileCenter(this.scene, meet.x, meet.y).y;
+    this.spawnReviewChalk(px, py, Math.min(5000, holdMs));
+
+    const glow = this.scene.add.circle(px, py + 8, 48, 0xe8b060, 0.32);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.35,
+      duration: Math.min(3200, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToReviewHuddle(holdMs);
+  }
+
+  /** Soft amber chalk flecks at whiteboard. */
+  spawnReviewChalk(x, y, ms = 4000) {
+    ensureReviewChalkTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, REVIEW_CHALK_TEX, {
+      speedX: { min: -22, max: 22 },
+      speedY: { min: -18, max: 8 },
+      gravityY: 18,
+      scale: { start: 0.85, end: 0.2 },
+      alpha: { start: 0.88, end: 0 },
+      lifespan: { min: 700, max: 1300 },
+      frequency: 70,
+      quantity: 1,
+      tint: REVIEW_TINTS,
+      rotate: { min: -40, max: 40 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/review/blocked 2–4 → War Room meeting ±1; hold 6–10s → restore. */
+  async gatherIdleToReviewHuddle(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isReviewHuddleGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const spots = meetingOffsets(meet);
+    const hold =
+      holdMs ??
+      REVIEW_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (REVIEW_HOLD_MAX_MS - REVIEW_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.reviewHuddleGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (
+          !isReviewHuddleGatherable(agent) &&
+          !isStandupGatherable(agent)
+        ) {
+          continue;
+        }
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft chalk tick — skip if muted/locked. */
+  playReviewChalk() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(880, t0);
+      osc.frequency.exponentialRampToValueAtTime(420, t0 + 0.08);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.035, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.11);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -2641,6 +2866,7 @@ export class OfficeEvents {
       happyHourGathered: this.happyHourGathered,
       deployCelebrateGathered: this.deployCelebrateGathered,
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
+      reviewHuddleGathered: this.reviewHuddleGathered,
       mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,
