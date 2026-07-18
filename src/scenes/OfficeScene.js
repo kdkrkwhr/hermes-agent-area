@@ -32,6 +32,11 @@ import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
 import { FogMist } from "../effects/fogMist.js";
 import { WindowBirds } from "../effects/windowBirds.js";
+import { DustMotes } from "../effects/dustMotes.js";
+import { PlantSway } from "../effects/plantSway.js";
+import { WallPosterAmbient } from "../effects/wallPosterAmbient.js";
+import { SunBeams } from "../effects/sunBeams.js";
+import { AchievementShelf } from "../effects/achievementShelf.js";
 import { WeatherFx } from "../effects/weatherFx.js";
 import { NightFlashlight } from "../effects/nightFlashlight.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
@@ -56,6 +61,15 @@ import { FocusDndSign } from "../effects/focusDndSign.js";
 import { MonitorCode } from "../effects/monitorCode.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ExitNeon } from "../effects/exitNeon.js";
+import { SofaCushion } from "../effects/sofaCushion.js";
+import { BeanbagBounce } from "../effects/beanbagBounce.js";
+import { ChairSwivel } from "../effects/chairSwivel.js";
+import { ExecChairSwivel } from "../effects/execChairSwivel.js";
+import { RugSheen } from "../effects/rugSheen.js";
+import { SleepRugSheen } from "../effects/sleepRugSheen.js";
+import { RoundTableIdle } from "../effects/roundTableIdle.js";
+import { MahoDeskGleam } from "../effects/mahoDeskGleam.js";
+import { CeoCityWindow } from "../effects/ceoCityWindow.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -514,17 +528,32 @@ export class OfficeScene extends Phaser.Scene {
     this.openDeskIdle = new OpenDeskIdle(this);
     this.glassDoorSwing = new GlassDoorSwing(this);
     this.napPodBreathe = new NapPodBreathe(this);
-    // weatherFx contracts: fogMist / windowBirds must exist before WeatherFx
+    // weatherFx contracts: fogMist / windowBirds / dustMotes before WeatherFx
     this.fogMist = new FogMist(this, { mapW, mapH });
     this.windowBirds = new WindowBirds(this);
+    this.dustMotes = new DustMotes(this, { mapW, mapH });
+    this.plantSway = new PlantSway(this);
+    this.wallPosterAmbient = new WallPosterAmbient(this);
+    this.sunBeams = new SunBeams(this);
+    this.trophyShelf = new AchievementShelf(this);
     this.robotVacuum = new RobotVacuum(this);
     this.exitNeon = new ExitNeon(this);
     this.wallCalendar = new WallCalendar(this);
+    this.sofaCushion = new SofaCushion(this);
+    this.beanbagBounce = new BeanbagBounce(this);
+    this.chairSwivel = new ChairSwivel(this);
+    this.execChairSwivel = new ExecChairSwivel(this);
+    this.rugSheen = new RugSheen(this);
+    this.sleepRugSheen = new SleepRugSheen(this);
+    this.roundTableIdle = new RoundTableIdle(this);
+    this.mahoDeskGleam = new MahoDeskGleam(this);
+    this.ceoCityWindow = new CeoCityWindow(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
     this.applyTimeOfDayLighting();
     this.weatherFx.start();
+    this.trophyShelf?.start?.();
     maybeForceCelebrate(this, this.agents);
     maybeForceChatPing(this, this.agents);
     this._visualEffectsReady = true;
@@ -564,9 +593,22 @@ export class OfficeScene extends Phaser.Scene {
     this.napPodBreathe?.sync();
     this.fogMist?.sync();
     this.windowBirds?.sync();
+    this.dustMotes?.sync();
+    this.plantSway?.sync();
+    this.wallPosterAmbient?.sync();
+    this.sunBeams?.sync();
     this.robotVacuum?.sync();
     this.exitNeon?.sync();
     this.wallCalendar?.sync();
+    this.sofaCushion?.sync();
+    this.beanbagBounce?.sync();
+    this.chairSwivel?.sync();
+    this.execChairSwivel?.sync();
+    this.rugSheen?.sync();
+    this.sleepRugSheen?.sync();
+    this.roundTableIdle?.sync();
+    this.mahoDeskGleam?.sync();
+    this.ceoCityWindow?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -639,9 +681,20 @@ export class OfficeScene extends Phaser.Scene {
     this.openDeskIdle?.update(this.time.now, delta);
     this.glassDoorSwing?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
+    this.plantSway?.update(this.time.now);
+    this.wallPosterAmbient?.update(this.time.now, delta);
     this.robotVacuum?.update(this.time.now, delta);
     this.exitNeon?.update(this.time.now);
     this.wallCalendar?.update(this.time.now, delta);
+    this.sofaCushion?.update(this.time.now, delta);
+    this.beanbagBounce?.update(this.time.now, delta);
+    this.chairSwivel?.update(this.time.now, delta);
+    this.execChairSwivel?.update(this.time.now, delta);
+    this.rugSheen?.update(this.time.now, delta);
+    this.sleepRugSheen?.update(this.time.now, delta);
+    this.roundTableIdle?.update(this.time.now, delta);
+    this.mahoDeskGleam?.update(this.time.now, delta);
+    this.ceoCityWindow?.update(this.time.now);
     this.lobbyPoster?.update(this.time.now, delta);
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
@@ -679,6 +732,7 @@ export class OfficeScene extends Phaser.Scene {
     const panelState = this.kanbanPanel.update(snapshot, opts);
     this.whiteboardTicker?.updateFromSnapshot(snapshot);
     this.lobbySignage?.updateFromSnapshot(snapshot);
+    this.trophyShelf?.updateFromSnapshot?.(snapshot);
     if (typeof window !== "undefined") {
       window.__HERMES_AREA__ = {
         ...(window.__HERMES_AREA__ || {}),
@@ -1174,9 +1228,23 @@ export class OfficeScene extends Phaser.Scene {
       snow: this.snowFlakes?.snapshot?.() ?? null,
       fog: this.fogMist?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
+      dust: this.dustMotes?.snapshot?.() ?? null,
+      plantSway: this.plantSway?.snapshot?.() ?? null,
+      wallPoster: this.wallPosterAmbient?.snapshot?.() ?? null,
+      sunbeam: this.sunBeams?.snapshot?.() ?? null,
+      trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       exitNeon: this.exitNeon?.snapshot?.() ?? null,
       wallCalendar: this.wallCalendar?.snapshot?.() ?? null,
+      sofa: this.sofaCushion?.snapshot?.() ?? null,
+      beanbag: this.beanbagBounce?.snapshot?.() ?? null,
+      chair: this.chairSwivel?.snapshot?.() ?? null,
+      execChair: this.execChairSwivel?.snapshot?.() ?? null,
+      rug: this.rugSheen?.snapshot?.() ?? null,
+      sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
+      roundTable: this.roundTableIdle?.snapshot?.() ?? null,
+      maho: this.mahoDeskGleam?.snapshot?.() ?? null,
+      ceoWindow: this.ceoCityWindow?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([
