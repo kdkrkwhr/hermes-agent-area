@@ -55,6 +55,7 @@ import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
 import { KitchenIdle } from "../effects/kitchenIdle.js";
 import { WaterCoolerIdle } from "../effects/waterCoolerIdle.js";
+import { CoatRackIdle } from "../effects/coatRackIdle.js";
 import { ServerRackLeds } from "../effects/serverRackLeds.js";
 import { DeskFanSpin } from "../effects/deskFanSpin.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
@@ -552,6 +553,7 @@ export class OfficeScene extends Phaser.Scene {
     this.vendingIdle = new VendingIdle(this);
     this.kitchenIdle = new KitchenIdle(this);
     this.waterCoolerIdle = new WaterCoolerIdle(this);
+    this.coatRackIdle = new CoatRackIdle(this);
     this.serverRackLeds = new ServerRackLeds(this);
     this.deskFanSpin = new DeskFanSpin(this);
     this.dualDeskIdle = new DualDeskIdle(this);
@@ -732,6 +734,7 @@ export class OfficeScene extends Phaser.Scene {
     this.vendingIdle?.update(this.time.now);
     this.kitchenIdle?.update(this.time.now);
     this.waterCoolerIdle?.update(this.time.now);
+    this.coatRackIdle?.update(this.time.now);
     this.serverRackLeds?.update(this.time.now);
     this.deskFanSpin?.update(this.time.now);
     this.dualDeskIdle?.update(this.time.now, delta);
@@ -1348,6 +1351,7 @@ export class OfficeScene extends Phaser.Scene {
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       kitchenIdle: this.kitchenIdle?.snapshot?.() ?? null,
       waterCoolerIdle: this.waterCoolerIdle?.snapshot?.() ?? null,
+      coatRackIdle: this.coatRackIdle?.snapshot?.() ?? null,
       serverRack: this.serverRackLeds?.snapshot?.() ?? null,
       deskFan: this.deskFanSpin?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
@@ -1367,6 +1371,7 @@ export class OfficeScene extends Phaser.Scene {
       vending: this.roomInteract?.vendingSnapshot?.() ?? null,
       fridge: this.roomInteract?.fridgeSnapshot?.() ?? null,
       microwave: this.roomInteract?.microwaveSnapshot?.() ?? null,
+      coatRack: this.roomInteract?.coatRackSnapshot?.() ?? null,
       posterQuote: this.roomInteract?.posterSnapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {

@@ -33,6 +33,7 @@ const VEND_MS = 400;
 const FRIDGE_MS = 500;
 const MICROWAVE_MS = 450;
 const COOLER_MS = 450;
+const COAT_RUSTLE_MS = 450;
 const FAN_WHIR_MS = 800;
 const HIGHFIVE_MS = 400;
 
@@ -634,6 +635,45 @@ export class OfficeAudio {
         gain.gain.exponentialRampToValueAtTime(vol, t + 0.006);
         gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Soft coat fabric rustle — respects mute / ?sfx=0. */
+  playCoatRustle() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastCoatRustleAt && now - this._lastCoatRustleAt < COAT_RUSTLE_MS) return;
+    this._lastCoatRustleAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const tones = [
+        { type: "triangle", f0: 380, f1: 160, at: 0, dur: 0.08, vol: 0.035 },
+        { type: "sine", f0: 220, f1: 90, at: 0.03, dur: 0.1, vol: 0.028 },
+      ];
+      for (const { type, f0, f1, at, dur, vol } of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+        osc.type = type;
+        const t = t0 + at;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(50, f1), t + dur);
+        filter.type = "bandpass";
+        filter.frequency.setValueAtTime(900, t);
+        filter.Q.setValueAtTime(0.6, t);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(vol, t + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(filter);
+        filter.connect(gain);
         gain.connect(ctx.destination);
         osc.start(t);
         osc.stop(t + dur + 0.02);

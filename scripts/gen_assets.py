@@ -548,8 +548,29 @@ def make_tileset() -> None:
     px(buf, w, ox + 10, oy + 9, (220, 235, 245, 160))
     rect(buf, w, ox + 3, oy + 2, ox + 13, oy + 12, (140, 160, 180, 255))
 
+    # 43 coatRack (gid 44) — SV lobby stand + hooks + coat silhouette
+    STAND = (120, 132, 148, 255)
+    STAND2 = (90, 100, 114, 255)
+    HOOK = (180, 190, 205, 255)
+    COAT = (70, 95, 140, 255)
+    COAT2 = (50, 70, 110, 255)
+    COAT_TRIM = (200, 210, 220, 255)
+    ox, oy = tile_at(3, 5)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 5, oy + 14, ox + 11, oy + 15, STAND2)  # base
+    fill(buf, w, ox + 7, oy + 2, ox + 9, oy + 14, STAND)  # pole
+    fill(buf, w, ox + 4, oy + 2, ox + 12, oy + 4, STAND2)  # top bar
+    px(buf, w, ox + 5, oy + 4, HOOK)
+    px(buf, w, ox + 10, oy + 4, HOOK)
+    # hanging coat silhouette
+    fill(buf, w, ox + 3, oy + 5, ox + 8, oy + 13, COAT)
+    fill(buf, w, ox + 4, oy + 6, ox + 7, oy + 12, COAT2)
+    fill(buf, w, ox + 4, oy + 5, ox + 7, oy + 6, COAT_TRIM)
+    px(buf, w, ox + 5, oy + 8, COAT_TRIM)
+    rect(buf, w, ox + 4, oy + 2, ox + 12, oy + 4, (150, 165, 180, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -579,6 +600,7 @@ def make_map_json() -> None:
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
       34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
       39 fridge  40 microwave  41 waterCooler  42 serverRack  43 deskFan
+      44 coatRack
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -787,6 +809,7 @@ def make_map_json() -> None:
     put(23, 27, 27)
     put(17, 27, 18, False)
     put(21, 27, 18, False)
+    put(22, 26, 44)  # coatRack W of east umbrella/poster (queue y=27 clear)
 
     # standlamps (GID 20) — Open Desk / lounge / corridor / focus / ceo walls
     # collision left clear (walk-through decor); lampGlow/moths scan these

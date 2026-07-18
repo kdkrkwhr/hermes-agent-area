@@ -15,6 +15,7 @@ const VENDING_GID = 38;
 const FRIDGE_GID = 39;
 const MICROWAVE_GID = 40;
 const WATER_COOLER_GID = 41;
+const COAT_RACK_GID = 44;
 const LINGER_MS = 4500;
 const AQUAFEED_MS = 7000;
 const AQUAFEED_COOLDOWN_MS = 15000;
@@ -88,6 +89,7 @@ const BOOKSHELF_TIPS = [
   "?statusring=0 으로 발밑 상태색 링 끄기",
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
+  "?coatrack=force 는 로비 코트랙 wet 스모크용",
   "playwright smoke는 ?events=0&sfx=0 추천",
   "가상사무실 FX 대부분 ?쿼리=0 로 끔",
   "칸반 blocked면 clarify 말고 kanban_block",
@@ -117,6 +119,16 @@ const COOLER_TOASTS = [
   "한 모금…",
   "컵 채우는 중",
   "물맛 괜찮네",
+];
+const COAT_RACK_TOASTS_HANG = [
+  "코트 걸었다",
+  "우비 걸어둠",
+  "옷걸이에 탁",
+];
+const COAT_RACK_TOASTS_TAKE = [
+  "코트 벗었다",
+  "코트 챙김",
+  "옷 가져감",
 ];
 const VISIT_KEY = "hermes-area-visit-count";
 const TYPING_FRAMES = ["·", "··", "···"];
@@ -220,6 +232,20 @@ function findWaterCoolerTiles(scene) {
       for (let tx = 0; tx < scene.map.width; tx++) {
         const tile = layer.getTileAt(tx, ty);
         if (tile?.index === WATER_COOLER_GID) hits.push(tileCenter(scene, tx, ty));
+      }
+    }
+  }
+  return hits;
+}
+
+function findCoatRackInteractTiles(scene) {
+  const hits = [];
+  const layer = scene.furniture;
+  if (layer?.getTileAt && scene.map) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === COAT_RACK_GID) hits.push(tileCenter(scene, tx, ty));
       }
     }
   }
@@ -382,6 +408,18 @@ function coolerEnabledFromQuery() {
   }
 }
 
+/** Default on; `?coatrack=0|false|off` disables E-interact (idle FX uses same query). */
+function coatRackEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("coatrack");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
 /** Default on; `?bookshelftip=0|false|off` disables E-tip only (ambient FX still on). */
 function bookshelfTipEnabledFromQuery() {
   if (typeof location === "undefined") return true;
@@ -442,6 +480,31 @@ function nearCooler(scene, coolerTiles) {
     if (Math.hypot(b.x - c.x, b.y - c.y) <= reach) return true;
   }
   return false;
+}
+
+function nearCoatRack(scene, coatRackTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !coatRackTiles?.length) return false;
+  const reach = scene.map.tileWidth * KITCHEN_NEAR_TILES;
+  for (const c of coatRackTiles) {
+    if (Math.hypot(b.x - c.x, b.y - c.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearestCoatRack(scene, coatRackTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !coatRackTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const c of coatRackTiles) {
+    const d = Math.hypot(b.x - c.x, b.y - c.y);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
 }
 
 function nearPoster(scene, posterTiles) {
@@ -744,6 +807,7 @@ export class RoomInteract {
     this.fridgeTiles = findFridgeTiles(scene);
     this.microwaveTiles = findMicrowaveTiles(scene);
     this.coolerTiles = findWaterCoolerTiles(scene);
+    this.coatRackTiles = findCoatRackInteractTiles(scene);
     this.plantTiles = findPlantTiles(scene);
     this.posterTiles = findLobbyPosterTiles(scene);
     this.bookshelfTiles = findBookshelfTiles(scene);
@@ -799,6 +863,13 @@ export class RoomInteract {
     this.lastCoolerAt = 0;
     this._lastCoolerTile = null;
     this._lastCoolerToast = null;
+    this.coatRackEnabled = coatRackEnabledFromQuery();
+    this.coatRackActiveUntil = 0;
+    this.coatRackCooldownUntil = 0;
+    this.lastCoatRackAt = 0;
+    this._lastCoatRackTile = null;
+    this._lastCoatRackToast = null;
+    this._coatHung = false;
     this.posterEnabled = posterEnabledFromQuery();
     this.posterCooldownUntil = 0;
     this.lastPosterAt = 0;
@@ -837,7 +908,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > nap > mascotpet > plantwater > poster > bookshelf > work
+    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > coatrack > nap > mascotpet > plantwater > poster > bookshelf > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -873,6 +944,13 @@ export class RoomInteract {
       !this.coolerActive()
     ) {
       return "cooler";
+    }
+    if (
+      this.coatRackEnabled &&
+      nearCoatRack(this.scene, this.coatRackTiles) &&
+      !this.coatRackActive()
+    ) {
+      return "coatrack";
     }
     if (nearSleep(this.scene)) return "nap";
     if (
@@ -942,6 +1020,12 @@ export class RoomInteract {
       }
       return "E 물마시기";
     }
+    if (k === "coatrack") {
+      if (this.coatRackCoolingDown()) {
+        return `코트랙 쿨다운 ${this.coatRackCooldownLeftSec()}s`;
+      }
+      return this._coatHung ? "E 코트 벗기" : "E 코트 걸기";
+    }
     if (k === "nap") return "E 낮잠";
     if (k === "mascotpet") {
       if (this.mascotPetCoolingDown()) {
@@ -993,6 +1077,9 @@ export class RoomInteract {
     }
     if (this.coolerEnabled && nearCooler(this.scene, this.coolerTiles)) {
       return this.startCooler();
+    }
+    if (this.coatRackEnabled && nearCoatRack(this.scene, this.coatRackTiles)) {
+      return this.startCoatRack();
     }
     if (nearSleep(this.scene)) {
       this.openNap();
@@ -1496,6 +1583,68 @@ export class RoomInteract {
     return true;
   }
 
+  coatRackActive() {
+    return this.scene.time.now < this.coatRackActiveUntil;
+  }
+
+  coatRackCoolingDown() {
+    return this.scene.time.now < this.coatRackCooldownUntil;
+  }
+
+  coatRackCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.coatRackCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startCoatRack() {
+    if (!this.coatRackEnabled) return false;
+    if (this.coatRackActive()) return true;
+    if (this.coatRackCoolingDown()) {
+      this.showToast(`코트랙 쿨다운 ${this.coatRackCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "coatrack_cooldown",
+        cooldownSec: this.coatRackCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const machine = nearestCoatRack(this.scene, this.coatRackTiles);
+    if (!machine) return false;
+    const now = this.scene.time.now;
+    const dur =
+      KITCHEN_MS_MIN +
+      Math.floor(Math.random() * (KITCHEN_MS_MAX - KITCHEN_MS_MIN + 1));
+    const cool =
+      KITCHEN_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (KITCHEN_COOLDOWN_MS_MAX - KITCHEN_COOLDOWN_MS_MIN + 1),
+      );
+    this._coatHung = !this._coatHung;
+    const toasts = this._coatHung ? COAT_RACK_TOASTS_HANG : COAT_RACK_TOASTS_TAKE;
+    const toast = toasts[Math.floor(Math.random() * toasts.length)];
+    this.lastCoatRackAt = now;
+    this.coatRackActiveUntil = now + dur;
+    this.coatRackCooldownUntil = now + cool;
+    this._lastCoatRackTile = { tx: machine.tx, ty: machine.ty };
+    this._lastCoatRackToast = toast;
+    this.scene.officeAudio?.playCoatRustle?.();
+    this.showToast(toast);
+    this.lastAction = {
+      kind: "coatrack_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      toast,
+      hung: this._coatHung,
+      machine: this._lastCoatRackTile,
+    };
+    this.publish();
+    return true;
+  }
+
   bookshelfActive() {
     return this.scene.time.now < this.bookshelfActiveUntil;
   }
@@ -1653,6 +1802,14 @@ export class RoomInteract {
       this.lastAction = {
         kind: "cooler_end",
         lastCoolerAt: this.lastCoolerAt,
+      };
+      this.publish();
+    }
+    if (this.coatRackActiveUntil && time >= this.coatRackActiveUntil) {
+      this.coatRackActiveUntil = 0;
+      this.lastAction = {
+        kind: "coatrack_end",
+        lastCoatRackAt: this.lastCoatRackAt,
       };
       this.publish();
     }
@@ -1898,6 +2055,23 @@ export class RoomInteract {
     };
   }
 
+  coatRackSnapshot() {
+    return {
+      enabled: !!this.coatRackEnabled,
+      active: this.coatRackActive(),
+      cooldown: this.coatRackCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.coatRackCooldownUntil - this.scene.time.now),
+      ),
+      lastCoatRackAt: this.lastCoatRackAt || null,
+      coatRackCount: this.coatRackTiles?.length ?? 0,
+      hung: !!this._coatHung,
+      lastMachine: this._lastCoatRackTile,
+      lastToast: this._lastCoatRackToast,
+    };
+  }
+
   posterSnapshot() {
     return {
       enabled: !!this.posterEnabled,
@@ -1928,6 +2102,7 @@ export class RoomInteract {
       fridgeTiles: this.fridgeTiles.map((f) => ({ tx: f.tx, ty: f.ty })),
       microwaveTiles: this.microwaveTiles.map((m) => ({ tx: m.tx, ty: m.ty })),
       coolerTiles: this.coolerTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
+      coatRackTiles: this.coatRackTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       plantTiles: this.plantTiles.map((p) => ({
         tx: p.tx,
         ty: p.ty,
@@ -1968,6 +2143,10 @@ export class RoomInteract {
       coolerEnabled: !!this.coolerEnabled,
       coolerActive: this.coolerActive(),
       coolerCooldown: this.coolerCoolingDown(),
+      coatRackEnabled: !!this.coatRackEnabled,
+      coatRackActive: this.coatRackActive(),
+      coatRackCooldown: this.coatRackCoolingDown(),
+      coatHung: !!this._coatHung,
       posterEnabled: !!this.posterEnabled,
       posterCooldown: this.posterCoolingDown(),
       lastPosterAt: this.lastPosterAt || null,
@@ -1986,6 +2165,7 @@ export class RoomInteract {
       fridge: this.fridgeSnapshot(),
       microwave: this.microwaveSnapshot(),
       cooler: this.coolerSnapshot(),
+      coatRack: this.coatRackSnapshot(),
       posterQuote: this.posterSnapshot(),
       bookshelfTip: this.bookshelfSnapshot(),
     };
@@ -1999,18 +2179,21 @@ export {
   findFridgeTiles,
   findMicrowaveTiles,
   findWaterCoolerTiles,
+  findCoatRackInteractTiles,
   COFFEE_GID,
   AQUARIUM_GID,
   VENDING_GID,
   FRIDGE_GID,
   MICROWAVE_GID,
   WATER_COOLER_GID,
+  COAT_RACK_GID,
   nearCoffee,
   nearAquarium,
   nearVending,
   nearFridge,
   nearMicrowave,
   nearCooler,
+  nearCoatRack,
   nearSleep,
   nearMascot,
   nearPlant,
@@ -2020,6 +2203,7 @@ export {
   fridgeEnabledFromQuery,
   microwaveEnabledFromQuery,
   coolerEnabledFromQuery,
+  coatRackEnabledFromQuery,
   bookshelfTipEnabledFromQuery,
   nearBookshelf,
   BOOKSHELF_TIPS,
