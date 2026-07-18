@@ -1,7 +1,7 @@
 /** Focus server rack (GID42) LED soft blink / chase ambient.
  *  `?rack=0|off|false` off · `?rack=force` smoke (faster chase).
  *  Running agents → slightly faster period (optional load feel).
- *  Proximity: soft hint label only (no E-key).
+ *  Proximity: soft "E 서버랙" hint; E-key interact → short cyan/amber burst.
  */
 
 const SERVER_RACK_GID = 42;
@@ -12,9 +12,13 @@ const PERIOD_MS = 2600;
 const FORCE_PERIOD_MS = 1100;
 /** Min period when many agents running. */
 const BUSY_PERIOD_MS = 1600;
+/** E-interact LED burst period (~3–5 chase ticks in 1–1.5s). */
+const INTERACT_PERIOD_MS = 280;
 const HINT_NEAR_TILES = 2.2;
 const LED_COLORS = [0x50dc98, 0x66e8ff, 0xff6a4a, 0xffd060];
+const INTERACT_COLORS = [0x66e8ff, 0xffd060, 0x88f0ff, 0xffb84a];
 const GLOW = 0x44c8ee;
+const INTERACT_GLOW = 0xffc070;
 
 /**
  * Query: omit = on. `0`/`off`/`false` = never. `force`/`1`/`on`/`true` = smoke.
@@ -119,6 +123,7 @@ export class ServerRackLeds {
     this.racks = this.enabled ? findServerRackTiles(scene) : [];
     this.active = false;
     this.near = false;
+    this.interacting = false;
     this.runningCount = 0;
     this.periodMs = this.forced ? FORCE_PERIOD_MS : PERIOD_MS;
     this._lastKey = "";
@@ -127,7 +132,7 @@ export class ServerRackLeds {
     this.gfx.setBlendMode("ADD");
 
     this.hint = scene.add
-      .text(0, 0, "서버랙", {
+      .text(0, 0, "E 서버랙", {
         fontFamily: "Segoe UI, sans-serif",
         fontSize: "11px",
         color: "#a8e8ff",
@@ -143,6 +148,10 @@ export class ServerRackLeds {
     this.update(scene.time?.now ?? 0);
   }
 
+  isInteracting() {
+    return this.scene.roomInteract?.rackActive?.() ?? false;
+  }
+
   /**
    * @param {number} [time]
    */
@@ -150,6 +159,7 @@ export class ServerRackLeds {
     if (!this.enabled || !this.racks.length) {
       this.active = false;
       this.near = false;
+      this.interacting = false;
       this.gfx.clear();
       this.gfx.setVisible(false);
       this.hint?.setVisible(false);
@@ -158,7 +168,10 @@ export class ServerRackLeds {
     }
 
     this.runningCount = countRunningAgents(this.scene);
-    if (this.forced) {
+    this.interacting = this.isInteracting();
+    if (this.interacting) {
+      this.periodMs = INTERACT_PERIOD_MS;
+    } else if (this.forced) {
       this.periodMs = FORCE_PERIOD_MS;
     } else {
       // more running → slightly faster chase (cap at BUSY)
@@ -173,6 +186,7 @@ export class ServerRackLeds {
     const nearRack = bossNearRack(this.scene, this.racks);
     this.near = !!nearRack;
     if (nearRack && this.hint) {
+      this.hint.setText(this.interacting ? "조회 중…" : "E 서버랙");
       this.hint.setPosition(nearRack.x, nearRack.y - 18);
       this.hint.setVisible(true);
     } else if (this.hint) {
@@ -189,10 +203,12 @@ export class ServerRackLeds {
     const g = this.gfx;
     g.clear();
 
-    const boost = this.forced ? 1.45 : 1;
+    const boost = this.interacting ? 2.05 : this.forced ? 1.45 : 1;
     const period = this.periodMs;
     const cols = 4;
     const rows = 4;
+    const colors = this.interacting ? INTERACT_COLORS : LED_COLORS;
+    const glow = this.interacting ? INTERACT_GLOW : GLOW;
 
     for (const a of this.racks) {
       const chase = ((time / period) + a.phase) % 1;
@@ -206,17 +222,20 @@ export class ServerRackLeds {
           const wave = onCol
             ? 0.55 + 0.4 * Math.sin((time / (period * 0.35) + r * 0.4) * Math.PI * 2)
             : 0.12 + 0.08 * ((r + c) % 3);
-          const alpha = Math.min(0.95, wave * boost);
-          const color = LED_COLORS[c % LED_COLORS.length];
+          const pulse = this.interacting
+            ? 0.15 + 0.2 * Math.sin((time / 90 + c + r) * Math.PI)
+            : 0;
+          const alpha = Math.min(0.98, wave * boost + pulse);
+          const color = colors[c % colors.length];
 
-          if (onCol) {
-            g.fillStyle(GLOW, alpha * 0.28);
-            g.fillEllipse(lx, ly, 8, 6);
+          if (onCol || this.interacting) {
+            g.fillStyle(glow, alpha * (this.interacting ? 0.38 : 0.28));
+            g.fillEllipse(lx, ly, this.interacting ? 10 : 8, this.interacting ? 7 : 6);
           }
           g.fillStyle(color, alpha);
-          g.fillCircle(lx, ly, onCol ? 1.8 : 1.1);
-          if (onCol) {
-            g.fillStyle(0xffffff, Math.min(0.7, alpha * 0.55));
+          g.fillCircle(lx, ly, onCol || this.interacting ? 1.9 : 1.1);
+          if (onCol || this.interacting) {
+            g.fillStyle(0xffffff, Math.min(0.75, alpha * 0.55));
             g.fillCircle(lx, ly, 0.7);
           }
         }
@@ -230,6 +249,7 @@ export class ServerRackLeds {
       forced: this.forced,
       active: this.active,
       near: this.near,
+      interacting: this.interacting,
       rackCount: this.racks.length,
       racks: this.racks.map((a) => ({ tx: a.tx, ty: a.ty })),
       periodMs: this.periodMs,
@@ -267,8 +287,16 @@ export class ServerRackLeds {
     this.hint = null;
     this.racks = [];
     this.active = false;
+    this.interacting = false;
     this.publish();
   }
 }
 
-export { SERVER_RACK_GID, DEPTH, PERIOD_MS, FORCE_PERIOD_MS, BUSY_PERIOD_MS };
+export {
+  SERVER_RACK_GID,
+  DEPTH,
+  PERIOD_MS,
+  FORCE_PERIOD_MS,
+  BUSY_PERIOD_MS,
+  INTERACT_PERIOD_MS,
+};
