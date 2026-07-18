@@ -716,6 +716,7 @@ export class OfficeScene extends Phaser.Scene {
     this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
     this.wallPosterAmbient?.update(this.time.now, delta);
+    this.wallCalendar?.update(this.time.now, delta);
     this.exitNeon?.update(this.time.now);
     this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
