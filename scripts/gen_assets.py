@@ -589,7 +589,7 @@ def make_map_json() -> None:
     set_rect(floor, 30, 20, 33, 23, 21)
     door(29, 21)
 
-    # --- furniture: work1 Open Desk (wall-aligned + monitors/lamps/plants) ---
+    # --- furniture: work1 Open Desk (functional only — no plants/lamps/rugs) ---
     put(2, 3, 26)
     put(3, 3, 6)
     put(4, 3, 26)
@@ -598,26 +598,10 @@ def make_map_json() -> None:
     put(7, 3, 6)
     put(8, 3, 26)
     put(7, 4, 7)
-    put(5, 3, 20)          # desk lamp between stations
-    put(1, 3, 20)          # wall lamp
-    put(9, 3, 20)
     put(5, 4, 7)           # spare chair (desks WP at y=5 clear)
     put(9, 4, 7)
-    put(1, 4, 10)
-    put(10, 4, 10)
     put(2, 8, 15)
     put(2, 9, 15)
-    put(9, 8, 10)
-    put(9, 9, 10)
-    put(1, 8, 19, False)   # side posters
-    put(1, 9, 19, False)
-    put(10, 8, 19, False)
-    put(5, 10, 18, False)
-    put(6, 10, 18, False)
-    put(4, 10, 18, False)
-    put(7, 10, 18, False)
-    put(2, 11, 24)         # corner beanbag
-    put(10, 11, 10)
 
     # work2 Focus desks
     put(2, 17, 26)
@@ -628,23 +612,9 @@ def make_map_json() -> None:
     put(8, 17, 6)
     put(9, 17, 26)
     put(8, 18, 7)
-    put(5, 17, 20)
-    put(1, 17, 20)
-    put(10, 17, 20)
     put(5, 18, 7)
-    put(1, 18, 10)
-    put(10, 18, 10)
-    put(2, 22, 20)
-    put(4, 22, 20)
-    put(9, 23, 10)
-    put(1, 23, 10)
-    put(5, 24, 24)
-    put(6, 24, 18, False)
-    put(7, 24, 18, False)
-    put(2, 24, 19, False)
-    put(10, 24, 19, False)
 
-    # meeting War Room: table + chairs + board + side props
+    # meeting War Room: table + chairs + board
     put(19, 7, 23)
     put(20, 7, 23)
     put(19, 8, 23)
@@ -656,19 +626,9 @@ def make_map_json() -> None:
     put(17, 5, 15)
     put(18, 5, 15)
     put(22, 5, 15)         # extra board strip
-    put(22, 10, 10)
-    put(17, 10, 10)
-    put(17, 6, 20)         # lamp by boards
-    put(22, 6, 20)
-    put(21, 10, 24)        # side beanbag
     put(17, 9, 7)          # side chair (meeting WP 18,9 clear)
-    put(18, 10, 18, False)
-    put(19, 10, 18, False)
 
-    # ceo office: mahogany desk, executive chair, city windows, shelves, plants
-    for x in range(28, 33):
-        put(x, 5, 18, False)
-        put(x, 6, 18, False)
+    # ceo office: mahogany desk, executive chair, city windows, shelves
     put(28, 4, 31)
     put(29, 4, 31)
     put(30, 4, 31)
@@ -679,18 +639,10 @@ def make_map_json() -> None:
     put(26, 4, 34)
     put(26, 8, 34)
     put(26, 9, 34)
-    put(34, 3, 35)
-    put(34, 9, 10)
-    put(27, 4, 20)
-    put(33, 4, 20)
     for x in range(27, 34):
         put(x, 2, 33, False)  # city window strip
-    put(34, 5, 19, False)
-    put(34, 7, 19, False)
-    put(27, 9, 10)
-    put(33, 9, 35)
 
-    # lounge open SE: sofa + coffee + beanbag (idle / mascot)
+    # lounge: sofa + coffee + aquarium + printer + vending (E-key targets)
     put(16, 15, 9)
     put(17, 15, 9)
     put(18, 15, 9)
@@ -703,50 +655,20 @@ def make_map_json() -> None:
     put(17, 17, 23)
     put(18, 17, 23)
     put(16, 17, 7)
-    put(19, 17, 24)
-    put(22, 17, 20)
-    put(15, 16, 10)
-    put(23, 16, 10)
     put(24, 16, 36)  # second printer on lounge/corridor edge
     put(24, 17, 38)  # vending south of printer (lounge edge)
     put(14, 16, 38)  # vending east of corridor spine @ lounge height
-    put(20, 16, 18, False)
 
-    # sleep Nap Pod: bed + lamps + rugs
+    # sleep Nap Pod: bed only
     put(31, 20, 14)
     put(32, 20, 14)
-    put(30, 22, 28, False)
-    put(31, 22, 28, False)
-    put(32, 22, 20)
-    put(30, 20, 20)        # second lamp
-    put(32, 21, 20)        # lamp (sleep WP 31,21 clear)
     # keep (30,21) clear — sleep door at (29,21)
 
-    # lobby entrance: rugs + plants + posters
+    # lobby entrance: posters only (E-key quotes) — no plants/rugs/lamps
     door(19, H - 1)
     door(20, H - 1)
-    put(16, 27, 27)
-    put(23, 27, 27)
     put(15, 26, 19)
     put(24, 26, 19)
-    put(17, 27, 18, False)
-    put(18, 27, 18, False)
-    put(21, 27, 18, False)
-    put(22, 27, 18, False)
-    put(14, 27, 10)
-    put(25, 27, 10)
-    put(15, 27, 19, False)
-    put(24, 27, 19, False)
-    put(17, 26, 20)
-    put(22, 26, 20)
-
-    # corridor decor — sparse corners only (dense props hid open paths)
-    for x, y in [(12, 2), (13, 28), (36, 13)]:
-        if decor[y][x] == 0:
-            put(x, y, 10)
-    for x, y in [(12, 28), (2, 13)]:
-        if decor[y][x] == 0:
-            put(x, y, 19, False)
 
     waypoints = {
         "desks": [

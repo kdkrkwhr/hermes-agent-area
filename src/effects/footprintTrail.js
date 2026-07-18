@@ -1,4 +1,4 @@
-/** Soft foot footprint trails while walking. `?footprints=0` off. */
+/** Soft foot footprint trails while walking. Off by default; `?footprints=1` on. */
 
 /** Above floor shadow (~8), below typical agent sprite (10). */
 export const FOOTPRINT_DEPTH_DEFAULT = 8;
@@ -9,15 +9,15 @@ const FADE_MS = 520;
 const COLOR = 0x2a221c;
 const START_ALPHA = 0.34;
 
-/** `?footprints=0` (or false/off) disables. Default on. */
+/** Default off (declutter). `?footprints=1|true|on` enables. */
 export function footprintsEnabledFromQuery() {
-  if (typeof location === "undefined") return true;
+  if (typeof location === "undefined") return false;
   try {
     const v = new URLSearchParams(location.search).get("footprints");
-    if (v == null || v === "") return true;
-    return !(v === "0" || v === "false" || v === "off");
+    if (v == null || v === "") return false;
+    return v === "1" || v === "true" || v === "on";
   } catch {
-    return true;
+    return false;
   }
 }
 

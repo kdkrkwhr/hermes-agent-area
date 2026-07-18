@@ -24,7 +24,6 @@ import {
 } from "../effects/officeEffects.js";
 import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } from "../effects/deskGlow.js";
 import { shadowSnapshot } from "../effects/spriteShadow.js";
-import { footprintSnapshot } from "../effects/footprintTrail.js";
 import { statusFootRingSnapshot } from "../effects/statusFootRing.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
@@ -32,21 +31,9 @@ import { IdleChatter } from "../effects/idleChatter.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
 import { WeatherFx } from "../effects/weatherFx.js";
-import { LampGlow } from "../effects/lampGlow.js";
-import { LampMoths } from "../effects/lampMoths.js";
-import { DustMotes } from "../effects/dustMotes.js";
-import { FogMist } from "../effects/fogMist.js";
-import { SeasonalDrift } from "../effects/seasonalDrift.js";
-import { SunBeams } from "../effects/sunBeams.js";
-import { CityLights } from "../effects/cityLights.js";
-import { CeoCityWindow } from "../effects/ceoCityWindow.js";
 import { NightFlashlight } from "../effects/nightFlashlight.js";
-import { WindowBirds } from "../effects/windowBirds.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
-import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
 import { LobbyPoster } from "../effects/lobbyPoster.js";
-import { WallPosterAmbient } from "../effects/wallPosterAmbient.js";
-import { ExitNeon } from "../effects/exitNeon.js";
 import { AgentHighFive } from "../effects/agentHighFive.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { PrinterScan } from "../effects/printerScan.js";
@@ -54,33 +41,16 @@ import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
 import { MeetingProjector } from "../effects/meetingProjector.js";
 import { MeetingDoorSign } from "../effects/meetingDoorSign.js";
-import { PlantSway } from "../effects/plantSway.js";
-import { BeanbagBounce } from "../effects/beanbagBounce.js";
-import { SofaCushion } from "../effects/sofaCushion.js";
-import { ChairSwivel } from "../effects/chairSwivel.js";
-import { ExecChairSwivel } from "../effects/execChairSwivel.js";
-import { MahoDeskGleam } from "../effects/mahoDeskGleam.js";
-import { RugSheen } from "../effects/rugSheen.js";
-import { SleepRugSheen } from "../effects/sleepRugSheen.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
-import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
 import { OpenDeskIdle } from "../effects/openDeskIdle.js";
-import { FocusAcVent } from "../effects/focusAcVent.js";
 import { GlassDoorSwing } from "../effects/glassDoorSwing.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
-import { RobotVacuum } from "../effects/robotVacuum.js";
-import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
-import { WallCalendar } from "../effects/wallCalendar.js";
-import { DeskSticky } from "../effects/deskSticky.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
 import { FocusDndSign } from "../effects/focusDndSign.js";
 import { MonitorCode } from "../effects/monitorCode.js";
-import { MonitorScreensaver } from "../effects/monitorScreensaver.js";
-import { RubberDuck } from "../effects/rubberDuck.js";
-import { AchievementShelf } from "../effects/achievementShelf.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -97,7 +67,6 @@ import {
 } from "../effects/chatPing.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
-import { WhiteboardScribble } from "../effects/whiteboardScribble.js";
 import { LobbySignage } from "../ui/lobbySignage.js";
 import { EntranceGate } from "../ui/entranceGate.js";
 import { mountClockOutModal } from "../ui/clockOutModal.js";
@@ -330,10 +299,8 @@ export class OfficeScene extends Phaser.Scene {
 
     this.minimap = new Minimap(this);
     this.whiteboardTicker = new WhiteboardTicker(this);
-    this.whiteboardScribble = new WhiteboardScribble(this);
     if (this.lastSnapshot) {
       this.whiteboardTicker.updateFromSnapshot(this.lastSnapshot);
-      this.whiteboardScribble.updateFromSnapshot(this.lastSnapshot);
     }
     // lobby wall TV — kanban counts; ?signage=0 off
     this.lobbySignage = new LobbySignage(this);
@@ -522,20 +489,8 @@ export class OfficeScene extends Phaser.Scene {
     this.devTimeIndex = this.parseDevTimeOverride();
     this.windowRain = new WindowRain(this);
     this.snowFlakes = new SnowFlakes(this);
-    this.lampGlow = new LampGlow(this);
-    this.lampMoths = new LampMoths(this);
-    this.dustMotes = new DustMotes(this, { mapW, mapH });
-    this.fogMist = new FogMist(this, { mapW, mapH });
-    this.seasonalDrift = new SeasonalDrift(this);
-    this.umbrellaStand = new LobbyUmbrellaStand(this);
     this.lobbyPoster = new LobbyPoster(this);
-    this.wallPosterAmbient = new WallPosterAmbient(this);
-    this.exitNeon = new ExitNeon(this);
-    this.sunBeams = new SunBeams(this);
-    this.cityLights = new CityLights(this);
-    this.ceoCityWindow = new CeoCityWindow(this);
     this.nightFlashlight = new NightFlashlight(this);
-    this.windowBirds = new WindowBirds(this);
     this.windowBlinds = new WindowBlinds(this);
     this.agentHighFive = new AgentHighFive(this);
     this.coffeeSteam = new CoffeeSteam(this);
@@ -545,34 +500,16 @@ export class OfficeScene extends Phaser.Scene {
     this.meetingProjector = new MeetingProjector(this);
     this.meetingDoorSign = new MeetingDoorSign(this);
     this.wallClock = new WallClock(this);
-    this.wallCalendar = new WallCalendar(this);
-    this.deskSticky = new DeskSticky(this);
     this.focusHeadphones = new FocusHeadphones(this);
     this.focusDndSign = new FocusDndSign(this);
     this.monitorCode = new MonitorCode(this);
-    this.monitorScreensaver = new MonitorScreensaver(this);
-    this.rubberDuck = new RubberDuck(this);
-    this.trophyShelf = new AchievementShelf(this);
-    this.trophyShelf.start();
-    this.plantSway = new PlantSway(this);
-    this.beanbagBounce = new BeanbagBounce(this);
-    this.sofaCushion = new SofaCushion(this);
-    this.chairSwivel = new ChairSwivel(this);
-    this.execChairSwivel = new ExecChairSwivel(this);
-    this.mahoDeskGleam = new MahoDeskGleam(this);
-    this.rugSheen = new RugSheen(this);
-    this.sleepRugSheen = new SleepRugSheen(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
-    this.roundTableIdle = new RoundTableIdle(this);
     this.dualDeskIdle = new DualDeskIdle(this);
     this.openDeskIdle = new OpenDeskIdle(this);
-    this.focusAcVent = new FocusAcVent(this);
     this.glassDoorSwing = new GlassDoorSwing(this);
     this.napPodBreathe = new NapPodBreathe(this);
-    this.robotVacuum = new RobotVacuum(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
-    this.thunderFx = new ThunderFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
     this.applyTimeOfDayLighting();
@@ -601,42 +538,18 @@ export class OfficeScene extends Phaser.Scene {
     this.officeAudio?.syncTimeOfDay?.(preset);
     this.windowRain?.sync();
     this.snowFlakes?.sync();
-    this.lampGlow?.sync();
-    this.lampMoths?.sync();
-    this.dustMotes?.sync();
-    this.fogMist?.sync();
-    this.seasonalDrift?.sync();
-    this.umbrellaStand?.sync();
     this.lobbyPoster?.sync();
-    this.wallPosterAmbient?.sync();
-    this.wallCalendar?.sync();
-    this.exitNeon?.sync();
-    this.sunBeams?.sync();
-    this.cityLights?.sync();
-    this.ceoCityWindow?.sync();
     this.nightFlashlight?.sync();
-    this.windowBirds?.sync();
     this.windowBlinds?.sync();
     this.coffeeSteam?.sync();
     this.aquariumBubbles?.sync();
     this.aquariumFish?.sync();
-    this.plantSway?.sync();
-    this.beanbagBounce?.sync();
-    this.sofaCushion?.sync();
-    this.chairSwivel?.sync();
-    this.execChairSwivel?.sync();
-    this.mahoDeskGleam?.sync();
-    this.rugSheen?.sync();
-    this.sleepRugSheen?.sync();
-    this.roundTableIdle?.sync();
-    this.dualDeskIdle?.sync();
     this.focusDndSign?.sync();
     this.meetingDoorSign?.sync();
+    this.dualDeskIdle?.sync();
     this.openDeskIdle?.sync();
-    this.focusAcVent?.sync();
     this.glassDoorSwing?.sync();
     this.napPodBreathe?.sync();
-    this.robotVacuum?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -694,44 +607,22 @@ export class OfficeScene extends Phaser.Scene {
         this.officeAudio?.playTypingSfx?.(agent.def.id);
       }
     }
-    this.lampGlow?.update(this.time.now);
-    this.lampMoths?.update(this.time.now);
-    this.cityLights?.update(this.time.now);
-    this.ceoCityWindow?.update(this.time.now);
     this.nightFlashlight?.update(this.time.now);
     this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
     this.meetingProjector?.update(this.time.now, delta);
     this.meetingDoorSign?.update(this.time.now, delta);
-    this.deskSticky?.sync();
     this.focusHeadphones?.sync();
     this.focusDndSign?.update(this.time.now, delta);
     this.monitorCode?.sync(delta);
-    this.monitorScreensaver?.sync(this.time.now);
-    this.rubberDuck?.sync(this.time.now);
     this.printerScan?.update(this.time.now, delta);
-    this.plantSway?.update(this.time.now);
-    this.beanbagBounce?.update(this.time.now, delta);
-    this.sofaCushion?.update(this.time.now, delta);
-    this.chairSwivel?.update(this.time.now, delta);
-    this.execChairSwivel?.update(this.time.now, delta);
-    this.mahoDeskGleam?.update(this.time.now, delta);
-    this.rugSheen?.update(this.time.now, delta);
-    this.sleepRugSheen?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
-    this.whiteboardScribble?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
-    this.roundTableIdle?.update(this.time.now, delta);
     this.dualDeskIdle?.update(this.time.now, delta);
     this.openDeskIdle?.update(this.time.now, delta);
     this.glassDoorSwing?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
-    this.robotVacuum?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
-    this.wallPosterAmbient?.update(this.time.now, delta);
-    this.wallCalendar?.update(this.time.now, delta);
-    this.exitNeon?.update(this.time.now);
-    this.umbrellaStand?.update();
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
@@ -767,14 +658,11 @@ export class OfficeScene extends Phaser.Scene {
     if (!this.kanbanPanel || !snapshot) return;
     const panelState = this.kanbanPanel.update(snapshot, opts);
     this.whiteboardTicker?.updateFromSnapshot(snapshot);
-    this.whiteboardScribble?.updateFromSnapshot(snapshot);
     this.lobbySignage?.updateFromSnapshot(snapshot);
-    this.trophyShelf?.updateFromSnapshot(snapshot);
     if (typeof window !== "undefined") {
       window.__HERMES_AREA__ = {
         ...(window.__HERMES_AREA__ || {}),
         kanbanPanel: panelState,
-        trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       };
     }
     return panelState;
@@ -1265,9 +1153,6 @@ export class OfficeScene extends Phaser.Scene {
       rain: this.windowRain?.snapshot?.() ?? null,
       snow: this.snowFlakes?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
-      thunder: this.thunderFx?.snapshot?.() ?? null,
-      lampGlow: this.lampGlow?.snapshot?.() ?? null,
-      moths: this.lampMoths?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([
         ...(this.agents || []),
@@ -1275,24 +1160,8 @@ export class OfficeScene extends Phaser.Scene {
         this.mascot,
       ].filter(Boolean)),
       statusFootRing: statusFootRingSnapshot(this.agents || []),
-      footprints: footprintSnapshot([
-        ...(this.agents || []),
-        this.boss,
-        this.mascot,
-        this.visitorDirector?.visitor,
-      ].filter(Boolean)),
-      dust: this.dustMotes?.snapshot?.() ?? null,
-      fog: this.fogMist?.snapshot?.() ?? null,
-      season: this.seasonalDrift?.snapshot?.() ?? null,
-      umbrella: this.umbrellaStand?.snapshot?.() ?? null,
       poster: this.lobbyPoster?.snapshot?.() ?? null,
-      wallPoster: this.wallPosterAmbient?.snapshot?.() ?? null,
-      exitNeon: this.exitNeon?.snapshot?.() ?? null,
-      sunbeam: this.sunBeams?.snapshot?.() ?? null,
-      cityLights: this.cityLights?.snapshot?.() ?? null,
-      ceoWindow: this.ceoCityWindow?.snapshot?.() ?? null,
       flashlight: this.nightFlashlight?.snapshot?.() ?? null,
-      birds: this.windowBirds?.snapshot?.() ?? null,
       blinds: this.windowBlinds?.snapshot?.() ?? null,
       highFive: this.agentHighFive?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
@@ -1301,35 +1170,19 @@ export class OfficeScene extends Phaser.Scene {
       meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
       meetingDoorSign: this.meetingDoorSign?.snapshot?.() ?? null,
       wallClock: this.wallClock?.snapshot?.() ?? null,
-      wallCalendar: this.wallCalendar?.snapshot?.() ?? null,
-      deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
       focusDnd: this.focusDndSign?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
-      monitorScreensaver: this.monitorScreensaver?.snapshot?.() ?? null,
-      rubberDuck: this.rubberDuck?.snapshot?.() ?? null,
       printerScan: this.printerScan?.snapshot?.() ?? null,
-      trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
-      plantSway: this.plantSway?.snapshot?.() ?? null,
-      beanbag: this.beanbagBounce?.snapshot?.() ?? null,
-      sofa: this.sofaCushion?.snapshot?.() ?? null,
-      chair: this.chairSwivel?.snapshot?.() ?? null,
-      execChair: this.execChairSwivel?.snapshot?.() ?? null,
-      maho: this.mahoDeskGleam?.snapshot?.() ?? null,
-      rug: this.rugSheen?.snapshot?.() ?? null,
-      sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
-      roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
       openDeskIdle: this.openDeskIdle?.snapshot?.() ?? null,
-      acvent: this.focusAcVent?.snapshot?.() ?? null,
       doorswing: this.glassDoorSwing?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
-      vacuum: this.robotVacuum?.snapshot?.() ?? null,
+      bookshelf: this.bookshelfPages?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,
       help: this.helpOverlay?.snapshot?.() ?? null,
       whiteboardTicker: this.whiteboardTicker?.snapshot?.() ?? null,
-      whiteboardScribble: this.whiteboardScribble?.snapshot?.() ?? null,
       signage: this.lobbySignage?.snapshot?.() ?? null,
       gate: this.entranceGate?.snapshot?.() ?? null,
       roomInteract: this.roomInteract?.snapshot?.() ?? null,
