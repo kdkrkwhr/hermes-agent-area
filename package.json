@@ -43,6 +43,7 @@
     "smoke:scribble": "node scripts/smoke-scribble.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
     "smoke:happyhour": "node scripts/smoke-happyhour.mjs",
+    "smoke:deploycelebrate": "node scripts/smoke-deploycelebrate.mjs",
     "smoke:allhands": "node scripts/smoke-allhands.mjs",
     "smoke:microwaveding": "node scripts/smoke-microwaveding.mjs",
     "smoke:exitneon": "node scripts/smoke-exitneon.mjs",

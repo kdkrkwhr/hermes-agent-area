@@ -22,6 +22,7 @@ const RANDOM_KINDS = [
   "wifi_outage",
   "happy_hour",
   "microwave_ding",
+  "deploy_celebrate",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -40,6 +41,18 @@ const HAPPY_HOUR_START = 17;
 const HAPPY_HOUR_END = 20;
 const HAPPY_WEIGHT = 3;
 const HAPPY_FRIDAY_WEIGHT = 5;
+/** deploy_celebrate: lobby/lounge gather + teal/cyan confetti (ms) */
+const DEPLOY_HOLD_MIN_MS = 5000;
+const DEPLOY_HOLD_MAX_MS = 8000;
+const DEPLOY_TOASTS = ["배포 성공!", "프로덕션 각"];
+/** soft teal/cyan — taskCelebrate mint + cyan family */
+const DEPLOY_TINTS = [0x5ee0c8, 0x7ec8ff, 0x7eecc8, 0xa8fff0, 0xffffff];
+/** weekday 10–12 · 14–18: higher pick weight */
+const DEPLOY_AM_START = 10;
+const DEPLOY_AM_END = 12;
+const DEPLOY_PM_START = 14;
+const DEPLOY_PM_END = 18;
+const DEPLOY_WEIGHT = 3;
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -95,6 +108,8 @@ const WATER_WEIGHT = 3;
 const PIZZA_HOUR_START = 16;
 const PIZZA_HOUR_END = 18;
 const PIZZA_WEIGHT = 3;
+/** Tiny confetti bit for deploy_celebrate (taskCelebrate-style). */
+const DEPLOY_CONFETTI_TEX = "fx-confetti";
 /** while raining: higher pick weight for wet_floor */
 const WET_FLOOR_RAIN_WEIGHT = 3;
 /** wet_floor: yellow caution sign + toast (ms) */
@@ -195,6 +210,44 @@ function ensurePaperTexture(scene) {
   g.lineBetween(5, 7, 15, 7);
   g.generateTexture(PAPER_TEX, 16, 14);
   g.destroy();
+}
+
+/** Soft confetti rect — shared with taskCelebrate when present. */
+function ensureDeployConfettiTexture(scene) {
+  if (scene.textures.exists(DEPLOY_CONFETTI_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(2, 1, 4, 3);
+  g.generateTexture(DEPLOY_CONFETTI_TEX, 8, 8);
+  g.destroy();
+}
+
+/**
+ * Lobby center tile, else lounge/break, else entrance — deploy gather anchor.
+ * @param {Phaser.Scene} scene
+ */
+function findDeployGatherAnchor(scene) {
+  const lob = scene.waypoints?.lobby;
+  if (
+    lob &&
+    Number.isFinite(lob.xMin) &&
+    Number.isFinite(lob.xMax) &&
+    Number.isFinite(lob.yMin) &&
+    Number.isFinite(lob.yMax)
+  ) {
+    return {
+      x: Math.floor((lob.xMin + lob.xMax) / 2),
+      y: Math.floor((lob.yMin + lob.yMax) / 2),
+    };
+  }
+  const lou = scene.waypoints?.lounge;
+  if (Array.isArray(lou) && lou.length) {
+    return { x: lou[0].x, y: lou[0].y };
+  }
+  const br = scene.waypoints?.break;
+  if (br) return { x: br.x, y: br.y };
+  const ent = scene.waypoints?.entrance || { x: 20, y: 27 };
+  return { x: ent.x, y: ent.y };
 }
 
 /** Yellow A-frame wet-floor caution sign. */
@@ -381,6 +434,7 @@ export class OfficeEvents {
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.happyHourGathered = 0;
+    this.deployCelebrateGathered = 0;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
@@ -476,6 +530,10 @@ export class OfficeEvents {
       weekday && hour >= PIZZA_HOUR_START && hour < PIZZA_HOUR_END;
     const happyWindow =
       weekday && hour >= HAPPY_HOUR_START && hour < HAPPY_HOUR_END;
+    const deployWindow =
+      weekday &&
+      ((hour >= DEPLOY_AM_START && hour < DEPLOY_AM_END) ||
+        (hour >= DEPLOY_PM_START && hour < DEPLOY_PM_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -489,6 +547,7 @@ export class OfficeEvents {
       else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
+      else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
@@ -535,6 +594,7 @@ export class OfficeEvents {
     else if (kind === "wifi_outage") this.runWifiOutage();
     else if (kind === "happy_hour") this.runHappyHour();
     else if (kind === "microwave_ding") this.runMicrowaveDing();
+    else if (kind === "deploy_celebrate") this.runDeployCelebrate();
 
     this.publish();
   }
@@ -1887,6 +1947,192 @@ export class OfficeEvents {
     }
   }
 
+  /**
+   * Deploy celebrate: toast + teal/cyan confetti + idle/break → lobby/lounge 5–8s.
+   * Skip if another gather is active. Chime respects mute/lock.
+   */
+  runDeployCelebrate() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      DEPLOY_HOLD_MIN_MS +
+      Math.floor(Math.random() * (DEPLOY_HOLD_MAX_MS - DEPLOY_HOLD_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    const toast =
+      DEPLOY_TOASTS[Math.floor(Math.random() * DEPLOY_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playDeployChime();
+
+    const anchor = findDeployGatherAnchor(this.scene);
+    const { x, y } = tileCenter(this.scene, anchor.x, anchor.y);
+    this.spawnDeployBurst(x, y - 10);
+
+    void this.gatherIdleToDeployCelebrate(holdMs, anchor);
+  }
+
+  /** Soft teal/cyan ADD burst (taskCelebrate tone) + short spark ring. */
+  spawnDeployBurst(x, y) {
+    ensureDeployConfettiTexture(this.scene);
+    const qty = 10 + Math.floor(Math.random() * 7);
+    const confetti = this.scene.add.particles(x, y, DEPLOY_CONFETTI_TEX, {
+      speed: { min: 28, max: 72 },
+      angle: { min: 200, max: 340 },
+      gravityY: 40,
+      scale: { start: 0.85, end: 0.15 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 600, max: 900 },
+      quantity: qty,
+      frequency: -1,
+      tint: DEPLOY_TINTS,
+      blendMode: "ADD",
+      rotate: { min: -40, max: 40 },
+    });
+    confetti.setDepth(12);
+    confetti.explode(qty);
+
+    const spark = this.scene.add.particles(x, y, "fx-spark", {
+      speed: { min: 30, max: 90 },
+      angle: { min: 0, max: 360 },
+      scale: { start: 0.8, end: 0 },
+      alpha: { start: 0.95, end: 0 },
+      lifespan: { min: 400, max: 750 },
+      frequency: -1,
+      quantity: 14,
+      tint: DEPLOY_TINTS,
+      blendMode: "ADD",
+    });
+    spark.setDepth(12);
+    spark.explode(14);
+
+    const clear = this.scene.time.delayedCall(1100, () => {
+      try {
+        confetti.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        spark.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+    this.track(() => {
+      clear.remove(false);
+      try {
+        confetti.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        spark.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/break 2–4 → lobby/lounge spots; hold 5–8s → wander restore. */
+  async gatherIdleToDeployCelebrate(holdMs, anchor) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const center = anchor || findDeployGatherAnchor(this.scene);
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            center,
+            { x: center.x - 1, y: center.y + 1 },
+            { x: center.x + 1, y: center.y },
+            { x: center.x + 2, y: center.y - 1 },
+            { x: center.x - 2, y: center.y },
+          ];
+    const hold =
+      holdMs ??
+      DEPLOY_HOLD_MIN_MS +
+        Math.floor(Math.random() * (DEPLOY_HOLD_MAX_MS - DEPLOY_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.deployCelebrateGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Short deploy success chime — skip if muted/locked. */
+  playDeployChime() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // C6 → E6 → G6 — soft “ship” arpeggio
+      const notes = [1047, 1319, 1568];
+      for (let i = 0; i < notes.length; i++) {
+        const start = t0 + i * 0.06;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(notes[i], start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.038, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.2);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.22);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -2080,6 +2326,7 @@ export class OfficeEvents {
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       happyHourGathered: this.happyHourGathered,
+      deployCelebrateGathered: this.deployCelebrateGathered,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
