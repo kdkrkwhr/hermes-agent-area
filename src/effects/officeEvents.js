@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=happy_hour` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` force. */
 
 import Phaser from "phaser";
 
@@ -21,6 +21,7 @@ const RANDOM_KINDS = [
   "all_hands",
   "wifi_outage",
   "happy_hour",
+  "microwave_ding",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -80,6 +81,12 @@ const PAPER_MAX_MS = 7000;
 const LUNCH_HOUR_START = 11;
 const LUNCH_HOUR_END = 14;
 const LUNCH_WEIGHT = 4;
+/** weekday 11–14: higher pick weight for microwave_ding */
+const MICROWAVE_HOUR_START = 11;
+const MICROWAVE_HOUR_END = 14;
+const MICROWAVE_WEIGHT = 3;
+/** microwave_ding: short steam puff at coffee/break (ms) */
+const MICROWAVE_STEAM_MS = 1400;
 /** weekday afternoon: higher pick weight for water_cooler */
 const WATER_HOUR_START = 14;
 const WATER_HOUR_END = 17;
@@ -374,6 +381,7 @@ export class OfficeEvents {
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.happyHourGathered = 0;
+    this.microwaveDingAt = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
@@ -458,6 +466,10 @@ export class OfficeEvents {
     const weekday = now.getDay() >= 1 && now.getDay() <= 5;
     const lunchWindow =
       hour >= LUNCH_HOUR_START && hour < LUNCH_HOUR_END;
+    const microwaveWindow =
+      weekday &&
+      hour >= MICROWAVE_HOUR_START &&
+      hour < MICROWAVE_HOUR_END;
     const waterWindow =
       weekday && hour >= WATER_HOUR_START && hour < WATER_HOUR_END;
     const pizzaWindow =
@@ -471,6 +483,8 @@ export class OfficeEvents {
       if (k === "quiet_hours" && !night) continue;
       let weight = 1;
       if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
+      else if (k === "microwave_ding" && microwaveWindow)
+        weight = MICROWAVE_WEIGHT;
       else if (k === "water_cooler" && waterWindow) weight = WATER_WEIGHT;
       else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
@@ -520,8 +534,48 @@ export class OfficeEvents {
     else if (kind === "all_hands") this.runAllHands();
     else if (kind === "wifi_outage") this.runWifiOutage();
     else if (kind === "happy_hour") this.runHappyHour();
+    else if (kind === "microwave_ding") this.runMicrowaveDing();
 
     this.publish();
+  }
+
+  /**
+   * Microwave ding: toast + ding SFX + short steam at coffee (GID16) / break.
+   * Skip if gather is active. No agent move.
+   */
+  runMicrowaveDing() {
+    if (this.isGathering()) return;
+
+    this.showToast("띵~ 데워졌다", 2600);
+    this.playMicrowaveDing();
+    const { x, y } = findCoffeeTile(this.scene);
+    this.spawnSteamBurst(x, y - 8, MICROWAVE_STEAM_MS);
+    this.microwaveDingAt = Date.now();
+    this.publish();
+  }
+
+  /** Short microwave “ding” beep — skip if muted/locked. */
+  playMicrowaveDing() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1760, t0); // A6 — classic ding
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.055, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.3);
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /**
@@ -2026,6 +2080,7 @@ export class OfficeEvents {
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       happyHourGathered: this.happyHourGathered,
+      microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,

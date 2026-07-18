@@ -44,6 +44,7 @@
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
     "smoke:happyhour": "node scripts/smoke-happyhour.mjs",
     "smoke:allhands": "node scripts/smoke-allhands.mjs",
+    "smoke:microwaveding": "node scripts/smoke-microwaveding.mjs",
     "smoke:exitneon": "node scripts/smoke-exitneon.mjs",
     "smoke:calendar": "node scripts/smoke-calendar.mjs",
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
