@@ -1,7 +1,8 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=coffee_spill` / `?events=review_huddle` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=pair_programming` / `?events=coffee_spill` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
+import { findDualDeskTiles } from "./dualDeskIdle.js";
 
 const RANDOM_KINDS = [
   "standup",
@@ -28,6 +29,7 @@ const RANDOM_KINDS = [
   "birthday_balloons",
   "review_huddle",
   "coffee_spill",
+  "pair_programming",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -121,6 +123,19 @@ const COFFEE_PUDDLE_TEX = "fx-coffee-puddle";
 const COFFEE_SPILL_HOUR_START = 11;
 const COFFEE_SPILL_HOUR_END = 15;
 const COFFEE_SPILL_WEIGHT = 2;
+/** pair_programming: dualDesk 2-agent gather + cyan sparkle (ms) */
+const PAIR_HOLD_MIN_MS = 6000;
+const PAIR_HOLD_MAX_MS = 10000;
+const PAIR_TOASTS = ["페어 각?", "페어프로그래밍!"];
+const PAIR_SPARKLE_TEX = "fx-pair-sparkle";
+/** soft cyan / teal — monitor gleam */
+const PAIR_TINTS = [0x5ee0c8, 0x7ec8ff, 0x40d0c0, 0xa8fff0];
+/** weekday 10–12 · 14–17: higher pick weight */
+const PAIR_AM_START = 10;
+const PAIR_AM_END = 12;
+const PAIR_PM_START = 14;
+const PAIR_PM_END = 17;
+const PAIR_WEIGHT = 2;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -334,6 +349,61 @@ function ensureReviewChalkTexture(scene) {
   g.destroy();
 }
 
+/**
+ * pair_programming gather tile: prefer walkable focusDesks near dualDesk,
+ * then open desks. Furniture GID26 itself is often blocked for pathfind.
+ * @returns {{x:number,y:number}} tile coords
+ */
+function findPairDeskTile(scene) {
+  const focus = scene.waypoints?.focusDesks;
+  if (Array.isArray(focus) && focus.length) {
+    const spot = focus[Math.floor(Math.random() * focus.length)];
+    return { x: spot.x, y: spot.y };
+  }
+  const desks = findDualDeskTiles(scene);
+  if (desks.length) {
+    const d = desks[Math.floor(Math.random() * desks.length)];
+    // stand just south of furniture when possible
+    return { x: d.tx, y: d.ty + 1 };
+  }
+  const open = scene.waypoints?.desks;
+  if (Array.isArray(open) && open.length) {
+    const spot = open[Math.floor(Math.random() * open.length)];
+    return { x: spot.x, y: spot.y };
+  }
+  return { x: 3, y: 19 };
+}
+
+/** Nearest dualDesk furniture center for sparkle VFX (px), else gather tile center. */
+function findPairSparklePx(scene, gatherTile) {
+  const desks = findDualDeskTiles(scene);
+  if (desks.length) {
+    let best = desks[0];
+    let bestD = Infinity;
+    for (const d of desks) {
+      const dist = Math.hypot(d.tx - gatherTile.x, d.ty - gatherTile.y);
+      if (dist < bestD) {
+        bestD = dist;
+        best = d;
+      }
+    }
+    return { x: best.x, y: best.y };
+  }
+  return tileCenter(scene, gatherTile.x, gatherTile.y);
+}
+
+/** Soft cyan/teal monitor sparkle speck. */
+function ensurePairSparkleTexture(scene) {
+  if (scene.textures.exists(PAIR_SPARKLE_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(3, 3, 2.2);
+  g.fillStyle(0xffffff, 0.55);
+  g.fillCircle(5, 2, 1.2);
+  g.generateTexture(PAIR_SPARKLE_TEX, 8, 8);
+  g.destroy();
+}
+
 /** Tiny paper-plane diamond / folded triangle. */
 function ensurePaperTexture(scene) {
   if (scene.textures.exists(PAPER_TEX)) return;
@@ -534,6 +604,27 @@ function isReviewHuddleGatherable(agent) {
   );
 }
 
+/** idle / ready only — pair programming at dual desk (exactly 2). */
+function isPairProgrammingGatherable(agent) {
+  if (!agent?.sprite) return false;
+  const s = agent?.serverStatus;
+  if (
+    s === "running" ||
+    s === "blocked" ||
+    s === "chatting" ||
+    s === "offline" ||
+    s === "review" ||
+    s === "todo"
+  ) {
+    return false;
+  }
+  if (agent.live) {
+    return s === "idle" || s === "ready";
+  }
+  const kind = agent.getEffectKind?.();
+  return kind === "idle" || kind === "ready";
+}
+
 /** idle or running (desk/focus) — stretch in place, no gather move. */
 function isStretchEligible(agent) {
   if (!agent?.sprite) return false;
@@ -594,6 +685,7 @@ export class OfficeEvents {
     this.deployCelebrateGathered = 0;
     this.birthdayBalloonsGathered = 0;
     this.reviewHuddleGathered = 0;
+    this.pairProgrammingGathered = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -702,6 +794,10 @@ export class OfficeEvents {
         (hour >= REVIEW_PM_START && hour < REVIEW_PM_END));
     const coffeeSpillWindow =
       hour >= COFFEE_SPILL_HOUR_START && hour < COFFEE_SPILL_HOUR_END;
+    const pairWindow =
+      weekday &&
+      ((hour >= PAIR_AM_START && hour < PAIR_AM_END) ||
+        (hour >= PAIR_PM_START && hour < PAIR_PM_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -720,6 +816,7 @@ export class OfficeEvents {
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       else if (k === "coffee_spill" && coffeeSpillWindow)
         weight = COFFEE_SPILL_WEIGHT;
+      else if (k === "pair_programming" && pairWindow) weight = PAIR_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -770,6 +867,7 @@ export class OfficeEvents {
     else if (kind === "birthday_balloons") this.runBirthdayBalloons();
     else if (kind === "review_huddle") this.runReviewHuddle();
     else if (kind === "coffee_spill") this.runCoffeeSpill();
+    else if (kind === "pair_programming") this.runPairProgramming();
 
     this.publish();
   }
@@ -2862,8 +2960,181 @@ export class OfficeEvents {
     }
   }
 
+
+  /**
+   * Pair programming: toast + cyan/teal monitor sparkle at dualDesk +
+   * idle/ready exactly 2 -> desk +/-1 ring 6-10s. Skip if gathering.
+   */
+  runPairProgramming() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      PAIR_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (PAIR_HOLD_MAX_MS - PAIR_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      PAIR_TOASTS[Math.floor(Math.random() * PAIR_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playPairClick();
+
+    const desk = findPairDeskTile(this.scene);
+    const sparkle = findPairSparklePx(this.scene, desk);
+    const x = sparkle.x;
+    const y = sparkle.y;
+    this.spawnPairSparkle(x, y - 6, Math.min(5000, holdMs));
+
+    const glow = this.scene.add.circle(x, y + 4, 40, 0x5ee0c8, 0.28);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.3,
+      duration: Math.min(2800, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToPairProgramming(holdMs, desk);
+  }
+
+  /** Soft cyan/teal flecks above dual monitors. */
+  spawnPairSparkle(x, y, ms = 4000) {
+    ensurePairSparkleTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, PAIR_SPARKLE_TEX, {
+      speedX: { min: -16, max: 16 },
+      speedY: { min: -28, max: -6 },
+      gravityY: 12,
+      scale: { start: 0.9, end: 0.15 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 500, max: 1100 },
+      frequency: 80,
+      quantity: 1,
+      tint: PAIR_TINTS,
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(700, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/ready exactly 2 -> dualDesk +/-1; hold 6-10s -> restore. */
+  async gatherIdleToPairProgramming(holdMs, deskTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isPairProgrammingGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2);
+    const candidates = pool.slice(0, want);
+    const desk = deskTile || findPairDeskTile(this.scene);
+    const focus = this.scene.waypoints?.focusDesks;
+    const spots =
+      Array.isArray(focus) && focus.length >= 2
+        ? shuffleInPlace(focus.slice()).slice(0, 2)
+        : meetingOffsets(desk);
+    const hold =
+      holdMs ??
+      PAIR_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (PAIR_HOLD_MAX_MS - PAIR_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.pairProgrammingGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (
+          !isPairProgrammingGatherable(agent) &&
+          !isStandupGatherable(agent)
+        ) {
+          continue;
+        }
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft keyboard/click tick — skip if muted/locked. */
+  playPairClick() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(720, t0);
+      osc.frequency.exponentialRampToValueAtTime(380, t0 + 0.06);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.028, t0 + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.08);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.09);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
+
     this.showToast("정전");
     this.playBuzz();
     const overlay = this.scene.lightingOverlay;
@@ -3058,6 +3329,7 @@ export class OfficeEvents {
       deployCelebrateGathered: this.deployCelebrateGathered,
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
       reviewHuddleGathered: this.reviewHuddleGathered,
+      pairProgrammingGathered: this.pairProgrammingGathered,
       mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,
