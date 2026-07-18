@@ -11,6 +11,8 @@ import {
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 52; // lazy lounge pace (agents ~200)
+/** mascot_zoomies dash pace — still under agent sprint feel */
+const ZOOMIES_SPEED = 210;
 const SHEET = "char-mascot";
 const ID = "mascot";
 
@@ -35,6 +37,11 @@ export class Mascot {
     /** @type {number} pet-mode end time (scene.time.now); 0 = off */
     this.petUntil = 0;
     this._petBaseY = null;
+    /** @type {number} zoomies end time (scene.time.now); 0 = off */
+    this.zoomiesUntil = 0;
+    /** @type {{x:number,y:number}[]} remaining lounge dash targets */
+    this.zoomiesQueue = [];
+    this._zoomiesBusy = false;
 
     const px = startTile.x * this.tileSize + this.tileSize / 2;
     const py = startTile.y * this.tileSize + this.tileSize / 2;
@@ -54,6 +61,10 @@ export class Mascot {
     return time < (this.petUntil || 0);
   }
 
+  isZoomies(time = this.scene.time.now) {
+    return time < (this.zoomiesUntil || 0);
+  }
+
   /**
    * Stop wander, face toward a world point (boss), short idle bounce.
    * @param {number} durationMs
@@ -61,6 +72,7 @@ export class Mascot {
    * @param {number} [faceY]
    */
   startPet(durationMs, faceX, faceY) {
+    if (this.isZoomies()) this.endZoomies();
     const now = this.scene.time.now;
     this.path = [];
     this.pathIndex = 0;
@@ -103,6 +115,64 @@ export class Mascot {
       this._petBaseY = null;
     }
     this.idleUntil = this.scene.time.now + 1200 + Math.random() * 800;
+  }
+
+  /**
+   * Fast dash through lounge waypoints for `durationMs`, then back to wander.
+   * @param {number} durationMs
+   * @param {{x:number,y:number}[]} destinations
+   */
+  startZoomies(durationMs, destinations) {
+    if (this.isPetting()) this.endPet();
+    this.path = [];
+    this.pathIndex = 0;
+    this.busy = false;
+    this._zoomiesBusy = false;
+    const now = this.scene.time.now;
+    this.zoomiesUntil = now + Math.max(1200, durationMs || 5000);
+    this.zoomiesQueue = Array.isArray(destinations)
+      ? destinations.filter((d) => d && Number.isFinite(d.x) && Number.isFinite(d.y))
+      : [];
+    void this.dashNextZoomies();
+  }
+
+  endZoomies() {
+    if (!this.zoomiesUntil && !this.zoomiesQueue.length) return;
+    this.zoomiesUntil = 0;
+    this.zoomiesQueue = [];
+    this._zoomiesBusy = false;
+    this.path = [];
+    this.pathIndex = 0;
+    this.idleUntil = this.scene.time.now + 900 + Math.random() * 1100;
+  }
+
+  /** Pathfind to the next queued lounge tile (mascot pathfinder only). */
+  async dashNextZoomies() {
+    if (!this.isZoomies() || this._zoomiesBusy) return;
+    if (!this.zoomiesQueue.length) return;
+    this._zoomiesBusy = true;
+    const dest = this.zoomiesQueue.shift();
+    const from = this.tilePos();
+    try {
+      const path = await this.scene.pathfinder.findPath(
+        from.x,
+        from.y,
+        dest.x,
+        dest.y,
+      );
+      if (path.length) {
+        this.path = path.slice(1);
+        this.pathIndex = 0;
+      } else if (this.zoomiesQueue.length) {
+        this._zoomiesBusy = false;
+        void this.dashNextZoomies();
+        return;
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      this._zoomiesBusy = false;
+    }
   }
 
   syncShadow() {
@@ -168,7 +238,7 @@ export class Mascot {
   }
 
   async wander() {
-    if (this.busy) return;
+    if (this.busy || this.isZoomies() || this.isPetting()) return;
     this.busy = true;
     const dest = this.pickLoungeSpot();
     const from = this.tilePos();
@@ -197,10 +267,70 @@ export class Mascot {
     return dy < 0 ? "up" : "down";
   }
 
+  /** Shared tile-step mover; returns true when a path node was consumed. */
+  stepAlongPath(time, delta, speed) {
+    if (!this.path.length) return false;
+    const target = this.path[this.pathIndex];
+    const tx = target.x * this.tileSize + this.tileSize / 2;
+    const ty = target.y * this.tileSize + this.tileSize / 2;
+    const dx = tx - this.sprite.x;
+    const dy = ty - this.sprite.y;
+    const dist = Math.hypot(dx, dy);
+    const step = (speed * delta) / 1000;
+
+    if (dist <= step) {
+      this.sprite.setPosition(tx, ty);
+      this.pathIndex += 1;
+      if (this.pathIndex >= this.path.length) {
+        this.path = [];
+        this.pathIndex = 0;
+        return true;
+      }
+    } else {
+      this.sprite.x += (dx / dist) * step;
+      this.sprite.y += (dy / dist) * step;
+      const dir = this.facingFromDelta(dx, dy);
+      this.lastDir = dir;
+      const walkKey = `${ID}-walk-${dir}`;
+      if (this.sprite.anims.currentAnim?.key !== walkKey) {
+        this.sprite.anims.play(walkKey, true);
+      }
+    }
+    return false;
+  }
+
   update(time, delta) {
+    if (this.zoomiesUntil && time >= this.zoomiesUntil) {
+      this.endZoomies();
+    }
     if (this.petUntil && time >= this.petUntil) {
       this.endPet();
     }
+
+    if (this.isZoomies(time)) {
+      if (!this.path.length) {
+        const idleKey = `${ID}-idle-${this.lastDir || "down"}`;
+        if (this.sprite.anims.currentAnim?.key !== idleKey) {
+          try {
+            this.sprite.anims.play(idleKey, true);
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!this._zoomiesBusy && this.zoomiesQueue.length) {
+          void this.dashNextZoomies();
+        }
+        this.syncShadow();
+        return;
+      }
+      const finished = this.stepAlongPath(time, delta, ZOOMIES_SPEED);
+      if (finished && this.zoomiesQueue.length) {
+        void this.dashNextZoomies();
+      }
+      this.syncShadow();
+      return;
+    }
+
     if (this.isPetting(time)) {
       const idleKey = `${ID}-idle-${this.lastDir || "down"}`;
       if (this.sprite.anims.currentAnim?.key !== idleKey) {
@@ -228,31 +358,9 @@ export class Mascot {
       return;
     }
 
-    const target = this.path[this.pathIndex];
-    const tx = target.x * this.tileSize + this.tileSize / 2;
-    const ty = target.y * this.tileSize + this.tileSize / 2;
-    const dx = tx - this.sprite.x;
-    const dy = ty - this.sprite.y;
-    const dist = Math.hypot(dx, dy);
-    const step = (SPEED * delta) / 1000;
-
-    if (dist <= step) {
-      this.sprite.setPosition(tx, ty);
-      this.pathIndex += 1;
-      if (this.pathIndex >= this.path.length) {
-        this.path = [];
-        this.pathIndex = 0;
-        this.idleUntil = time + 3000 + Math.random() * 5500;
-      }
-    } else {
-      this.sprite.x += (dx / dist) * step;
-      this.sprite.y += (dy / dist) * step;
-      const dir = this.facingFromDelta(dx, dy);
-      this.lastDir = dir;
-      const walkKey = `${ID}-walk-${dir}`;
-      if (this.sprite.anims.currentAnim?.key !== walkKey) {
-        this.sprite.anims.play(walkKey, true);
-      }
+    const finished = this.stepAlongPath(time, delta, SPEED);
+    if (finished) {
+      this.idleUntil = time + 3000 + Math.random() * 5500;
     }
     this.syncShadow();
   }

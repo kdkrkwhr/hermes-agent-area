@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` / `?events=mascot_zoomies` force. */
 
 import Phaser from "phaser";
 
@@ -23,6 +23,7 @@ const RANDOM_KINDS = [
   "happy_hour",
   "microwave_ding",
   "deploy_celebrate",
+  "mascot_zoomies",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -53,6 +54,11 @@ const DEPLOY_AM_END = 12;
 const DEPLOY_PM_START = 14;
 const DEPLOY_PM_END = 18;
 const DEPLOY_WEIGHT = 3;
+/** mascot_zoomies: lounge dash + dust (ms); weight=1 default */
+const ZOOMIES_HOLD_MIN_MS = 4000;
+const ZOOMIES_HOLD_MAX_MS = 7000;
+const ZOOMIES_TOASTS = ["줌이즈!", "냥 가즈아"];
+const ZOOMIES_DUST_TEX = "fx-zoomies-dust";
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -193,6 +199,18 @@ function ensureParcelTexture(scene) {
   g.fillStyle(0x8b6914, 1);
   g.fillRect(6, 2, 4, 2);
   g.generateTexture(PARCEL_TEX, 16, 16);
+  g.destroy();
+}
+
+/** Soft dust puff for mascot_zoomies trail. */
+function ensureZoomiesDustTexture(scene) {
+  if (scene.textures.exists(ZOOMIES_DUST_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xd8d0c4, 0.9);
+  g.fillCircle(4, 4, 3.5);
+  g.fillStyle(0xc0b8ac, 0.55);
+  g.fillCircle(2, 5, 2);
+  g.generateTexture(ZOOMIES_DUST_TEX, 8, 8);
   g.destroy();
 }
 
@@ -435,6 +453,7 @@ export class OfficeEvents {
     this.wifiOutageAffected = 0;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
+    this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
@@ -595,6 +614,7 @@ export class OfficeEvents {
     else if (kind === "happy_hour") this.runHappyHour();
     else if (kind === "microwave_ding") this.runMicrowaveDing();
     else if (kind === "deploy_celebrate") this.runDeployCelebrate();
+    else if (kind === "mascot_zoomies") this.runMascotZoomies();
 
     this.publish();
   }
@@ -2133,6 +2153,121 @@ export class OfficeEvents {
     }
   }
 
+
+  /**
+   * Mascot zoomies: toast + soft dust/speed-line trail + lounge dash 3–5 spots.
+   * Skip if no mascot. Does not move agents/boss or mark gathering.
+   */
+  runMascotZoomies() {
+    const mascot = this.scene.mascot;
+    if (!mascot?.sprite || typeof mascot.startZoomies !== "function") {
+      return;
+    }
+
+    const holdMs =
+      ZOOMIES_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (ZOOMIES_HOLD_MAX_MS - ZOOMIES_HOLD_MIN_MS + 1),
+      );
+    const toast =
+      ZOOMIES_TOASTS[Math.floor(Math.random() * ZOOMIES_TOASTS.length)];
+    this.showToast(toast, 2800);
+
+    const spots = mascot.loungeSpots?.() || [];
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const pool =
+      Array.isArray(spots) && spots.length
+        ? [...spots]
+        : [
+            br,
+            { x: br.x + 1, y: br.y + 1 },
+            { x: br.x - 1, y: br.y + 2 },
+            { x: br.x + 2, y: br.y },
+            { x: br.x - 2, y: br.y + 1 },
+          ];
+    shuffleInPlace(pool);
+    const n = 3 + Math.floor(Math.random() * 3); // 3–5
+    const dests = [];
+    for (let i = 0; i < n; i++) {
+      dests.push(pool[i % pool.length]);
+    }
+
+    this.mascotZoomiesActive = true;
+    mascot.startZoomies(holdMs, dests);
+    this.spawnZoomiesTrail(mascot, holdMs);
+
+    const clear = this.scene.time.delayedCall(holdMs + 80, () => {
+      this.mascotZoomiesActive = false;
+      this.publish();
+    });
+    this.track(() => {
+      clear.remove(false);
+      try {
+        mascot.endZoomies?.();
+      } catch {
+        /* ignore */
+      }
+      this.mascotZoomiesActive = false;
+    });
+    this.publish();
+  }
+
+  /** Soft dust + speed-line particles that follow the zooming mascot. */
+  spawnZoomiesTrail(mascot, ms) {
+    ensureZoomiesDustTexture(this.scene);
+    const dust = this.scene.add.particles(0, 0, ZOOMIES_DUST_TEX, {
+      follow: mascot.sprite,
+      followOffset: { x: 0, y: 6 },
+      speed: { min: 8, max: 36 },
+      angle: { min: 140, max: 220 },
+      gravityY: -8,
+      scale: { start: 0.55, end: 0.08 },
+      alpha: { start: 0.38, end: 0 },
+      lifespan: { min: 260, max: 480 },
+      frequency: 42,
+      quantity: 1,
+      tint: [0xd8d0c4, 0xc8c0b4, 0xe8e0d4],
+    });
+    dust.setDepth(8);
+
+    const lines = this.scene.add.particles(0, 0, "fx-spark", {
+      follow: mascot.sprite,
+      followOffset: { x: 0, y: 2 },
+      speed: { min: 40, max: 90 },
+      angle: { min: 160, max: 200 },
+      scale: { start: 0.45, end: 0.05 },
+      alpha: { start: 0.55, end: 0 },
+      lifespan: { min: 180, max: 320 },
+      frequency: 70,
+      quantity: 1,
+      tint: [0xffffff, 0xffe8c8, 0xffd0a0],
+      blendMode: "ADD",
+    });
+    lines.setDepth(10);
+
+    const stop = this.scene.time.delayedCall(ms, () => {
+      dust.stop();
+      lines.stop();
+      this.scene.time.delayedCall(500, () => {
+        dust.destroy();
+        lines.destroy();
+      });
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        dust.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        lines.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -2327,6 +2462,7 @@ export class OfficeEvents {
       wifiOutageAffected: this.wifiOutageAffected,
       happyHourGathered: this.happyHourGathered,
       deployCelebrateGathered: this.deployCelebrateGathered,
+      mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,

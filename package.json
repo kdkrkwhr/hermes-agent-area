@@ -49,6 +49,7 @@
     "smoke:exitneon": "node scripts/smoke-exitneon.mjs",
     "smoke:calendar": "node scripts/smoke-calendar.mjs",
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
+    "smoke:mascotzoomies": "node scripts/smoke-mascotzoomies.mjs",
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
