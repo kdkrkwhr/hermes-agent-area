@@ -53,6 +53,7 @@ import { VendingIdle } from "../effects/vendingIdle.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
 import { OpenDeskIdle } from "../effects/openDeskIdle.js";
 import { GlassDoorSwing } from "../effects/glassDoorSwing.js";
+import { GlassPartitionShimmer } from "../effects/glassPartitionShimmer.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { WallClock } from "../effects/wallClock.js";
 import { WallCalendar } from "../effects/wallCalendar.js";
@@ -542,6 +543,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dualDeskIdle = new DualDeskIdle(this);
     this.openDeskIdle = new OpenDeskIdle(this);
     this.glassDoorSwing = new GlassDoorSwing(this);
+    this.glassPartitionShimmer = new GlassPartitionShimmer(this);
     this.napPodBreathe = new NapPodBreathe(this);
     // weatherFx contracts: fogMist / windowBirds / dustMotes before WeatherFx
     this.fogMist = new FogMist(this, { mapW, mapH });
@@ -611,6 +613,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dualDeskIdle?.sync();
     this.openDeskIdle?.sync();
     this.glassDoorSwing?.sync();
+    this.glassPartitionShimmer?.sync();
     this.napPodBreathe?.sync();
     this.fogMist?.sync();
     this.windowBirds?.sync();
@@ -710,6 +713,7 @@ export class OfficeScene extends Phaser.Scene {
     this.dualDeskIdle?.update(this.time.now, delta);
     this.openDeskIdle?.update(this.time.now, delta);
     this.glassDoorSwing?.update(this.time.now, delta);
+    this.glassPartitionShimmer?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.plantSway?.update(this.time.now);
     this.wallPosterAmbient?.update(this.time.now, delta);
@@ -1315,6 +1319,7 @@ export class OfficeScene extends Phaser.Scene {
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
       openDeskIdle: this.openDeskIdle?.snapshot?.() ?? null,
       doorswing: this.glassDoorSwing?.snapshot?.() ?? null,
+      glassfx: this.glassPartitionShimmer?.snapshot?.() ?? null,
       nappod: this.napPodBreathe?.snapshot?.() ?? null,
       bookshelf: this.bookshelfPages?.snapshot?.() ?? null,
       minimap: this.minimap?.snapshot?.() ?? null,

@@ -71,6 +71,7 @@ const BOOKSHELF_TIPS = [
   "?sofa=force 는 소파 쿠션 스모크용",
   "?chair=force 는 Open Desk 의자 스월 스모크용",
   "?doorswing=force 는 유리문 스윙 스모크용",
+  "?glassfx=force 는 War Room 유리파티션 shimmer 스모크용",
   "?exitneon=force 는 야간 EXIT 네온 스모크용",
   "?roundtable=force 는 원탁 머그/서류 bob 스모크용",
   "?dnd=force 는 Focus 방해금지 사인 스모크용",
