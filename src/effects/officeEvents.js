@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=wifi_outage` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=happy_hour` force. */
 
 import Phaser from "phaser";
 
@@ -20,6 +20,7 @@ const RANDOM_KINDS = [
   "wet_floor",
   "all_hands",
   "wifi_outage",
+  "happy_hour",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -27,6 +28,17 @@ const WIFI_MAX_MS = 4000;
 const WIFI_LINES = ["와이파이?", "버퍼링…"];
 const WIFI_GRAY = 0x7a7a88;
 const WIFI_ALPHA = 0.22;
+/** happy_hour: lounge gather + soft amber overlay (ms) */
+const HAPPY_HOLD_MIN_MS = 6000;
+const HAPPY_HOLD_MAX_MS = 10000;
+const HAPPY_TOASTS = ["해피아워!", "칼퇴 각?"];
+const HAPPY_AMBER = 0xe8a040;
+const HAPPY_ALPHA = 0.15;
+/** weekday 17–20: higher pick weight; Friday gets extra */
+const HAPPY_HOUR_START = 17;
+const HAPPY_HOUR_END = 20;
+const HAPPY_WEIGHT = 3;
+const HAPPY_FRIDAY_WEIGHT = 5;
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -361,6 +373,7 @@ export class OfficeEvents {
     this.pizzaPartyGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
+    this.happyHourGathered = 0;
     this.parcelActive = false;
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
@@ -449,6 +462,9 @@ export class OfficeEvents {
       weekday && hour >= WATER_HOUR_START && hour < WATER_HOUR_END;
     const pizzaWindow =
       weekday && hour >= PIZZA_HOUR_START && hour < PIZZA_HOUR_END;
+    const happyWindow =
+      weekday && hour >= HAPPY_HOUR_START && hour < HAPPY_HOUR_END;
+    const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
     for (const k of RANDOM_KINDS) {
@@ -457,6 +473,8 @@ export class OfficeEvents {
       if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
       else if (k === "water_cooler" && waterWindow) weight = WATER_WEIGHT;
       else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
+      else if (k === "happy_hour" && happyWindow)
+        weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
@@ -501,6 +519,7 @@ export class OfficeEvents {
     else if (kind === "wet_floor") this.runWetFloor();
     else if (kind === "all_hands") this.runAllHands();
     else if (kind === "wifi_outage") this.runWifiOutage();
+    else if (kind === "happy_hour") this.runHappyHour();
 
     this.publish();
   }
@@ -1673,6 +1692,147 @@ export class OfficeEvents {
     });
   }
 
+
+  /**
+   * Happy hour: toast + amber overlay + idle/break → lounge gather 6–10s.
+   * Soft amber (not wifi gray). Skip if another gather is active.
+   * Clink SFX respects mute/lock via playHappyClink.
+   */
+  runHappyHour() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      HAPPY_HOLD_MIN_MS +
+      Math.floor(Math.random() * (HAPPY_HOLD_MAX_MS - HAPPY_HOLD_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    const toast =
+      HAPPY_TOASTS[Math.floor(Math.random() * HAPPY_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playHappyClink();
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(HAPPY_AMBER, HAPPY_ALPHA);
+    }
+
+    const clearAmber = this.scene.time.delayedCall(holdMs, () => {
+      restoreOverlay();
+      this.publish();
+    });
+    this.track(() => {
+      clearAmber.remove(false);
+      restoreOverlay();
+    });
+
+    void this.gatherIdleToHappyHour(holdMs);
+  }
+
+  /** Idle/break 2–4 → lounge spots; hold 6–10s → wander restore. */
+  async gatherIdleToHappyHour(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const hold =
+      holdMs ??
+      HAPPY_HOLD_MIN_MS +
+        Math.floor(Math.random() * (HAPPY_HOLD_MAX_MS - HAPPY_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.happyHourGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft glass clink for happy_hour — skip if muted/locked. */
+  playHappyClink() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const notes = [988, 1319]; // B5 → E6
+      for (let i = 0; i < notes.length; i++) {
+        const start = t0 + i * 0.07;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(notes[i], start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.04, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.24);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -1865,6 +2025,7 @@ export class OfficeEvents {
       pizzaPartyGathered: this.pizzaPartyGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
+      happyHourGathered: this.happyHourGathered,
       parcelActive: this.parcelActive,
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,
