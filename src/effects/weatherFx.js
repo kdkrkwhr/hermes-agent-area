@@ -202,6 +202,7 @@ export class WeatherFx {
     this.scene.fogMist?.setCloudy(!!cls.cloudy);
 
     this.scene.windowBirds?.sync();
+    this.scene.shootingStars?.sync();
 
     this._applyCloudOverlay(cls);
     this._maybeToast(cls);
@@ -270,6 +271,7 @@ export class WeatherFx {
     this.scene.fogMist?.setCloudy(false);
     this.cloudOverlay?.setFillStyle(0x6a7a8a, 0);
     this.scene.windowBirds?.sync();
+    this.scene.shootingStars?.sync();
   }
 
   snapshot() {

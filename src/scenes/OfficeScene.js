@@ -32,6 +32,7 @@ import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
 import { FogMist } from "../effects/fogMist.js";
 import { WindowBirds } from "../effects/windowBirds.js";
+import { ShootingStars } from "../effects/shootingStars.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { WallPosterAmbient } from "../effects/wallPosterAmbient.js";
@@ -545,9 +546,10 @@ export class OfficeScene extends Phaser.Scene {
     this.glassDoorSwing = new GlassDoorSwing(this);
     this.glassPartitionShimmer = new GlassPartitionShimmer(this);
     this.napPodBreathe = new NapPodBreathe(this);
-    // weatherFx contracts: fogMist / windowBirds / dustMotes before WeatherFx
+    // weatherFx contracts: fogMist / windowBirds / shootingStars / dustMotes before WeatherFx
     this.fogMist = new FogMist(this, { mapW, mapH });
     this.windowBirds = new WindowBirds(this);
+    this.shootingStars = new ShootingStars(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.plantSway = new PlantSway(this);
     this.wallPosterAmbient = new WallPosterAmbient(this);
@@ -617,6 +619,7 @@ export class OfficeScene extends Phaser.Scene {
     this.napPodBreathe?.sync();
     this.fogMist?.sync();
     this.windowBirds?.sync();
+    this.shootingStars?.sync();
     this.dustMotes?.sync();
     this.plantSway?.sync();
     this.wallPosterAmbient?.sync();
@@ -1266,6 +1269,7 @@ export class OfficeScene extends Phaser.Scene {
       snow: this.snowFlakes?.snapshot?.() ?? null,
       fog: this.fogMist?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
+      stars: this.shootingStars?.snapshot?.() ?? null,
       dust: this.dustMotes?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
       wallPoster: this.wallPosterAmbient?.snapshot?.() ?? null,
