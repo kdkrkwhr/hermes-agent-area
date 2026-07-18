@@ -30,6 +30,7 @@ import { OfficeEvents } from "../effects/officeEvents.js";
 import { IdleChatter } from "../effects/idleChatter.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
+import { ThunderFx } from "../effects/thunderFx.js";
 import { FogMist } from "../effects/fogMist.js";
 import { WindowBirds } from "../effects/windowBirds.js";
 import { ShootingStars } from "../effects/shootingStars.js";
@@ -521,6 +522,8 @@ export class OfficeScene extends Phaser.Scene {
     this.devTimeIndex = this.parseDevTimeOverride();
     this.windowRain = new WindowRain(this);
     this.snowFlakes = new SnowFlakes(this);
+    // thunder after rain/snow — canStrike gates on windowRain.active + not snowing
+    this.thunderFx = new ThunderFx(this, { mapW, mapH });
     this.lobbyPoster = new LobbyPoster(this);
     this.nightFlashlight = new NightFlashlight(this);
     this.windowBlinds = new WindowBlinds(this);
@@ -1271,6 +1274,7 @@ export class OfficeScene extends Phaser.Scene {
       chatter: this.idleChatter?.snapshot?.() ?? null,
       rain: this.windowRain?.snapshot?.() ?? null,
       snow: this.snowFlakes?.snapshot?.() ?? null,
+      thunder: this.thunderFx?.snapshot?.() ?? null,
       fog: this.fogMist?.snapshot?.() ?? null,
       birds: this.windowBirds?.snapshot?.() ?? null,
       stars: this.shootingStars?.snapshot?.() ?? null,

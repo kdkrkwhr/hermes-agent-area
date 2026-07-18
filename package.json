@@ -55,6 +55,7 @@
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
     "smoke:stars": "node scripts/smoke-stars.mjs",
     "smoke:pollinator": "node scripts/smoke-pollinator.mjs",
+    "smoke:thunder": "node scripts/smoke-thunder.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

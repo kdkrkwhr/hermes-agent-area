@@ -58,6 +58,7 @@ export class ThunderFx {
     this.lastAt = null;
     this._timer = null;
     this._flashTimers = [];
+    this._destroyed = false;
 
     this.overlay = scene.add.rectangle(0, 0, dims.mapW, dims.mapH, 0xd8eeff, 0);
     this.overlay.setOrigin(0, 0);
@@ -68,7 +69,14 @@ export class ThunderFx {
     scene.events.once("shutdown", () => this.destroy());
 
     if (!this.forcedOff) {
-      this._scheduleNext();
+      // create() may run before sys.isActive — kick after first UPDATE
+      if (scene.sys?.isActive?.()) {
+        this._scheduleNext();
+      } else {
+        scene.events.once(Phaser.Scenes.Events.UPDATE, () => {
+          if (!this._destroyed) this._scheduleNext();
+        });
+      }
     }
     this.publish();
   }
@@ -92,7 +100,7 @@ export class ThunderFx {
   }
 
   _scheduleNext() {
-    if (this.forcedOff || !this.scene?.sys?.isActive?.()) return;
+    if (this.forcedOff || this._destroyed || !this.scene?.sys) return;
     if (this._timer) {
       this._timer.remove(false);
       this._timer = null;
@@ -171,6 +179,8 @@ export class ThunderFx {
   }
 
   destroy() {
+    if (this._destroyed) return;
+    this._destroyed = true;
     if (this._timer) {
       this._timer.remove(false);
       this._timer = null;
