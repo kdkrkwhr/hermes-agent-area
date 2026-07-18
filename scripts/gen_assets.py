@@ -487,8 +487,31 @@ def make_tileset() -> None:
     fill(buf, w, ox + 3, oy + 13, ox + 13, oy + 14, MW2)
     rect(buf, w, ox + 1, oy + 4, ox + 15, oy + 14, (140, 155, 170, 255))
 
+    # 41 server rack (gid 42) — charcoal IT rack + front LED dots
+    RACK = (28, 32, 38, 255)
+    RACK2 = (18, 20, 26, 255)
+    RACK_LIP = (48, 54, 64, 255)
+    LED_G = (60, 220, 120, 255)
+    LED_A = (80, 200, 255, 255)
+    LED_R = (255, 90, 70, 255)
+    ox, oy = tile_at(1, 5)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, RACK)
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 3, RACK_LIP)
+    fill(buf, w, ox + 3, oy + 3, ox + 13, oy + 14, RACK2)
+    for by in (5, 8, 11):
+        fill(buf, w, ox + 3, oy + by, ox + 13, oy + by + 1, RACK_LIP)
+    for i, (lx, col) in enumerate(((4, LED_A), (7, LED_G), (10, LED_R), (12, LED_G))):
+        for j in range(4):
+            py = oy + 4 + j * 2
+            if j == i % 4:
+                px(buf, w, ox + lx, py, col)
+            else:
+                px(buf, w, ox + lx, py, (40, 48, 56, 255))
+    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (90, 100, 118, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(0, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -517,7 +540,7 @@ def make_map_json() -> None:
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
       34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
-      39 fridge  40 microwave
+      39 fridge  40 microwave  42 serverRack
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -648,6 +671,8 @@ def make_map_json() -> None:
     put(9, 17, 26)
     put(8, 18, 7)
     put(5, 18, 7)
+    # Focus–corridor east wall: IT server rack (clears door@11,20 + focusDesks y=19)
+    put(10, 22, 42)
 
     # meeting War Room: table + chairs + board + leaf tables (GID8)
     put(19, 7, 23)
