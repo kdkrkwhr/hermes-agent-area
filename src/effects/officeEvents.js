@@ -109,6 +109,7 @@ const PIZZA_HOLD_MAX_MS = 12000;
 const ALL_HANDS_HOLD_MIN_MS = 8000;
 const ALL_HANDS_HOLD_MAX_MS = 12000;
 const COFFEE_GID = 16;
+const WATER_COOLER_GID = 41;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -182,6 +183,20 @@ function findCoffeeTile(scene) {
   }
   const br = scene.waypoints?.break;
   return br ? tileCenter(scene, br.x, br.y) : tileCenter(scene, 35, 5);
+}
+
+/** Prefer GID41 waterCooler; fallback coffee then break waypoint. */
+function findWaterCoolerTile(scene) {
+  const layer = scene.furniture;
+  if (layer?.getTileAt) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === WATER_COOLER_GID) return tileCenter(scene, tx, ty);
+      }
+    }
+  }
+  return findCoffeeTile(scene);
 }
 
 /** Lobby AABB center, else entrance waypoint. */
@@ -1397,8 +1412,7 @@ export class OfficeEvents {
     // lock early so printer/standup/ship don't race during pathfind
     this.markGathering(WATER_CHAT_MAX_MS + 12000);
     this.showToast("정수기 앞 잡담 중", 2800);
-    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
-    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    const { x, y } = findWaterCoolerTile(this.scene);
     this.spawnDropletRing(x, y - 6, 3500);
     void this.gatherIdleToWaterCooler();
   }
@@ -1435,17 +1449,21 @@ export class OfficeEvents {
     );
     const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
     const candidates = pool.slice(0, want);
-    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const cooler = findWaterCoolerTile(this.scene);
+    const tw = this.scene.map?.tileWidth ?? 32;
+    const th = this.scene.map?.tileHeight ?? 32;
+    const cx = Math.floor(cooler.x / tw);
+    const cy = Math.floor(cooler.y / th);
     const lou = this.scene.waypoints?.lounge;
     const spots =
       Array.isArray(lou) && lou.length
         ? shuffleInPlace([...lou])
         : [
-            br,
-            { x: br.x - 1, y: br.y + 1 },
-            { x: br.x + 1, y: br.y },
-            { x: br.x + 2, y: br.y - 1 },
-            { x: br.x - 2, y: br.y },
+            { x: cx, y: cy },
+            { x: cx - 1, y: cy + 1 },
+            { x: cx + 1, y: cy },
+            { x: cx + 2, y: cy - 1 },
+            { x: cx - 2, y: cy },
           ];
     const holdMs =
       WATER_CHAT_MIN_MS +

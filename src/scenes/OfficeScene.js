@@ -54,6 +54,7 @@ import { MeetingDoorSign } from "../effects/meetingDoorSign.js";
 import { BookshelfPages } from "../effects/bookshelfPages.js";
 import { VendingIdle } from "../effects/vendingIdle.js";
 import { KitchenIdle } from "../effects/kitchenIdle.js";
+import { WaterCoolerIdle } from "../effects/waterCoolerIdle.js";
 import { ServerRackLeds } from "../effects/serverRackLeds.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
 import { OpenDeskIdle } from "../effects/openDeskIdle.js";
@@ -549,6 +550,7 @@ export class OfficeScene extends Phaser.Scene {
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
     this.kitchenIdle = new KitchenIdle(this);
+    this.waterCoolerIdle = new WaterCoolerIdle(this);
     this.serverRackLeds = new ServerRackLeds(this);
     this.dualDeskIdle = new DualDeskIdle(this);
     this.openDeskIdle = new OpenDeskIdle(this);
@@ -727,6 +729,7 @@ export class OfficeScene extends Phaser.Scene {
     this.bookshelfPages?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
     this.kitchenIdle?.update(this.time.now);
+    this.waterCoolerIdle?.update(this.time.now);
     this.serverRackLeds?.update(this.time.now);
     this.dualDeskIdle?.update(this.time.now, delta);
     this.openDeskIdle?.update(this.time.now, delta);
@@ -1341,6 +1344,7 @@ export class OfficeScene extends Phaser.Scene {
       printerScan: this.printerScan?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       kitchenIdle: this.kitchenIdle?.snapshot?.() ?? null,
+      waterCoolerIdle: this.waterCoolerIdle?.snapshot?.() ?? null,
       serverRack: this.serverRackLeds?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
       openDeskIdle: this.openDeskIdle?.snapshot?.() ?? null,

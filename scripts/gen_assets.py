@@ -487,6 +487,26 @@ def make_tileset() -> None:
     fill(buf, w, ox + 3, oy + 13, ox + 13, oy + 14, MW2)
     rect(buf, w, ox + 1, oy + 4, ox + 15, oy + 14, (140, 155, 170, 255))
 
+    # 40 waterCooler (gid 41) — tall SV open-plan cooler + cup ledge + soft LED
+    COOLER = (236, 242, 248, 255)
+    COOLER2 = (200, 214, 228, 255)
+    COOLER_BODY = (180, 198, 214, 255)
+    WATER_BLUE = (120, 200, 230, 200)
+    LED_CY = (100, 230, 210, 255)
+    CUP = (245, 248, 252, 255)
+    ox, oy = tile_at(0, 5)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 3, oy + 1, ox + 13, oy + 15, COOLER)
+    fill(buf, w, ox + 3, oy + 1, ox + 13, oy + 3, COOLER2)
+    fill(buf, w, ox + 5, oy + 3, ox + 11, oy + 8, WATER_BLUE)
+    fill(buf, w, ox + 6, oy + 4, ox + 8, oy + 6, (200, 235, 245, 160))
+    fill(buf, w, ox + 4, oy + 2, ox + 6, oy + 3, LED_CY)
+    fill(buf, w, ox + 4, oy + 9, ox + 12, oy + 11, COOLER_BODY)
+    fill(buf, w, ox + 7, oy + 10, ox + 9, oy + 12, (90, 110, 130, 255))
+    fill(buf, w, ox + 4, oy + 12, ox + 12, oy + 14, COOLER2)
+    fill(buf, w, ox + 6, oy + 11, ox + 8, oy + 13, CUP)
+    rect(buf, w, ox + 3, oy + 1, ox + 13, oy + 15, (150, 175, 195, 255))
+
     # 41 server rack (gid 42) — charcoal IT rack + front LED dots
     RACK = (28, 32, 38, 255)
     RACK2 = (18, 20, 26, 255)
@@ -511,7 +531,7 @@ def make_tileset() -> None:
     rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (90, 100, 118, 255))
 
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(0, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -540,7 +560,7 @@ def make_map_json() -> None:
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
       34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
-      39 fridge  40 microwave  42 serverRack
+      39 fridge  40 microwave  41 waterCooler  42 serverRack
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -718,6 +738,7 @@ def make_map_json() -> None:
     put(23, 15, 36)  # printer beside coffee (open-desk edge)
     put(22, 16, 39)  # fridge south of coffee (kitchen, clears corridor)
     put(23, 16, 40)  # microwave beside fridge
+    put(21, 16, 41)  # waterCooler west of fridge (kitchen, clears corridor)
     put(17, 17, 23)
     put(18, 17, 23)
     put(16, 17, 7)

@@ -32,6 +32,7 @@ const DRIP_MS = 500;
 const VEND_MS = 400;
 const FRIDGE_MS = 500;
 const MICROWAVE_MS = 450;
+const COOLER_MS = 450;
 const HIGHFIVE_MS = 400;
 
 function readMutePref() {
@@ -602,6 +603,40 @@ export class OfficeAudio {
       gain.connect(ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.3);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Short cooler sip/drip — respects mute / ?sfx=0. */
+  playCoolerSip() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastCoolerAt && now - this._lastCoolerAt < COOLER_MS) return;
+    this._lastCoolerAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const tones = [
+        { type: "sine", f0: 720, f1: 380, at: 0, dur: 0.07, vol: 0.05 },
+        { type: "triangle", f0: 440, f1: 220, at: 0.04, dur: 0.1, vol: 0.04 },
+      ];
+      for (const { type, f0, f1, at, dur, vol } of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        const t = t0 + at;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(60, f1), t + dur);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
     } catch {
       /* autoplay / headless */
     }
