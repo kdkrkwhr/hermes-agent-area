@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=hotfix_scramble` / `?events=merge_conflict` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -33,6 +33,8 @@ const RANDOM_KINDS = [
   "pair_programming",
   "merge_conflict",
   "hotfix_scramble",
+  "build_fail",
+  "code_freeze",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -40,6 +42,18 @@ const WIFI_MAX_MS = 4000;
 const WIFI_LINES = ["와이파이?", "버퍼링…"];
 const WIFI_GRAY = 0x7a7a88;
 const WIFI_ALPHA = 0.22;
+/** code_freeze: cool-blue overlay + idle bubbles (ms) — no gather/move */
+const FREEZE_MIN_MS = 4000;
+const FREEZE_MAX_MS = 7000;
+const FREEZE_TOASTS = ["코드프리즈!", "머지 잠금"];
+const FREEZE_LINES = ["커밋 금지?", "핫픽스만"];
+/** soft cool blue — deploy lock vibe */
+const FREEZE_BLUE = 0x4a7ec8;
+const FREEZE_ALPHA = 0.15;
+/** weekday 16–19: higher pick weight */
+const FREEZE_HOUR_START = 16;
+const FREEZE_HOUR_END = 19;
+const FREEZE_WEIGHT = 3;
 /** happy_hour: lounge gather + soft amber overlay (ms) */
 const HAPPY_HOLD_MIN_MS = 6000;
 const HAPPY_HOLD_MAX_MS = 10000;
@@ -167,6 +181,17 @@ const HOTFIX_AM_END = 12;
 const HOTFIX_PM_START = 14;
 const HOTFIX_PM_END = 18;
 const HOTFIX_WEIGHT = 3;
+/** build_fail: Open Desk gather + soft rose/red overlay (ms) — CI red vibe */
+const BUILD_FAIL_MIN_MS = 4000;
+const BUILD_FAIL_MAX_MS = 7000;
+const BUILD_FAIL_TOASTS = ["빌드 깨짐!", "CI 빨강"];
+const BUILD_FAIL_LINES = ["뭐가 깨졌지?", "로그 각"];
+/** soft rose/red — distinct from hotfix pulse / deploy teal */
+const BUILD_FAIL_ROSE = 0xc04558;
+const BUILD_FAIL_ALPHA_MIN = 0.12;
+const BUILD_FAIL_ALPHA_MAX = 0.18;
+/** weekday 10–12 · 14–18: same window as deploy (one pick per tick) */
+const BUILD_FAIL_WEIGHT = 3;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -769,6 +794,7 @@ export class OfficeEvents {
     this.pizzaPartyGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
+    this.codeFreezeAffected = 0;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
     this.birthdayBalloonsGathered = 0;
@@ -776,6 +802,7 @@ export class OfficeEvents {
     this.pairProgrammingGathered = 0;
     this.mergeConflictGathered = 0;
     this.hotfixScrambleGathered = 0;
+    this.buildFailGathered = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -892,6 +919,8 @@ export class OfficeEvents {
       weekday &&
       ((hour >= HOTFIX_AM_START && hour < HOTFIX_AM_END) ||
         (hour >= HOTFIX_PM_START && hour < HOTFIX_PM_END));
+    const freezeWindow =
+      weekday && hour >= FREEZE_HOUR_START && hour < FREEZE_HOUR_END;
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -913,6 +942,8 @@ export class OfficeEvents {
       else if (k === "pair_programming" && pairWindow) weight = PAIR_WEIGHT;
       else if (k === "merge_conflict") weight = MERGE_WEIGHT;
       else if (k === "hotfix_scramble" && hotfixWindow) weight = HOTFIX_WEIGHT;
+      else if (k === "build_fail" && deployWindow) weight = BUILD_FAIL_WEIGHT;
+      else if (k === "code_freeze" && freezeWindow) weight = FREEZE_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -966,6 +997,8 @@ export class OfficeEvents {
     else if (kind === "pair_programming") this.runPairProgramming();
     else if (kind === "merge_conflict") this.runMergeConflict();
     else if (kind === "hotfix_scramble") this.runHotfixScramble();
+    else if (kind === "build_fail") this.runBuildFail();
+    else if (kind === "code_freeze") this.runCodeFreeze();
 
     this.publish();
   }
@@ -2181,7 +2214,8 @@ export class OfficeEvents {
             agent._workBackup == null &&
             agent._specBackup == null &&
             agent._phoneBackup == null &&
-            agent._wifiBackup == null
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null
           ) {
             agent.setStatus(agent._stretchBackup);
           }
@@ -2266,7 +2300,8 @@ export class OfficeEvents {
             agent._specBackup == null &&
             agent._stretchBackup == null &&
             agent._phoneBackup == null &&
-            agent._waterBackup == null
+            agent._waterBackup == null &&
+            agent._freezeBackup == null
           ) {
             agent.setStatus(agent._wifiBackup);
           }
@@ -2290,6 +2325,118 @@ export class OfficeEvents {
     });
   }
 
+  /**
+   * Code freeze: toast + cool-blue overlay 4–7s + idle bubbles on 1–2 agents.
+   * No gather / no move of running·blocked. Skip if gather active.
+   * Optional freeze chime respects mute/lock.
+   */
+  runCodeFreeze() {
+    if (this.isGathering()) return;
+
+    const toast =
+      FREEZE_TOASTS[Math.floor(Math.random() * FREEZE_TOASTS.length)];
+    this.showToast(toast, 3000);
+    this.playFreezeChime();
+
+    const duration =
+      FREEZE_MIN_MS +
+      Math.floor(Math.random() * (FREEZE_MAX_MS - FREEZE_MIN_MS + 1));
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(FREEZE_BLUE, FREEZE_ALPHA);
+    }
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 2), // 1–2
+    );
+    const picked = pool.slice(0, want);
+    this.codeFreezeAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._freezeBackup = agent.statusText;
+      agent.setStatus(
+        FREEZE_LINES[Math.floor(Math.random() * FREEZE_LINES.length)],
+      );
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._freezeBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null
+          ) {
+            agent.setStatus(agent._freezeBackup);
+          }
+          agent._freezeBackup = null;
+        }
+      }
+      this.codeFreezeAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._freezeBackup != null) {
+          agent.setStatus(agent._freezeBackup);
+          agent._freezeBackup = null;
+        }
+      }
+      this.codeFreezeAffected = 0;
+    });
+  }
+
+  /** Soft freeze chime (descending cool tone) — skip if muted/locked. */
+  playFreezeChime() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // E5 → C5 — short “lock” drop
+      const notes = [659, 523];
+      for (let i = 0; i < notes.length; i++) {
+        const start = t0 + i * 0.08;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(notes[i], start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.035, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.28);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.3);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
 
   /**
    * Happy hour: toast + amber overlay + idle/break → lounge gather 6–10s.
@@ -3550,6 +3697,154 @@ export class OfficeEvents {
     this.track(() => restore.remove(false));
   }
 
+  /**
+   * Build fail: toast + soft rose/red overlay 4–7s +
+   * idle 1–3 → Open Desk gather. Skip if gather active
+   * (printer_jam / hotfix / etc.). Bubbles: CI panic lines.
+   */
+  runBuildFail() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      BUILD_FAIL_MIN_MS +
+      Math.floor(
+        Math.random() * (BUILD_FAIL_MAX_MS - BUILD_FAIL_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      BUILD_FAIL_TOASTS[Math.floor(Math.random() * BUILD_FAIL_TOASTS.length)];
+    this.showToast(toast, 3200);
+
+    const alpha =
+      BUILD_FAIL_ALPHA_MIN +
+      Math.random() * (BUILD_FAIL_ALPHA_MAX - BUILD_FAIL_ALPHA_MIN);
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(BUILD_FAIL_ROSE, alpha);
+      const clearOverlay = this.scene.time.delayedCall(holdMs, () => {
+        restoreOverlay();
+      });
+      this.track(() => {
+        clearOverlay.remove(false);
+        restoreOverlay();
+      });
+    }
+
+    const desk = findMergeConflictDeskTile(this.scene);
+    void this.gatherIdleToBuildFail(holdMs, desk);
+  }
+
+  /** Idle 1–3 → Open Desk +/-1 ring; hold 4–7s → restore + clear bubbles. */
+  async gatherIdleToBuildFail(holdMs, deskTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 1 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const desk = deskTile || findMergeConflictDeskTile(this.scene);
+    const openWp = this.scene.waypoints?.desks;
+    const opens = findOpenDeskTiles(this.scene);
+    const spots =
+      Array.isArray(openWp) && openWp.length >= 2
+        ? shuffleInPlace(openWp.slice()).slice(0, 3)
+        : opens.length
+          ? shuffleInPlace(
+              opens.map((d) => ({ x: d.tx, y: d.ty + 1 })),
+            ).slice(0, 3)
+          : meetingOffsets(desk);
+    const hold =
+      holdMs ??
+      BUILD_FAIL_MIN_MS +
+        Math.floor(
+          Math.random() * (BUILD_FAIL_MAX_MS - BUILD_FAIL_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+      agent._buildFailBackup = agent.statusText;
+      agent.setStatus(
+        BUILD_FAIL_LINES[Math.floor(Math.random() * BUILD_FAIL_LINES.length)],
+      );
+    }
+
+    this.buildFailGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (agent._buildFailBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null
+          ) {
+            agent.setStatus(agent._buildFailBackup);
+          }
+          agent._buildFailBackup = null;
+        }
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      this.buildFailGathered = 0;
+      this.publish();
+    });
+    this.track(() => {
+      restore.remove(false);
+      for (const agent of moved) {
+        if (agent._buildFailBackup != null) {
+          agent.setStatus(agent._buildFailBackup);
+          agent._buildFailBackup = null;
+        }
+      }
+      this.buildFailGathered = 0;
+    });
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
 
@@ -3743,6 +4038,7 @@ export class OfficeEvents {
       pizzaPartyGathered: this.pizzaPartyGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
+      codeFreezeAffected: this.codeFreezeAffected,
       happyHourGathered: this.happyHourGathered,
       deployCelebrateGathered: this.deployCelebrateGathered,
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
@@ -3750,6 +4046,7 @@ export class OfficeEvents {
       pairProgrammingGathered: this.pairProgrammingGathered,
       mergeConflictGathered: this.mergeConflictGathered,
       hotfixScrambleGathered: this.hotfixScrambleGathered,
+      buildFailGathered: this.buildFailGathered,
       mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,

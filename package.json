@@ -65,6 +65,7 @@
     "smoke:pairprogramming": "node scripts/smoke-pairprogramming.mjs",
     "smoke:mergeconflict": "node scripts/smoke-mergeconflict.mjs",
     "smoke:hotfixscramble": "node scripts/smoke-hotfixscramble.mjs",
+    "smoke:buildfail": "node scripts/smoke-buildfail.mjs",
     "smoke:codefreeze": "node scripts/smoke-codefreeze.mjs",
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
     "smoke:stars": "node scripts/smoke-stars.mjs",
