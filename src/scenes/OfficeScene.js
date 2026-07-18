@@ -1382,6 +1382,7 @@ export class OfficeScene extends Phaser.Scene {
       microwave: this.roomInteract?.microwaveSnapshot?.() ?? null,
       coatRack: this.roomInteract?.coatRackSnapshot?.() ?? null,
       posterQuote: this.roomInteract?.posterSnapshot?.() ?? null,
+      printer: this.roomInteract?.printerSnapshot?.() ?? null,
       visitor: this.visitorDirector?.snapshot?.() ?? null,
       clockOut: {
         pending: !!this._clockOutPending,

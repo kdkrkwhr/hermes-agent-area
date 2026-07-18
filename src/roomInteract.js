@@ -8,6 +8,7 @@ import {
   posterEnabledFromQuery,
 } from "./effects/lobbyPoster.js";
 import { findBookshelfTiles } from "./effects/bookshelfPages.js";
+import { PRINTER_GID } from "./effects/officeEvents.js";
 
 const COFFEE_GID = 16;
 const AQUARIUM_GID = 37;
@@ -36,6 +37,12 @@ const VENDING_MS_MAX = 2000;
 const VENDING_COOLDOWN_MS_MIN = 12000;
 const VENDING_COOLDOWN_MS_MAX = 20000;
 const VENDING_NEAR_TILES = 2.0;
+/** Printer print: 1–1.5s paper burst, 12–20s cooldown, ≤2.0 tile. */
+const PRINTER_MS_MIN = 1000;
+const PRINTER_MS_MAX = 1500;
+const PRINTER_COOLDOWN_MS_MIN = 12000;
+const PRINTER_COOLDOWN_MS_MAX = 20000;
+const PRINTER_NEAR_TILES = 2.0;
 /** Fridge / microwave / cooler: short toast, 12–20s cooldown, ≤2.0 tile. */
 const KITCHEN_MS_MIN = 800;
 const KITCHEN_MS_MAX = 1400;
@@ -90,6 +97,7 @@ const BOOKSHELF_TIPS = [
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
   "?coatrack=force 는 로비 코트랙 wet 스모크용",
+  "?printer=force 는 Open Desk 프린터 출력 스모크용",
   "playwright smoke는 ?events=0&sfx=0 추천",
   "가상사무실 FX 대부분 ?쿼리=0 로 끔",
   "칸반 blocked면 clarify 말고 kanban_block",
@@ -135,6 +143,8 @@ const TYPING_FRAMES = ["·", "··", "···"];
 const HEART_TINTS = [0xff6699, 0xff88aa, 0xff4466, 0xffaacc];
 const DROP_TINTS = [0x6ec8ff, 0x4ab0ee, 0x9ad8ff, 0x3a9ad4];
 const SNACK_TINTS = [0xff5555, 0x4aa0ff, 0xffc44a, 0xff88aa, 0x88dd66];
+const PAPER_TINTS = [0xffffff, 0xf5f0e6, 0xe8eef5, 0xfff8dc];
+const PRINTER_TOASTS = ["출력 중…", "인쇄 중…", "찌르륵… 출력!"];
 
 function tileCenter(scene, tx, ty) {
   const tw = scene.map.tileWidth;
@@ -246,6 +256,21 @@ function findCoatRackInteractTiles(scene) {
       for (let tx = 0; tx < scene.map.width; tx++) {
         const tile = layer.getTileAt(tx, ty);
         if (tile?.index === COAT_RACK_GID) hits.push(tileCenter(scene, tx, ty));
+      }
+    }
+  }
+  return hits;
+}
+
+/** Real GID36 printer furniture only — no entrance fallback. */
+function findPrinterTiles(scene) {
+  const hits = [];
+  const layer = scene.furniture;
+  if (layer?.getTileAt && scene.map) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === PRINTER_GID) hits.push(tileCenter(scene, tx, ty));
       }
     }
   }
@@ -420,6 +445,28 @@ function coatRackEnabledFromQuery() {
   }
 }
 
+/** Default on; `?printer=0|false|off` disables E print. `force` stays on (smoke auto-fire). */
+function printerEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("printer");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
+/** `?printer=force` → smoke auto-print once after boot. */
+function printerForceFromQuery() {
+  if (typeof location === "undefined") return false;
+  try {
+    return new URLSearchParams(location.search).get("printer") === "force";
+  } catch {
+    return false;
+  }
+}
+
 /** Default on; `?bookshelftip=0|false|off` disables E-tip only (ambient FX still on). */
 function bookshelfTipEnabledFromQuery() {
   if (typeof location === "undefined") return true;
@@ -468,6 +515,16 @@ function nearMicrowave(scene, microwaveTiles) {
   const reach = scene.map.tileWidth * KITCHEN_NEAR_TILES;
   for (const m of microwaveTiles) {
     if (Math.hypot(b.x - m.x, b.y - m.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearPrinter(scene, printerTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !printerTiles?.length) return false;
+  const reach = scene.map.tileWidth * PRINTER_NEAR_TILES;
+  for (const p of printerTiles) {
+    if (Math.hypot(b.x - p.x, b.y - p.y) <= reach) return true;
   }
   return false;
 }
@@ -577,6 +634,21 @@ function nearestMicrowave(scene, microwaveTiles) {
   return best;
 }
 
+function nearestPrinter(scene, printerTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !printerTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const p of printerTiles) {
+    const d = Math.hypot(b.x - p.x, b.y - p.y);
+    if (d < bestD) {
+      bestD = d;
+      best = p;
+    }
+  }
+  return best;
+}
+
 function nearestCooler(scene, coolerTiles) {
   const b = scene.boss?.sprite;
   if (!b || !coolerTiles?.length) return null;
@@ -663,6 +735,19 @@ function ensureSnackTexture(scene) {
   g.fillStyle(0xffffff, 0.55);
   g.fillRect(2, 2, 4, 2);
   g.generateTexture("fx-snack", 8, 10);
+  g.destroy();
+}
+
+function ensurePaperTexture(scene) {
+  if (scene.textures.exists("fx-paper")) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(0, 0, 7, 9);
+  g.fillStyle(0xcccccc, 0.5);
+  g.fillRect(1, 2, 5, 1);
+  g.fillRect(1, 4, 4, 1);
+  g.fillRect(1, 6, 5, 1);
+  g.generateTexture("fx-paper", 7, 9);
   g.destroy();
 }
 
@@ -769,6 +854,44 @@ function burstVendingSnack(scene, x, y, durationMs = 1500) {
   return { emitter, qty, durationMs: dur };
 }
 
+/** Paper sheet burst for 1–1.5s at printer tray. */
+function burstPrinterPaper(scene, x, y, durationMs = 1200) {
+  if (!scene?.add) return null;
+  ensurePaperTexture(scene);
+  const qty = 6 + Math.floor(Math.random() * 5); // 6–10
+  const emitter = scene.add.particles(x, y - 2, "fx-paper", {
+    speed: { min: 28, max: 95 },
+    angle: { min: 200, max: 340 },
+    gravityY: 140,
+    scale: { start: 1.05, end: 0.25 },
+    alpha: { start: 0.95, end: 0 },
+    lifespan: { min: 450, max: 1000 },
+    quantity: 1,
+    frequency: 80,
+    tint: PAPER_TINTS,
+    blendMode: "NORMAL",
+    rotate: { min: -55, max: 55 },
+  });
+  emitter.setDepth(12);
+  emitter.explode(qty);
+  const dur = Math.max(900, durationMs);
+  scene.time.delayedCall(dur, () => {
+    try {
+      emitter.stop();
+    } catch {
+      /* ignore */
+    }
+  });
+  scene.time.delayedCall(dur + 900, () => {
+    try {
+      emitter.destroy();
+    } catch {
+      /* ignore */
+    }
+  });
+  return { emitter, qty, durationMs: dur };
+}
+
 function loungeAgents(scene) {
   return (scene.agents || []).filter((a) => {
     if (a.serverStatus === "idle" || a.currentKind === "break") return true;
@@ -808,6 +931,7 @@ export class RoomInteract {
     this.microwaveTiles = findMicrowaveTiles(scene);
     this.coolerTiles = findWaterCoolerTiles(scene);
     this.coatRackTiles = findCoatRackInteractTiles(scene);
+    this.printerTiles = findPrinterTiles(scene);
     this.plantTiles = findPlantTiles(scene);
     this.posterTiles = findLobbyPosterTiles(scene);
     this.bookshelfTiles = findBookshelfTiles(scene);
@@ -870,6 +994,13 @@ export class RoomInteract {
     this._lastCoatRackTile = null;
     this._lastCoatRackToast = null;
     this._coatHung = false;
+    this.printerEnabled = printerEnabledFromQuery();
+    this.printerActiveUntil = 0;
+    this.printerCooldownUntil = 0;
+    this.lastPrintAt = 0;
+    this._lastPrintTile = null;
+    this._lastPrintToast = null;
+    this._lastPaperQty = 0;
     this.posterEnabled = posterEnabledFromQuery();
     this.posterCooldownUntil = 0;
     this.lastPosterAt = 0;
@@ -881,6 +1012,15 @@ export class RoomInteract {
     this.lastBookshelfAt = 0;
     this._lastBookshelfTip = null;
     this._lastBookshelfTile = null;
+
+    if (this.printerEnabled && printerForceFromQuery()) {
+      this.scene.time.delayedCall(900, () => {
+        const machine = this.printerTiles?.[0];
+        if (!machine || !this.scene.boss?.sprite) return;
+        this.scene.boss.sprite.setPosition(machine.x + 12, machine.y + 18);
+        this.startPrinterPrint();
+      });
+    }
   }
 
   /** Call once after map ready — entry welcome. */
@@ -908,7 +1048,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > coatrack > nap > mascotpet > plantwater > poster > bookshelf > work
+    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > coatrack > printer > nap > mascotpet > plantwater > poster > bookshelf > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -951,6 +1091,13 @@ export class RoomInteract {
       !this.coatRackActive()
     ) {
       return "coatrack";
+    }
+    if (
+      this.printerEnabled &&
+      nearPrinter(this.scene, this.printerTiles) &&
+      !this.printerActive()
+    ) {
+      return "printer";
     }
     if (nearSleep(this.scene)) return "nap";
     if (
@@ -1026,6 +1173,12 @@ export class RoomInteract {
       }
       return this._coatHung ? "E 코트 벗기" : "E 코트 걸기";
     }
+    if (k === "printer") {
+      if (this.printerCoolingDown()) {
+        return `프린터 쿨다운 ${this.printerCooldownLeftSec()}s`;
+      }
+      return "E 출력";
+    }
     if (k === "nap") return "E 낮잠";
     if (k === "mascotpet") {
       if (this.mascotPetCoolingDown()) {
@@ -1080,6 +1233,9 @@ export class RoomInteract {
     }
     if (this.coatRackEnabled && nearCoatRack(this.scene, this.coatRackTiles)) {
       return this.startCoatRack();
+    }
+    if (this.printerEnabled && nearPrinter(this.scene, this.printerTiles)) {
+      return this.startPrinterPrint();
     }
     if (nearSleep(this.scene)) {
       this.openNap();
@@ -1645,6 +1801,85 @@ export class RoomInteract {
     return true;
   }
 
+  printerActive() {
+    return this.scene.time.now < this.printerActiveUntil;
+  }
+
+  printerCoolingDown() {
+    return this.scene.time.now < this.printerCooldownUntil;
+  }
+
+  printerCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.printerCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  /** printer_jam gather 중이면 용지 걸림 toast만. */
+  isPrinterJamActive() {
+    const oe = this.scene.officeEvents;
+    if (!oe?.isGathering?.()) return false;
+    return oe.lastEvent === "printer_jam";
+  }
+
+  startPrinterPrint() {
+    if (!this.printerEnabled) return false;
+    if (this.printerActive()) return true;
+    if (this.isPrinterJamActive()) {
+      this.showToast("용지 걸림…");
+      this.lastAction = {
+        kind: "printer_jam_block",
+        at: this.scene.time.now,
+      };
+      this.publish();
+      return true;
+    }
+    if (this.printerCoolingDown()) {
+      this.showToast(`프린터 쿨다운 ${this.printerCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "printer_cooldown",
+        cooldownSec: this.printerCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const machine = nearestPrinter(this.scene, this.printerTiles);
+    if (!machine) return false;
+    const now = this.scene.time.now;
+    const dur =
+      PRINTER_MS_MIN +
+      Math.floor(Math.random() * (PRINTER_MS_MAX - PRINTER_MS_MIN + 1));
+    const cool =
+      PRINTER_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (PRINTER_COOLDOWN_MS_MAX - PRINTER_COOLDOWN_MS_MIN + 1),
+      );
+    const toast =
+      PRINTER_TOASTS[Math.floor(Math.random() * PRINTER_TOASTS.length)];
+    this.lastPrintAt = now;
+    this.printerActiveUntil = now + dur;
+    this.printerCooldownUntil = now + cool;
+    this._lastPrintTile = { tx: machine.tx, ty: machine.ty };
+    this._lastPrintToast = toast;
+    const burst = burstPrinterPaper(this.scene, machine.x, machine.y, dur);
+    this._lastPaperQty = burst?.qty ?? 0;
+    this.scene.officeAudio?.playPrinterClick?.();
+    this.showToast(toast);
+    this.lastAction = {
+      kind: "printer_print_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      toast,
+      papers: this._lastPaperQty,
+      machine: this._lastPrintTile,
+    };
+    this.publish();
+    return true;
+  }
+
   bookshelfActive() {
     return this.scene.time.now < this.bookshelfActiveUntil;
   }
@@ -1810,6 +2045,14 @@ export class RoomInteract {
       this.lastAction = {
         kind: "coatrack_end",
         lastCoatRackAt: this.lastCoatRackAt,
+      };
+      this.publish();
+    }
+    if (this.printerActiveUntil && time >= this.printerActiveUntil) {
+      this.printerActiveUntil = 0;
+      this.lastAction = {
+        kind: "printer_print_end",
+        lastPrintAt: this.lastPrintAt,
       };
       this.publish();
     }
@@ -2072,6 +2315,24 @@ export class RoomInteract {
     };
   }
 
+  printerSnapshot() {
+    return {
+      enabled: !!this.printerEnabled,
+      active: this.printerActive(),
+      cooldown: this.printerCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.printerCooldownUntil - this.scene.time.now),
+      ),
+      lastPrintAt: this.lastPrintAt || null,
+      printerCount: this.printerTiles?.length ?? 0,
+      lastMachine: this._lastPrintTile,
+      lastToast: this._lastPrintToast,
+      papers: this._lastPaperQty || 0,
+      jamBlocked: this.isPrinterJamActive(),
+    };
+  }
+
   posterSnapshot() {
     return {
       enabled: !!this.posterEnabled,
@@ -2103,6 +2364,7 @@ export class RoomInteract {
       microwaveTiles: this.microwaveTiles.map((m) => ({ tx: m.tx, ty: m.ty })),
       coolerTiles: this.coolerTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       coatRackTiles: this.coatRackTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
+      printerTiles: this.printerTiles.map((p) => ({ tx: p.tx, ty: p.ty })),
       plantTiles: this.plantTiles.map((p) => ({
         tx: p.tx,
         ty: p.ty,
@@ -2147,6 +2409,10 @@ export class RoomInteract {
       coatRackActive: this.coatRackActive(),
       coatRackCooldown: this.coatRackCoolingDown(),
       coatHung: !!this._coatHung,
+      printerEnabled: !!this.printerEnabled,
+      printerActive: this.printerActive(),
+      printerCooldown: this.printerCoolingDown(),
+      lastPrintAt: this.lastPrintAt || null,
       posterEnabled: !!this.posterEnabled,
       posterCooldown: this.posterCoolingDown(),
       lastPosterAt: this.lastPosterAt || null,
@@ -2166,6 +2432,7 @@ export class RoomInteract {
       microwave: this.microwaveSnapshot(),
       cooler: this.coolerSnapshot(),
       coatRack: this.coatRackSnapshot(),
+      printer: this.printerSnapshot(),
       posterQuote: this.posterSnapshot(),
       bookshelfTip: this.bookshelfSnapshot(),
     };
@@ -2180,6 +2447,7 @@ export {
   findMicrowaveTiles,
   findWaterCoolerTiles,
   findCoatRackInteractTiles,
+  findPrinterTiles,
   COFFEE_GID,
   AQUARIUM_GID,
   VENDING_GID,
@@ -2187,6 +2455,7 @@ export {
   MICROWAVE_GID,
   WATER_COOLER_GID,
   COAT_RACK_GID,
+  PRINTER_GID,
   nearCoffee,
   nearAquarium,
   nearVending,
@@ -2194,6 +2463,7 @@ export {
   nearMicrowave,
   nearCooler,
   nearCoatRack,
+  nearPrinter,
   nearSleep,
   nearMascot,
   nearPlant,
@@ -2204,6 +2474,8 @@ export {
   microwaveEnabledFromQuery,
   coolerEnabledFromQuery,
   coatRackEnabledFromQuery,
+  printerEnabledFromQuery,
+  printerForceFromQuery,
   bookshelfTipEnabledFromQuery,
   nearBookshelf,
   BOOKSHELF_TIPS,

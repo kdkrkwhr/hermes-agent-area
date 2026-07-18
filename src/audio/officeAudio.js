@@ -30,6 +30,7 @@ const BLOOP_MS = 450;
 const MEOW_MS = 700;
 const DRIP_MS = 500;
 const VEND_MS = 400;
+const PRINT_MS = 400;
 const FRIDGE_MS = 500;
 const MICROWAVE_MS = 450;
 const COOLER_MS = 450;
@@ -535,6 +536,40 @@ export class OfficeAudio {
         osc.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
         gain.gain.setValueAtTime(0.0001, t);
         gain.gain.exponentialRampToValueAtTime(vol, t + 0.006);
+        gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(t);
+        osc.stop(t + dur + 0.02);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Printer feed click + short ding — respects mute / ?sfx=0. */
+  playPrinterClick() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastPrintAt && now - this._lastPrintAt < PRINT_MS) return;
+    this._lastPrintAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const tones = [
+        { type: "square", f0: 520, f1: 340, at: 0, dur: 0.035, vol: 0.045 },
+        { type: "sine", f0: 1320, f1: 990, at: 0.04, dur: 0.09, vol: 0.05 },
+      ];
+      for (const { type, f0, f1, at, dur, vol } of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        const t = t0 + at;
+        osc.frequency.setValueAtTime(f0, t);
+        osc.frequency.exponentialRampToValueAtTime(Math.max(40, f1), t + dur);
+        gain.gain.setValueAtTime(0.0001, t);
+        gain.gain.exponentialRampToValueAtTime(vol, t + 0.005);
         gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         osc.connect(gain);
         gain.connect(ctx.destination);
