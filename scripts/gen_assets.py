@@ -686,6 +686,20 @@ def make_map_json() -> None:
     ):
         put(lx, ly, 20, False)
 
+    # flower pots (GID 35) — Open Desk / Focus / lounge corners
+    # walk-through decor (same as lamps); plantSway + daytime pollinators scan these
+    for fx, fy in (
+        (1, 2),
+        (10, 2),
+        (1, 8),
+        (10, 8),
+        (2, 20),
+        (9, 21),
+        (16, 14),
+        (21, 14),
+    ):
+        put(fx, fy, 35, False)
+
     waypoints = {
         "desks": [
             {"x": 3, "y": 5},

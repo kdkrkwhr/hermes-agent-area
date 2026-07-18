@@ -35,6 +35,7 @@ import { WindowBirds } from "../effects/windowBirds.js";
 import { ShootingStars } from "../effects/shootingStars.js";
 import { DustMotes } from "../effects/dustMotes.js";
 import { PlantSway } from "../effects/plantSway.js";
+import { PlantPollinators } from "../effects/plantPollinators.js";
 import { WallPosterAmbient } from "../effects/wallPosterAmbient.js";
 import { SunBeams } from "../effects/sunBeams.js";
 import { AchievementShelf } from "../effects/achievementShelf.js";
@@ -552,6 +553,7 @@ export class OfficeScene extends Phaser.Scene {
     this.shootingStars = new ShootingStars(this);
     this.dustMotes = new DustMotes(this, { mapW, mapH });
     this.plantSway = new PlantSway(this);
+    this.plantPollinators = new PlantPollinators(this);
     this.wallPosterAmbient = new WallPosterAmbient(this);
     this.sunBeams = new SunBeams(this);
     this.trophyShelf = new AchievementShelf(this);
@@ -622,6 +624,7 @@ export class OfficeScene extends Phaser.Scene {
     this.shootingStars?.sync();
     this.dustMotes?.sync();
     this.plantSway?.sync();
+    this.plantPollinators?.sync();
     this.wallPosterAmbient?.sync();
     this.sunBeams?.sync();
     this.robotVacuum?.sync();
@@ -719,6 +722,7 @@ export class OfficeScene extends Phaser.Scene {
     this.glassPartitionShimmer?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
     this.plantSway?.update(this.time.now);
+    this.plantPollinators?.update(this.time.now);
     this.wallPosterAmbient?.update(this.time.now, delta);
     this.robotVacuum?.update(this.time.now, delta);
     this.exitNeon?.update(this.time.now);
@@ -1272,6 +1276,7 @@ export class OfficeScene extends Phaser.Scene {
       stars: this.shootingStars?.snapshot?.() ?? null,
       dust: this.dustMotes?.snapshot?.() ?? null,
       plantSway: this.plantSway?.snapshot?.() ?? null,
+      pollinator: this.plantPollinators?.snapshot?.() ?? null,
       wallPoster: this.wallPosterAmbient?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
