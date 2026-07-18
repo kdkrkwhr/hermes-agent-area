@@ -33,6 +33,7 @@ const VEND_MS = 400;
 const FRIDGE_MS = 500;
 const MICROWAVE_MS = 450;
 const COOLER_MS = 450;
+const FAN_WHIR_MS = 800;
 const HIGHFIVE_MS = 400;
 
 function readMutePref() {
@@ -637,6 +638,39 @@ export class OfficeAudio {
         osc.start(t);
         osc.stop(t + dur + 0.02);
       }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Soft desk-fan whir — respects mute / ?sfx=0. */
+  playFanWhir() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastFanWhirAt && now - this._lastFanWhirAt < FAN_WHIR_MS) return;
+    this._lastFanWhirAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+      osc.type = "sawtooth";
+      osc.frequency.setValueAtTime(90, t0);
+      osc.frequency.linearRampToValueAtTime(130, t0 + 0.12);
+      osc.frequency.linearRampToValueAtTime(85, t0 + 0.28);
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(420, t0);
+      filter.Q.setValueAtTime(0.7, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.028, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.3);
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.32);
     } catch {
       /* autoplay / headless */
     }

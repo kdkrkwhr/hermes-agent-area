@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` / `?events=review_huddle` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=coffee_spill` / `?events=review_huddle` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -27,6 +27,7 @@ const RANDOM_KINDS = [
   "mascot_zoomies",
   "birthday_balloons",
   "review_huddle",
+  "coffee_spill",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -109,7 +110,17 @@ const PIZZA_HOLD_MAX_MS = 12000;
 const ALL_HANDS_HOLD_MIN_MS = 8000;
 const ALL_HANDS_HOLD_MAX_MS = 12000;
 const COFFEE_GID = 16;
+const FRIDGE_GID = 39;
+const MICROWAVE_GID = 40;
 const WATER_COOLER_GID = 41;
+/** coffee_spill: soft puddle + gather (ms) */
+const COFFEE_SPILL_MIN_MS = 6000;
+const COFFEE_SPILL_MAX_MS = 10000;
+const COFFEE_PUDDLE_TEX = "fx-coffee-puddle";
+/** lunch-ish 11–15: higher pick weight for coffee_spill */
+const COFFEE_SPILL_HOUR_START = 11;
+const COFFEE_SPILL_HOUR_END = 15;
+const COFFEE_SPILL_WEIGHT = 2;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -183,6 +194,51 @@ function findCoffeeTile(scene) {
   }
   const br = scene.waypoints?.break;
   return br ? tileCenter(scene, br.x, br.y) : tileCenter(scene, 35, 5);
+}
+
+/**
+ * coffee_spill anchor: coffee(GID16) → fridge/microwave → lounge/break.
+ * @returns {{x:number,y:number}} tile coords
+ */
+function findCoffeeSpillTile(scene) {
+  const layer = scene.furniture;
+  if (layer?.getTileAt) {
+    let fridge = null;
+    let microwave = null;
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (!tile) continue;
+        if (tile.index === COFFEE_GID) return { x: tx, y: ty };
+        if (tile.index === FRIDGE_GID && !fridge) fridge = { x: tx, y: ty };
+        if (tile.index === MICROWAVE_GID && !microwave)
+          microwave = { x: tx, y: ty };
+      }
+    }
+    if (fridge) return fridge;
+    if (microwave) return microwave;
+  }
+  const lou = scene.waypoints?.lounge;
+  if (Array.isArray(lou) && lou.length) {
+    const spot = lou[Math.floor(Math.random() * lou.length)];
+    return { x: spot.x, y: spot.y };
+  }
+  const br = scene.waypoints?.break || { x: 31, y: 4 };
+  return { x: br.x, y: br.y };
+}
+
+/** Soft coffee puddle oval — ADD + alpha fade. */
+function ensureCoffeePuddleTexture(scene) {
+  if (scene.textures.exists(COFFEE_PUDDLE_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0x8b4a28, 1);
+  g.fillEllipse(20, 14, 36, 22);
+  g.fillStyle(0xc47840, 0.7);
+  g.fillEllipse(18, 12, 22, 12);
+  g.fillStyle(0xe8b888, 0.45);
+  g.fillEllipse(16, 11, 10, 6);
+  g.generateTexture(COFFEE_PUDDLE_TEX, 40, 28);
+  g.destroy();
 }
 
 /** Prefer GID41 waterCooler; fallback coffee then break waypoint. */
@@ -545,6 +601,8 @@ export class OfficeEvents {
     this.paperAirplaneActive = false;
     this.phoneRingTarget = null;
     this.wetFloorActive = false;
+    this.coffeeSpillGathered = 0;
+    this.coffeeSpillActive = false;
     /** ms timestamp — IdleChatter skips while now < this */
     this._gatherUntil = 0;
     /** Sticky while standup gather/hold runs (lastEvent may become ship_it). */
@@ -642,6 +700,8 @@ export class OfficeEvents {
       weekday &&
       ((hour >= REVIEW_AM_START && hour < REVIEW_AM_END) ||
         (hour >= REVIEW_PM_START && hour < REVIEW_PM_END));
+    const coffeeSpillWindow =
+      hour >= COFFEE_SPILL_HOUR_START && hour < COFFEE_SPILL_HOUR_END;
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -658,6 +718,8 @@ export class OfficeEvents {
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
       else if (k === "review_huddle" && reviewWindow) weight = REVIEW_WEIGHT;
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
+      else if (k === "coffee_spill" && coffeeSpillWindow)
+        weight = COFFEE_SPILL_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -707,8 +769,119 @@ export class OfficeEvents {
     else if (kind === "mascot_zoomies") this.runMascotZoomies();
     else if (kind === "birthday_balloons") this.runBirthdayBalloons();
     else if (kind === "review_huddle") this.runReviewHuddle();
+    else if (kind === "coffee_spill") this.runCoffeeSpill();
 
     this.publish();
+  }
+
+  /**
+   * Coffee spill: toast + soft ADD puddle 6–10s at coffee/kitchen +
+   * idle 2–3 → ±1 ring. Skip if gather active. Optional hiss SFX.
+   */
+  runCoffeeSpill() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      COFFEE_SPILL_MIN_MS +
+      Math.floor(
+        Math.random() * (COFFEE_SPILL_MAX_MS - COFFEE_SPILL_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    this.showToast("커피 엎침!", 3000);
+    this.playCoffeeSpillHiss();
+
+    const pt = findCoffeeSpillTile(this.scene);
+    const { x, y } = tileCenter(this.scene, pt.x, pt.y);
+    this.spawnCoffeePuddle(x, y + 4, holdMs);
+    void this.gatherIdleToMeeting(pt, "coffeeSpillGathered");
+  }
+
+  /** Soft coffee puddle on floor — ADD blend, alpha fade out. */
+  spawnCoffeePuddle(x, y, lifeMs) {
+    ensureCoffeePuddleTexture(this.scene);
+    this.coffeeSpillActive = true;
+    const puddle = this.scene.add.image(x, y, COFFEE_PUDDLE_TEX);
+    puddle.setDepth(8);
+    puddle.setScale(1.55);
+    puddle.setAlpha(0.9);
+    puddle.setBlendMode(Phaser.BlendModes.ADD);
+
+    const life =
+      lifeMs ??
+      COFFEE_SPILL_MIN_MS +
+        Math.floor(
+          Math.random() * (COFFEE_SPILL_MAX_MS - COFFEE_SPILL_MIN_MS + 1),
+        );
+    const fadeMs = 900;
+
+    const fade = this.scene.time.delayedCall(Math.max(0, life - fadeMs), () => {
+      this.scene.tweens.add({
+        targets: puddle,
+        alpha: 0,
+        duration: fadeMs,
+        ease: "Sine.easeIn",
+        onComplete: () => {
+          puddle.destroy();
+          this.coffeeSpillActive = false;
+          this.publish();
+        },
+      });
+    });
+
+    this.track(() => {
+      fade.remove(false);
+      this.scene.tweens.killTweensOf(puddle);
+      puddle.destroy();
+      this.coffeeSpillActive = false;
+    });
+    this.publish();
+  }
+
+  /** Short hiss/drip — skip if muted/locked. */
+  playCoffeeSpillHiss() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const n = Math.floor(ctx.sampleRate * 0.18);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      }
+      const noise = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(900, t0);
+      filter.Q.setValueAtTime(0.8, t0);
+      noise.buffer = buf;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.05, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.16);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + 0.18);
+
+      const drip = ctx.createOscillator();
+      const dripGain = ctx.createGain();
+      drip.type = "sine";
+      drip.frequency.setValueAtTime(620, t0 + 0.05);
+      drip.frequency.exponentialRampToValueAtTime(220, t0 + 0.14);
+      dripGain.gain.setValueAtTime(0.0001, t0 + 0.05);
+      dripGain.gain.exponentialRampToValueAtTime(0.035, t0 + 0.06);
+      dripGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.15);
+      drip.connect(dripGain);
+      dripGain.connect(ctx.destination);
+      drip.start(t0 + 0.05);
+      drip.stop(t0 + 0.17);
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /**
@@ -2892,6 +3065,8 @@ export class OfficeEvents {
       paperAirplaneActive: this.paperAirplaneActive,
       phoneRingTarget: this.phoneRingTarget,
       wetFloorActive: this.wetFloorActive,
+      coffeeSpillGathered: this.coffeeSpillGathered,
+      coffeeSpillActive: this.coffeeSpillActive,
       gathering: this.isGathering(),
       gatherUntil: this._gatherUntil || 0,
       standupGathering: !!this._standupGathering,

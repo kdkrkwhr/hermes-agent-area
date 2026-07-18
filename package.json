@@ -54,6 +54,7 @@
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
     "smoke:mascotzoomies": "node scripts/smoke-mascotzoomies.mjs",
     "smoke:birthdayballoons": "node scripts/smoke-birthdayballoons.mjs",
+    "smoke:coffeespill": "node scripts/smoke-coffeespill.mjs",
     "smoke:reviewhuddle": "node scripts/smoke-reviewhuddle.mjs",
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
     "smoke:stars": "node scripts/smoke-stars.mjs",

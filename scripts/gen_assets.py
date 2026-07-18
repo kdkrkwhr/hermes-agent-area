@@ -530,8 +530,26 @@ def make_tileset() -> None:
                 px(buf, w, ox + lx, py, (40, 48, 56, 255))
     rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (90, 100, 118, 255))
 
+    # 42 deskFan (gid 43) — small stand fan + grill (blade FX overlaid at runtime)
+    FAN_BASE = (70, 82, 96, 255)
+    FAN_STEM = (110, 125, 140, 255)
+    FAN_RING = (180, 198, 214, 255)
+    FAN_HUB = (90, 110, 130, 255)
+    FAN_GRILL = (200, 220, 235, 200)
+    ox, oy = tile_at(2, 5)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 5, oy + 13, ox + 11, oy + 15, FAN_BASE)
+    fill(buf, w, ox + 7, oy + 8, ox + 9, oy + 13, FAN_STEM)
+    fill(buf, w, ox + 3, oy + 2, ox + 13, oy + 12, FAN_RING)
+    fill(buf, w, ox + 4, oy + 3, ox + 12, oy + 11, (40, 52, 64, 255))
+    fill(buf, w, ox + 5, oy + 4, ox + 11, oy + 10, FAN_GRILL)
+    fill(buf, w, ox + 7, oy + 6, ox + 9, oy + 8, FAN_HUB)
+    px(buf, w, ox + 6, oy + 5, (220, 235, 245, 180))
+    px(buf, w, ox + 10, oy + 9, (220, 235, 245, 160))
+    rect(buf, w, ox + 3, oy + 2, ox + 13, oy + 12, (140, 160, 180, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -560,7 +578,7 @@ def make_map_json() -> None:
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
       34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
-      39 fridge  40 microwave  41 waterCooler  42 serverRack
+      39 fridge  40 microwave  41 waterCooler  42 serverRack  43 deskFan
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -678,6 +696,8 @@ def make_map_json() -> None:
     put(7, 4, 7)
     put(5, 4, 7)           # spare chair (desks WP at y=5 clear)
     put(9, 4, 7)
+    put(5, 3, 43)          # deskFan between Open Desk clusters (WP y=5 clear)
+    put(9, 3, 43)          # deskFan east edge of Open Desk pair
     put(2, 8, 15)
     put(2, 9, 15)
 
@@ -691,6 +711,7 @@ def make_map_json() -> None:
     put(9, 17, 26)
     put(8, 18, 7)
     put(5, 18, 7)
+    put(5, 17, 43)         # deskFan between Focus dualDesk clusters (WP y=19 clear)
     # Focus–corridor east wall: IT server rack (clears door@11,20 + focusDesks y=19)
     put(10, 22, 42)
 
