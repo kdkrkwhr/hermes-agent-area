@@ -1,8 +1,9 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=pair_programming` / `?events=coffee_spill` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=merge_conflict` / `?events=pair_programming` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
 import { findDualDeskTiles } from "./dualDeskIdle.js";
+import { findOpenDeskTiles } from "./openDeskIdle.js";
 
 const RANDOM_KINDS = [
   "standup",
@@ -30,6 +31,7 @@ const RANDOM_KINDS = [
   "review_huddle",
   "coffee_spill",
   "pair_programming",
+  "merge_conflict",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -136,6 +138,18 @@ const PAIR_AM_END = 12;
 const PAIR_PM_START = 14;
 const PAIR_PM_END = 17;
 const PAIR_WEIGHT = 2;
+/** merge_conflict: Open Desk / dualDesk gather + red/amber conflict spark (ms) */
+const MERGE_HOLD_MIN_MS = 4000;
+const MERGE_HOLD_MAX_MS = 7000;
+const MERGE_TOASTS = ["머지 충돌!", "CONFLICT", "rebase ㄱㄱ"];
+const MERGE_SPARK_TEX = "fx-merge-spark";
+/** soft red / amber — git conflict vibe */
+const MERGE_TINTS = [0xff5544, 0xff8844, 0xe8a040, 0xffcc66];
+/** spark burst only — short, not full hold */
+const MERGE_SPARK_MIN_MS = 1500;
+const MERGE_SPARK_MAX_MS = 2500;
+/** weight=1 always (no TOD boost) */
+const MERGE_WEIGHT = 1;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -404,6 +418,58 @@ function ensurePairSparkleTexture(scene) {
   g.destroy();
 }
 
+/**
+ * merge_conflict gather tile: prefer open desks, then dualDesk focus,
+ * then dualDesk south stand. Same pathfind-safe idea as pair_programming.
+ * @returns {{x:number,y:number}} tile coords
+ */
+function findMergeConflictDeskTile(scene) {
+  const open = scene.waypoints?.desks;
+  if (Array.isArray(open) && open.length) {
+    const spot = open[Math.floor(Math.random() * open.length)];
+    return { x: spot.x, y: spot.y };
+  }
+  const opens = findOpenDeskTiles(scene);
+  if (opens.length) {
+    const d = opens[Math.floor(Math.random() * opens.length)];
+    return { x: d.tx, y: d.ty + 1 };
+  }
+  return findPairDeskTile(scene);
+}
+
+/** Nearest open/dual desk furniture center for conflict spark (px). */
+function findMergeConflictSparkPx(scene, gatherTile) {
+  const opens = findOpenDeskTiles(scene);
+  const duals = findDualDeskTiles(scene);
+  const desks = opens.length ? opens : duals;
+  if (desks.length) {
+    let best = desks[0];
+    let bestD = Infinity;
+    for (const d of desks) {
+      const dist = Math.hypot(d.tx - gatherTile.x, d.ty - gatherTile.y);
+      if (dist < bestD) {
+        bestD = dist;
+        best = d;
+      }
+    }
+    return { x: best.x, y: best.y };
+  }
+  return tileCenter(scene, gatherTile.x, gatherTile.y);
+}
+
+/** Soft red/amber conflict spark speck. */
+function ensureMergeSparkTexture(scene) {
+  if (scene.textures.exists(MERGE_SPARK_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(3, 3, 2.4);
+  g.fillStyle(0xffffff, 0.65);
+  g.fillRect(2, 1, 2, 5);
+  g.fillRect(1, 2, 5, 2);
+  g.generateTexture(MERGE_SPARK_TEX, 8, 8);
+  g.destroy();
+}
+
 /** Tiny paper-plane diamond / folded triangle. */
 function ensurePaperTexture(scene) {
   if (scene.textures.exists(PAPER_TEX)) return;
@@ -625,6 +691,11 @@ function isPairProgrammingGatherable(agent) {
   return kind === "idle" || kind === "ready";
 }
 
+/** idle / ready — merge conflict huddle at open/dual desk (2–3). */
+function isMergeConflictGatherable(agent) {
+  return isPairProgrammingGatherable(agent);
+}
+
 /** idle or running (desk/focus) — stretch in place, no gather move. */
 function isStretchEligible(agent) {
   if (!agent?.sprite) return false;
@@ -686,6 +757,7 @@ export class OfficeEvents {
     this.birthdayBalloonsGathered = 0;
     this.reviewHuddleGathered = 0;
     this.pairProgrammingGathered = 0;
+    this.mergeConflictGathered = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -817,6 +889,7 @@ export class OfficeEvents {
       else if (k === "coffee_spill" && coffeeSpillWindow)
         weight = COFFEE_SPILL_WEIGHT;
       else if (k === "pair_programming" && pairWindow) weight = PAIR_WEIGHT;
+      else if (k === "merge_conflict") weight = MERGE_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -868,6 +941,7 @@ export class OfficeEvents {
     else if (kind === "review_huddle") this.runReviewHuddle();
     else if (kind === "coffee_spill") this.runCoffeeSpill();
     else if (kind === "pair_programming") this.runPairProgramming();
+    else if (kind === "merge_conflict") this.runMergeConflict();
 
     this.publish();
   }
@@ -3132,6 +3206,160 @@ export class OfficeEvents {
     }
   }
 
+  /**
+   * Merge conflict: toast + red/amber conflict spark at open/dual desk +
+   * idle/ready 2–3 → desk +/-1 ring 4–7s. Skip if gathering.
+   * Whoosh already fired in fire(); mute respected there / here.
+   */
+  runMergeConflict() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      MERGE_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (MERGE_HOLD_MAX_MS - MERGE_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      MERGE_TOASTS[Math.floor(Math.random() * MERGE_TOASTS.length)];
+    this.showToast(toast, 3200);
+
+    const desk = findMergeConflictDeskTile(this.scene);
+    const spark = findMergeConflictSparkPx(this.scene, desk);
+    const x = spark.x;
+    const y = spark.y;
+    const sparkMs =
+      MERGE_SPARK_MIN_MS +
+      Math.floor(
+        Math.random() * (MERGE_SPARK_MAX_MS - MERGE_SPARK_MIN_MS + 1),
+      );
+    this.spawnMergeConflictSpark(x, y - 6, sparkMs);
+
+    const glow = this.scene.add.circle(x, y + 4, 42, 0xff5544, 0.26);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.35,
+      duration: Math.min(2400, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToMergeConflict(holdMs, desk);
+  }
+
+  /** Soft red/amber conflict flecks above desk monitors. */
+  spawnMergeConflictSpark(x, y, ms = 2000) {
+    ensureMergeSparkTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, MERGE_SPARK_TEX, {
+      speedX: { min: -22, max: 22 },
+      speedY: { min: -36, max: -8 },
+      gravityY: 18,
+      scale: { start: 1.0, end: 0.12 },
+      alpha: { start: 0.95, end: 0 },
+      lifespan: { min: 400, max: 900 },
+      frequency: 55,
+      quantity: 2,
+      tint: MERGE_TINTS,
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(600, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/ready 2–3 -> open/dual desk +/-1; hold 4–7s -> restore. */
+  async gatherIdleToMergeConflict(holdMs, deskTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isMergeConflictGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 2));
+    const candidates = pool.slice(0, want);
+    const desk = deskTile || findMergeConflictDeskTile(this.scene);
+    const openWp = this.scene.waypoints?.desks;
+    const focus = this.scene.waypoints?.focusDesks;
+    const spots =
+      Array.isArray(openWp) && openWp.length >= 2
+        ? shuffleInPlace(openWp.slice()).slice(0, 3)
+        : Array.isArray(focus) && focus.length >= 2
+          ? shuffleInPlace(focus.slice()).slice(0, 3)
+          : meetingOffsets(desk);
+    const hold =
+      holdMs ??
+      MERGE_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (MERGE_HOLD_MAX_MS - MERGE_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.mergeConflictGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (
+          !isMergeConflictGatherable(agent) &&
+          !isStandupGatherable(agent)
+        ) {
+          continue;
+        }
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
 
@@ -3330,6 +3558,7 @@ export class OfficeEvents {
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
       reviewHuddleGathered: this.reviewHuddleGathered,
       pairProgrammingGathered: this.pairProgrammingGathered,
+      mergeConflictGathered: this.mergeConflictGathered,
       mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,
