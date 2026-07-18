@@ -30,6 +30,8 @@ const BLOOP_MS = 450;
 const MEOW_MS = 700;
 const DRIP_MS = 500;
 const VEND_MS = 400;
+const FRIDGE_MS = 500;
+const MICROWAVE_MS = 450;
 const HIGHFIVE_MS = 400;
 
 function readMutePref() {
@@ -536,6 +538,70 @@ export class OfficeAudio {
         osc.start(t);
         osc.stop(t + dur + 0.02);
       }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Short fridge cool-hiss (filtered noise) — respects mute / ?sfx=0. */
+  playFridgeHiss() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastFridgeAt && now - this._lastFridgeAt < FRIDGE_MS) return;
+    this._lastFridgeAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const n = Math.floor(ctx.sampleRate * 0.22);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      }
+      const noise = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      filter.type = "highpass";
+      filter.frequency.setValueAtTime(2400, t0);
+      filter.Q.setValueAtTime(0.6, t0);
+      noise.buffer = buf;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.045, t0 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.2);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + 0.22);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Classic microwave ding (A6) — same tone as officeEvents microwave_ding. */
+  playMicrowaveDing() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastMicrowaveAt && now - this._lastMicrowaveAt < MICROWAVE_MS) {
+      return;
+    }
+    this._lastMicrowaveAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1760, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.055, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.28);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.3);
     } catch {
       /* autoplay / headless */
     }

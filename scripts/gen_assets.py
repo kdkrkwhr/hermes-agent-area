@@ -453,8 +453,42 @@ def make_tileset() -> None:
     fill(buf, w, ox + 5, oy + 13, ox + 9, oy + 14, (30, 34, 40, 255))
     rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (140, 160, 180, 255))
 
+    # 38 fridge (gid 39) — tall white SV kitchen fridge + soft LED
+    FRIDGE = (236, 240, 244, 255)
+    FRIDGE2 = (210, 218, 226, 255)
+    FRIDGE_LED = (120, 220, 200, 255)
+    HANDLE = (160, 175, 190, 255)
+    ox, oy = tile_at(6, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, FRIDGE)
+    fill(buf, w, ox + 2, oy + 1, ox + 14, oy + 3, FRIDGE2)
+    fill(buf, w, ox + 3, oy + 7, ox + 13, oy + 8, FRIDGE2)
+    fill(buf, w, ox + 12, oy + 4, ox + 13, oy + 6, HANDLE)
+    fill(buf, w, ox + 12, oy + 9, ox + 13, oy + 12, HANDLE)
+    fill(buf, w, ox + 3, oy + 2, ox + 5, oy + 3, FRIDGE_LED)
+    rect(buf, w, ox + 2, oy + 1, ox + 14, oy + 15, (180, 195, 210, 255))
+
+    # 39 microwave (gid 40) — counter microwave + clock digits
+    MW = (88, 96, 108, 255)
+    MW2 = (60, 68, 80, 255)
+    MW_GLASS = (40, 48, 58, 255)
+    MW_GLINT = (160, 190, 210, 180)
+    CLOCK = (80, 220, 160, 255)
+    ox, oy = tile_at(7, 4)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 1, oy + 4, ox + 15, oy + 14, MW)
+    fill(buf, w, ox + 1, oy + 4, ox + 15, oy + 5, MW2)
+    fill(buf, w, ox + 2, oy + 6, ox + 10, oy + 12, MW_GLASS)
+    fill(buf, w, ox + 3, oy + 7, ox + 5, oy + 9, MW_GLINT)
+    fill(buf, w, ox + 11, oy + 6, ox + 14, oy + 12, MW2)
+    fill(buf, w, ox + 11, oy + 6, ox + 14, oy + 8, CLOCK)
+    px(buf, w, ox + 12, oy + 9, (255, 200, 90, 255))
+    px(buf, w, ox + 13, oy + 10, (255, 200, 90, 255))
+    fill(buf, w, ox + 3, oy + 13, ox + 13, oy + 14, MW2)
+    rect(buf, w, ox + 1, oy + 4, ox + 15, oy + 14, (140, 155, 170, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(6, 4), (7, 4), (0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(0, 5), (1, 5), (2, 5), (3, 5), (4, 5), (5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -483,6 +517,7 @@ def make_map_json() -> None:
       23 roundTable  24 beanbag  25 lobbyWood  26 dualDesk  27 bigPlant  28 sleepRug
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
       34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
+      39 fridge  40 microwave
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -646,7 +681,7 @@ def make_map_json() -> None:
     for x in range(27, 34):
         put(x, 2, 33, False)  # city window strip
 
-    # lounge: sofa + coffee + aquarium + printer + vending (E-key targets)
+    # lounge: sofa + coffee + aquarium + printer + vending + kitchen (E-key targets)
     put(16, 15, 9)
     put(17, 15, 9)
     put(18, 15, 9)
@@ -656,6 +691,8 @@ def make_map_json() -> None:
     put(21, 15, 16)
     put(22, 15, 16)
     put(23, 15, 36)  # printer beside coffee (open-desk edge)
+    put(22, 16, 39)  # fridge south of coffee (kitchen, clears corridor)
+    put(23, 16, 40)  # microwave beside fridge
     put(17, 17, 23)
     put(18, 17, 23)
     put(16, 17, 7)

@@ -12,6 +12,8 @@ import { findBookshelfTiles } from "./effects/bookshelfPages.js";
 const COFFEE_GID = 16;
 const AQUARIUM_GID = 37;
 const VENDING_GID = 38;
+const FRIDGE_GID = 39;
+const MICROWAVE_GID = 40;
 const LINGER_MS = 4500;
 const AQUAFEED_MS = 7000;
 const AQUAFEED_COOLDOWN_MS = 15000;
@@ -32,6 +34,12 @@ const VENDING_MS_MAX = 2000;
 const VENDING_COOLDOWN_MS_MIN = 12000;
 const VENDING_COOLDOWN_MS_MAX = 20000;
 const VENDING_NEAR_TILES = 2.0;
+/** Fridge / microwave: short toast, 12–20s cooldown, ≤2.0 tile. */
+const KITCHEN_MS_MIN = 800;
+const KITCHEN_MS_MAX = 1400;
+const KITCHEN_COOLDOWN_MS_MIN = 12000;
+const KITCHEN_COOLDOWN_MS_MAX = 20000;
+const KITCHEN_NEAR_TILES = 2.0;
 /** Poster quote: 8s cooldown, ≤2.0 tile. */
 const POSTER_COOLDOWN_MS = 8000;
 const POSTER_NEAR_TILES = 2.0;
@@ -90,6 +98,18 @@ const VENDING_TOASTS = [
   "딸깍… 사이다!",
   "딸깍… 초코바!",
   "딸깍… 감자칩!",
+];
+const FRIDGE_TOASTS = [
+  "찬바람 스윽…",
+  "우유 아직 있네",
+  "야식 후보 탐색 중",
+  "냉장고 문 조심",
+];
+const MICROWAVE_TOASTS = [
+  "띵~ 데워졌다",
+  "1분 돌리는 중…",
+  "컵라면 각",
+  "뜨거우니까 조심",
 ];
 const VISIT_KEY = "hermes-area-visit-count";
 const TYPING_FRAMES = ["·", "··", "···"];
@@ -153,6 +173,34 @@ function findVendingTiles(scene) {
   if (!hits.length) {
     const br = scene.waypoints?.break || { x: 18, y: 16 };
     hits.push(tileCenter(scene, br.x + 6, br.y + 1));
+  }
+  return hits;
+}
+
+function findFridgeTiles(scene) {
+  const hits = [];
+  const layer = scene.furniture;
+  if (layer?.getTileAt && scene.map) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === FRIDGE_GID) hits.push(tileCenter(scene, tx, ty));
+      }
+    }
+  }
+  return hits;
+}
+
+function findMicrowaveTiles(scene) {
+  const hits = [];
+  const layer = scene.furniture;
+  if (layer?.getTileAt && scene.map) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === MICROWAVE_GID) hits.push(tileCenter(scene, tx, ty));
+      }
+    }
   }
   return hits;
 }
@@ -277,6 +325,30 @@ function vendingEnabledFromQuery() {
   }
 }
 
+/** Default on; `?fridge=0|false|off` disables E-interact (idle FX uses ?kitchen). */
+function fridgeEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("fridge");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
+/** Default on; `?microwave=0|false|off` disables E-interact. */
+function microwaveEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("microwave");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
 /** Default on; `?bookshelftip=0|false|off` disables E-tip only (ambient FX still on). */
 function bookshelfTipEnabledFromQuery() {
   if (typeof location === "undefined") return true;
@@ -305,6 +377,26 @@ function nearVending(scene, vendingTiles) {
   const reach = scene.map.tileWidth * VENDING_NEAR_TILES;
   for (const v of vendingTiles) {
     if (Math.hypot(b.x - v.x, b.y - v.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearFridge(scene, fridgeTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !fridgeTiles?.length) return false;
+  const reach = scene.map.tileWidth * KITCHEN_NEAR_TILES;
+  for (const f of fridgeTiles) {
+    if (Math.hypot(b.x - f.x, b.y - f.y) <= reach) return true;
+  }
+  return false;
+}
+
+function nearMicrowave(scene, microwaveTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !microwaveTiles?.length) return false;
+  const reach = scene.map.tileWidth * KITCHEN_NEAR_TILES;
+  for (const m of microwaveTiles) {
+    if (Math.hypot(b.x - m.x, b.y - m.y) <= reach) return true;
   }
   return false;
 }
@@ -344,6 +436,36 @@ function nearestVending(scene, vendingTiles) {
     if (d < bestD) {
       bestD = d;
       best = v;
+    }
+  }
+  return best;
+}
+
+function nearestFridge(scene, fridgeTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !fridgeTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const f of fridgeTiles) {
+    const d = Math.hypot(b.x - f.x, b.y - f.y);
+    if (d < bestD) {
+      bestD = d;
+      best = f;
+    }
+  }
+  return best;
+}
+
+function nearestMicrowave(scene, microwaveTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !microwaveTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const m of microwaveTiles) {
+    const d = Math.hypot(b.x - m.x, b.y - m.y);
+    if (d < bestD) {
+      bestD = d;
+      best = m;
     }
   }
   return best;
@@ -561,6 +683,8 @@ export class RoomInteract {
     this.coffeeTiles = findCoffeeTiles(scene);
     this.aquariumTiles = findAquariumTiles(scene);
     this.vendingTiles = findVendingTiles(scene);
+    this.fridgeTiles = findFridgeTiles(scene);
+    this.microwaveTiles = findMicrowaveTiles(scene);
     this.plantTiles = findPlantTiles(scene);
     this.posterTiles = findLobbyPosterTiles(scene);
     this.bookshelfTiles = findBookshelfTiles(scene);
@@ -598,6 +722,18 @@ export class RoomInteract {
     this._lastVendTile = null;
     this._lastVendToast = null;
     this._lastSnackQty = 0;
+    this.fridgeEnabled = fridgeEnabledFromQuery();
+    this.fridgeActiveUntil = 0;
+    this.fridgeCooldownUntil = 0;
+    this.lastFridgeAt = 0;
+    this._lastFridgeTile = null;
+    this._lastFridgeToast = null;
+    this.microwaveEnabled = microwaveEnabledFromQuery();
+    this.microwaveActiveUntil = 0;
+    this.microwaveCooldownUntil = 0;
+    this.lastMicrowaveAt = 0;
+    this._lastMicrowaveTile = null;
+    this._lastMicrowaveToast = null;
     this.posterEnabled = posterEnabledFromQuery();
     this.posterCooldownUntil = 0;
     this.lastPosterAt = 0;
@@ -636,7 +772,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > vending > nap > mascotpet > plantwater > poster > bookshelf > work
+    // priority: coffee > aquafeed > vending > fridge > microwave > nap > mascotpet > plantwater > poster > bookshelf > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -651,6 +787,20 @@ export class RoomInteract {
       !this.vendingActive()
     ) {
       return "vending";
+    }
+    if (
+      this.fridgeEnabled &&
+      nearFridge(this.scene, this.fridgeTiles) &&
+      !this.fridgeActive()
+    ) {
+      return "fridge";
+    }
+    if (
+      this.microwaveEnabled &&
+      nearMicrowave(this.scene, this.microwaveTiles) &&
+      !this.microwaveActive()
+    ) {
+      return "microwave";
     }
     if (nearSleep(this.scene)) return "nap";
     if (
@@ -702,6 +852,18 @@ export class RoomInteract {
       }
       return "E 스낵뽑기";
     }
+    if (k === "fridge") {
+      if (this.fridgeCoolingDown()) {
+        return `냉장고 쿨다운 ${this.fridgeCooldownLeftSec()}s`;
+      }
+      return "E 냉장고";
+    }
+    if (k === "microwave") {
+      if (this.microwaveCoolingDown()) {
+        return `전자레인지 쿨다운 ${this.microwaveCooldownLeftSec()}s`;
+      }
+      return "E 데우기";
+    }
     if (k === "nap") return "E 낮잠";
     if (k === "mascotpet") {
       if (this.mascotPetCoolingDown()) {
@@ -744,6 +906,12 @@ export class RoomInteract {
     }
     if (this.vendingEnabled && nearVending(this.scene, this.vendingTiles)) {
       return this.startVending();
+    }
+    if (this.fridgeEnabled && nearFridge(this.scene, this.fridgeTiles)) {
+      return this.startFridge();
+    }
+    if (this.microwaveEnabled && nearMicrowave(this.scene, this.microwaveTiles)) {
+      return this.startMicrowave();
     }
     if (nearSleep(this.scene)) {
       this.openNap();
@@ -1067,6 +1235,126 @@ export class RoomInteract {
     return true;
   }
 
+  fridgeActive() {
+    return this.scene.time.now < this.fridgeActiveUntil;
+  }
+
+  fridgeCoolingDown() {
+    return this.scene.time.now < this.fridgeCooldownUntil;
+  }
+
+  fridgeCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.fridgeCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startFridge() {
+    if (!this.fridgeEnabled) return false;
+    if (this.fridgeActive()) return true;
+    if (this.fridgeCoolingDown()) {
+      this.showToast(`냉장고 쿨다운 ${this.fridgeCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "fridge_cooldown",
+        cooldownSec: this.fridgeCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const machine = nearestFridge(this.scene, this.fridgeTiles);
+    if (!machine) return false;
+    const now = this.scene.time.now;
+    const dur =
+      KITCHEN_MS_MIN +
+      Math.floor(Math.random() * (KITCHEN_MS_MAX - KITCHEN_MS_MIN + 1));
+    const cool =
+      KITCHEN_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (KITCHEN_COOLDOWN_MS_MAX - KITCHEN_COOLDOWN_MS_MIN + 1),
+      );
+    const toast =
+      FRIDGE_TOASTS[Math.floor(Math.random() * FRIDGE_TOASTS.length)];
+    this.lastFridgeAt = now;
+    this.fridgeActiveUntil = now + dur;
+    this.fridgeCooldownUntil = now + cool;
+    this._lastFridgeTile = { tx: machine.tx, ty: machine.ty };
+    this._lastFridgeToast = toast;
+    this.scene.officeAudio?.playFridgeHiss?.();
+    this.showToast(toast);
+    this.lastAction = {
+      kind: "fridge_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      toast,
+      machine: this._lastFridgeTile,
+    };
+    this.publish();
+    return true;
+  }
+
+  microwaveActive() {
+    return this.scene.time.now < this.microwaveActiveUntil;
+  }
+
+  microwaveCoolingDown() {
+    return this.scene.time.now < this.microwaveCooldownUntil;
+  }
+
+  microwaveCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.microwaveCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startMicrowave() {
+    if (!this.microwaveEnabled) return false;
+    if (this.microwaveActive()) return true;
+    if (this.microwaveCoolingDown()) {
+      this.showToast(`전자레인지 쿨다운 ${this.microwaveCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "microwave_cooldown",
+        cooldownSec: this.microwaveCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const machine = nearestMicrowave(this.scene, this.microwaveTiles);
+    if (!machine) return false;
+    const now = this.scene.time.now;
+    const dur =
+      KITCHEN_MS_MIN +
+      Math.floor(Math.random() * (KITCHEN_MS_MAX - KITCHEN_MS_MIN + 1));
+    const cool =
+      KITCHEN_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (KITCHEN_COOLDOWN_MS_MAX - KITCHEN_COOLDOWN_MS_MIN + 1),
+      );
+    const toast =
+      MICROWAVE_TOASTS[Math.floor(Math.random() * MICROWAVE_TOASTS.length)];
+    this.lastMicrowaveAt = now;
+    this.microwaveActiveUntil = now + dur;
+    this.microwaveCooldownUntil = now + cool;
+    this._lastMicrowaveTile = { tx: machine.tx, ty: machine.ty };
+    this._lastMicrowaveToast = toast;
+    this.scene.officeAudio?.playMicrowaveDing?.();
+    this.showToast(toast);
+    this.lastAction = {
+      kind: "microwave_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      toast,
+      machine: this._lastMicrowaveTile,
+    };
+    this.publish();
+    return true;
+  }
+
   bookshelfActive() {
     return this.scene.time.now < this.bookshelfActiveUntil;
   }
@@ -1200,6 +1488,22 @@ export class RoomInteract {
       this.lastAction = {
         kind: "vending_end",
         lastVendAt: this.lastVendAt,
+      };
+      this.publish();
+    }
+    if (this.fridgeActiveUntil && time >= this.fridgeActiveUntil) {
+      this.fridgeActiveUntil = 0;
+      this.lastAction = {
+        kind: "fridge_end",
+        lastFridgeAt: this.lastFridgeAt,
+      };
+      this.publish();
+    }
+    if (this.microwaveActiveUntil && time >= this.microwaveActiveUntil) {
+      this.microwaveActiveUntil = 0;
+      this.lastAction = {
+        kind: "microwave_end",
+        lastMicrowaveAt: this.lastMicrowaveAt,
       };
       this.publish();
     }
@@ -1397,6 +1701,38 @@ export class RoomInteract {
     };
   }
 
+  fridgeSnapshot() {
+    return {
+      enabled: !!this.fridgeEnabled,
+      active: this.fridgeActive(),
+      cooldown: this.fridgeCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.fridgeCooldownUntil - this.scene.time.now),
+      ),
+      lastFridgeAt: this.lastFridgeAt || null,
+      fridgeCount: this.fridgeTiles?.length ?? 0,
+      lastMachine: this._lastFridgeTile,
+      lastToast: this._lastFridgeToast,
+    };
+  }
+
+  microwaveSnapshot() {
+    return {
+      enabled: !!this.microwaveEnabled,
+      active: this.microwaveActive(),
+      cooldown: this.microwaveCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.microwaveCooldownUntil - this.scene.time.now),
+      ),
+      lastMicrowaveAt: this.lastMicrowaveAt || null,
+      microwaveCount: this.microwaveTiles?.length ?? 0,
+      lastMachine: this._lastMicrowaveTile,
+      lastToast: this._lastMicrowaveToast,
+    };
+  }
+
   posterSnapshot() {
     return {
       enabled: !!this.posterEnabled,
@@ -1424,6 +1760,8 @@ export class RoomInteract {
       coffeeTiles: this.coffeeTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       aquariumTiles: this.aquariumTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       vendingTiles: this.vendingTiles.map((v) => ({ tx: v.tx, ty: v.ty })),
+      fridgeTiles: this.fridgeTiles.map((f) => ({ tx: f.tx, ty: f.ty })),
+      microwaveTiles: this.microwaveTiles.map((m) => ({ tx: m.tx, ty: m.ty })),
       plantTiles: this.plantTiles.map((p) => ({
         tx: p.tx,
         ty: p.ty,
@@ -1455,6 +1793,12 @@ export class RoomInteract {
       vendingActive: this.vendingActive(),
       vendingCooldown: this.vendingCoolingDown(),
       lastVendAt: this.lastVendAt || null,
+      fridgeEnabled: !!this.fridgeEnabled,
+      fridgeActive: this.fridgeActive(),
+      fridgeCooldown: this.fridgeCoolingDown(),
+      microwaveEnabled: !!this.microwaveEnabled,
+      microwaveActive: this.microwaveActive(),
+      microwaveCooldown: this.microwaveCoolingDown(),
       posterEnabled: !!this.posterEnabled,
       posterCooldown: this.posterCoolingDown(),
       lastPosterAt: this.lastPosterAt || null,
@@ -1470,6 +1814,8 @@ export class RoomInteract {
       mascotPet: this.mascotPetSnapshot(),
       plantWater: this.plantWaterSnapshot(),
       vending: this.vendingSnapshot(),
+      fridge: this.fridgeSnapshot(),
+      microwave: this.microwaveSnapshot(),
       posterQuote: this.posterSnapshot(),
       bookshelfTip: this.bookshelfSnapshot(),
     };
@@ -1480,18 +1826,26 @@ export {
   findCoffeeTiles,
   findAquariumTiles,
   findVendingTiles,
+  findFridgeTiles,
+  findMicrowaveTiles,
   COFFEE_GID,
   AQUARIUM_GID,
   VENDING_GID,
+  FRIDGE_GID,
+  MICROWAVE_GID,
   nearCoffee,
   nearAquarium,
   nearVending,
+  nearFridge,
+  nearMicrowave,
   nearSleep,
   nearMascot,
   nearPlant,
   mascotPetEnabledFromQuery,
   plantWaterEnabledFromQuery,
   vendingEnabledFromQuery,
+  fridgeEnabledFromQuery,
+  microwaveEnabledFromQuery,
   bookshelfTipEnabledFromQuery,
   nearBookshelf,
   BOOKSHELF_TIPS,
