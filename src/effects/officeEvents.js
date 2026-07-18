@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=merge_conflict` / `?events=pair_programming` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=hotfix_scramble` / `?events=merge_conflict` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -32,6 +32,7 @@ const RANDOM_KINDS = [
   "coffee_spill",
   "pair_programming",
   "merge_conflict",
+  "hotfix_scramble",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -150,6 +151,22 @@ const MERGE_SPARK_MIN_MS = 1500;
 const MERGE_SPARK_MAX_MS = 2500;
 /** weight=1 always (no TOD boost) */
 const MERGE_WEIGHT = 1;
+/** hotfix_scramble: Open Desk urgent gather + soft red/amber pulse (ms) */
+const HOTFIX_HOLD_MIN_MS = 5000;
+const HOTFIX_HOLD_MAX_MS = 8000;
+const HOTFIX_TOASTS = ["핫픽스!", "긴급 배포", "스크램블"];
+/** soft red / amber — urgency pulse (not full fire_drill) */
+const HOTFIX_PULSE_COLOR = 0xe85030;
+const HOTFIX_PULSE_AMBER = 0xe8a040;
+const HOTFIX_PULSE_ALPHA = 0.12;
+const HOTFIX_PULSE_MIN_MS = 2000;
+const HOTFIX_PULSE_MAX_MS = 3000;
+/** weekday 10–12 · 14–18: higher pick weight */
+const HOTFIX_AM_START = 10;
+const HOTFIX_AM_END = 12;
+const HOTFIX_PM_START = 14;
+const HOTFIX_PM_END = 18;
+const HOTFIX_WEIGHT = 3;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -758,6 +775,7 @@ export class OfficeEvents {
     this.reviewHuddleGathered = 0;
     this.pairProgrammingGathered = 0;
     this.mergeConflictGathered = 0;
+    this.hotfixScrambleGathered = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -870,6 +888,10 @@ export class OfficeEvents {
       weekday &&
       ((hour >= PAIR_AM_START && hour < PAIR_AM_END) ||
         (hour >= PAIR_PM_START && hour < PAIR_PM_END));
+    const hotfixWindow =
+      weekday &&
+      ((hour >= HOTFIX_AM_START && hour < HOTFIX_AM_END) ||
+        (hour >= HOTFIX_PM_START && hour < HOTFIX_PM_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -890,6 +912,7 @@ export class OfficeEvents {
         weight = COFFEE_SPILL_WEIGHT;
       else if (k === "pair_programming" && pairWindow) weight = PAIR_WEIGHT;
       else if (k === "merge_conflict") weight = MERGE_WEIGHT;
+      else if (k === "hotfix_scramble" && hotfixWindow) weight = HOTFIX_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -942,6 +965,7 @@ export class OfficeEvents {
     else if (kind === "coffee_spill") this.runCoffeeSpill();
     else if (kind === "pair_programming") this.runPairProgramming();
     else if (kind === "merge_conflict") this.runMergeConflict();
+    else if (kind === "hotfix_scramble") this.runHotfixScramble();
 
     this.publish();
   }
@@ -3360,6 +3384,172 @@ export class OfficeEvents {
     this.track(() => restore.remove(false));
   }
 
+
+  /**
+   * Hotfix scramble: toast + soft red/amber pulse 2–3s +
+   * idle/break 2–4 → Open Desk ring; hold 5–8s. Skip if gather active.
+   * Optional short alert tone (mute / ?sfx=0 skip).
+   */
+  runHotfixScramble() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      HOTFIX_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (HOTFIX_HOLD_MAX_MS - HOTFIX_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      HOTFIX_TOASTS[Math.floor(Math.random() * HOTFIX_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playHotfixAlert();
+
+    const pulseMs =
+      HOTFIX_PULSE_MIN_MS +
+      Math.floor(
+        Math.random() * (HOTFIX_PULSE_MAX_MS - HOTFIX_PULSE_MIN_MS + 1),
+      );
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    if (overlay && preset) {
+      const restoreOverlay = () => {
+        const p = this.scene.lightingPreset;
+        if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+      };
+      let on = true;
+      let amber = false;
+      overlay.setFillStyle(HOTFIX_PULSE_COLOR, HOTFIX_PULSE_ALPHA);
+      const pulse = this.scene.time.addEvent({
+        delay: 320,
+        loop: true,
+        callback: () => {
+          on = !on;
+          if (on) {
+            amber = !amber;
+            overlay.setFillStyle(
+              amber ? HOTFIX_PULSE_AMBER : HOTFIX_PULSE_COLOR,
+              HOTFIX_PULSE_ALPHA,
+            );
+          } else restoreOverlay();
+        },
+      });
+      const clearPulse = this.scene.time.delayedCall(pulseMs, () => {
+        pulse.remove(false);
+        restoreOverlay();
+      });
+      this.track(() => {
+        pulse.remove(false);
+        clearPulse.remove(false);
+        restoreOverlay();
+      });
+    }
+
+    const desk = findMergeConflictDeskTile(this.scene);
+    void this.gatherIdleToHotfixScramble(holdMs, desk);
+  }
+
+  /** Short urgent alert chirp — skip if muted/locked. */
+  playHotfixAlert() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      for (let i = 0; i < 2; i++) {
+        const start = t0 + i * 0.11;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(990, start);
+        osc.frequency.exponentialRampToValueAtTime(720, start + 0.08);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.038, start + 0.01);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.09);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.1);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Idle/break 2–4 → Open Desk +/-1 ring; hold 5–8s → restore. */
+  async gatherIdleToHotfixScramble(holdMs, deskTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const desk = deskTile || findMergeConflictDeskTile(this.scene);
+    const openWp = this.scene.waypoints?.desks;
+    const opens = findOpenDeskTiles(this.scene);
+    const spots =
+      Array.isArray(openWp) && openWp.length >= 2
+        ? shuffleInPlace(openWp.slice()).slice(0, 4)
+        : opens.length
+          ? shuffleInPlace(
+              opens.map((d) => ({ x: d.tx, y: d.ty + 1 })),
+            ).slice(0, 4)
+          : meetingOffsets(desk);
+    const hold =
+      holdMs ??
+      HOTFIX_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (HOTFIX_HOLD_MAX_MS - HOTFIX_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.hotfixScrambleGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
 
@@ -3559,6 +3749,7 @@ export class OfficeEvents {
       reviewHuddleGathered: this.reviewHuddleGathered,
       pairProgrammingGathered: this.pairProgrammingGathered,
       mergeConflictGathered: this.mergeConflictGathered,
+      hotfixScrambleGathered: this.hotfixScrambleGathered,
       mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,

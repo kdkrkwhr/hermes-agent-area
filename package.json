@@ -63,6 +63,7 @@
     "smoke:reviewhuddle": "node scripts/smoke-reviewhuddle.mjs",
     "smoke:pairprogramming": "node scripts/smoke-pairprogramming.mjs",
     "smoke:mergeconflict": "node scripts/smoke-mergeconflict.mjs",
+    "smoke:hotfixscramble": "node scripts/smoke-hotfixscramble.mjs",
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
     "smoke:stars": "node scripts/smoke-stars.mjs",
     "smoke:pollinator": "node scripts/smoke-pollinator.mjs",
