@@ -70,6 +70,7 @@ import { FocusDndSign } from "../effects/focusDndSign.js";
 import { FocusAcVent } from "../effects/focusAcVent.js";
 import { MonitorCode } from "../effects/monitorCode.js";
 import { MonitorScreensaver } from "../effects/monitorScreensaver.js";
+import { AfkDeskSign } from "../effects/afkDeskSign.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { RubberDuck } from "../effects/rubberDuck.js";
 import { WhiteboardScribble } from "../effects/whiteboardScribble.js";
@@ -548,6 +549,7 @@ export class OfficeScene extends Phaser.Scene {
     this.focusAcVent = new FocusAcVent(this);
     this.monitorCode = new MonitorCode(this);
     this.monitorScreensaver = new MonitorScreensaver(this);
+    this.afkDeskSign = new AfkDeskSign(this);
     this.deskSticky = new DeskSticky(this);
     this.overtimeDesk = new OvertimeDesk(this);
     this.rubberDuck = new RubberDuck(this);
@@ -631,6 +633,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles?.sync();
     this.aquariumFish?.sync();
     this.focusDndSign?.sync();
+    this.afkDeskSign?.sync?.(this.time.now);
     this.focusAcVent?.sync();
     this.meetingDoorSign?.sync();
     this.dualDeskIdle?.sync();
@@ -731,6 +734,7 @@ export class OfficeScene extends Phaser.Scene {
     this.focusDndSign?.update(this.time.now, delta);
     this.monitorCode?.sync(delta);
     this.monitorScreensaver?.sync(this.time.now);
+    this.afkDeskSign?.update(this.time.now, delta);
     this.deskSticky?.sync();
     this.overtimeDesk?.update(this.time.now);
     this.rubberDuck?.sync(this.time.now);
@@ -1352,6 +1356,7 @@ export class OfficeScene extends Phaser.Scene {
       acvent: this.focusAcVent?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
       monitorScreensaver: this.monitorScreensaver?.snapshot?.() ?? null,
+      afkDeskSign: this.afkDeskSign?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       overtime: this.overtimeDesk?.snapshot?.() ?? null,
       rubberDuck: this.rubberDuck?.snapshot?.() ?? null,

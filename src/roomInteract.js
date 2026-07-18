@@ -93,6 +93,7 @@ const BOOKSHELF_TIPS = [
   "?roundtable=force 는 원탁 머그/서류 bob 스모크용",
   "?meettable=force 는 War Room 테이블 leaf 서류 bob 스모크용",
   "?dnd=force 는 Focus 방해금지 사인 스모크용",
+  "?afk=force 는 자리비움 팻말 스모크용",
   "?statusring=0 으로 발밑 상태색 링 끄기",
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
