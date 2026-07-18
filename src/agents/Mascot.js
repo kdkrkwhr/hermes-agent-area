@@ -42,6 +42,13 @@ export class Mascot {
     /** @type {{x:number,y:number}[]} remaining lounge dash targets */
     this.zoomiesQueue = [];
     this._zoomiesBusy = false;
+    /** @type {number} ambient nap end time (scene.time.now); 0 = off */
+    this.napUntil = 0;
+    /** traveling toward sleep spot (blocks wander) */
+    this._napTraveling = false;
+    this._napBaseY = null;
+    /** @type {Phaser.GameObjects.Particles.ParticleEmitter|null} */
+    this._napZzz = null;
 
     const px = startTile.x * this.tileSize + this.tileSize / 2;
     const py = startTile.y * this.tileSize + this.tileSize / 2;
@@ -65,6 +72,105 @@ export class Mascot {
     return time < (this.zoomiesUntil || 0);
   }
 
+  isNapping(time = this.scene.time.now) {
+    return time < (this.napUntil || 0);
+  }
+
+  /** True while pathing to a nap spot or curling. */
+  isNapBusy() {
+    return this._napTraveling || this.isNapping();
+  }
+
+  beginNapTravel() {
+    this._napTraveling = true;
+    this.busy = false;
+  }
+
+  clearNapTravel() {
+    this._napTraveling = false;
+  }
+
+  /**
+   * Soft curl + fx-zzz for ambient nap. Caller must skip if zoomies/pet active.
+   * @param {number} durationMs
+   */
+  startNap(durationMs) {
+    if (this.isZoomies() || this.isPetting()) return;
+    this._napTraveling = false;
+    this.path = [];
+    this.pathIndex = 0;
+    this.busy = false;
+    const now = this.scene.time.now;
+    this.napUntil = now + Math.max(1200, durationMs || 8000);
+    this.lastDir = "down";
+    const idleKey = `${ID}-idle-down`;
+    try {
+      this.sprite.anims.play(idleKey, true);
+    } catch {
+      /* ignore */
+    }
+    this.scene.tweens.killTweensOf(this.sprite);
+    this._napBaseY = this.sprite.y;
+    this.sprite.setScale(1, 1);
+    this.scene.tweens.add({
+      targets: this.sprite,
+      scaleY: 0.72,
+      scaleX: 1.12,
+      y: this.sprite.y + 3,
+      duration: 380,
+      ease: "Sine.easeOut",
+    });
+    this._ensureNapZzz();
+  }
+
+  endNap() {
+    if (!this.napUntil && !this._napZzz) {
+      this._napTraveling = false;
+      return;
+    }
+    this.napUntil = 0;
+    this._napTraveling = false;
+    this.scene.tweens.killTweensOf(this.sprite);
+    this.sprite.setScale(1, 1);
+    if (this._napBaseY != null) {
+      this.sprite.y = this._napBaseY;
+      this._napBaseY = null;
+    }
+    this._killNapZzz();
+    this.idleUntil = this.scene.time.now + 1400 + Math.random() * 1200;
+  }
+
+  _ensureNapZzz() {
+    this._killNapZzz();
+    if (!this.scene.textures.exists("fx-zzz")) return;
+    const em = this.scene.add.particles(0, 0, "fx-zzz", {
+      follow: this.sprite,
+      followOffset: { x: 2, y: -22 },
+      speedX: { min: -5, max: 10 },
+      speedY: { min: -20, max: -9 },
+      scale: { start: 1.05, end: 0.25 },
+      alpha: { start: 0.85, end: 0 },
+      lifespan: { min: 1000, max: 1500 },
+      frequency: 340,
+      quantity: 1,
+      tint: [0xb8c8e8, 0xd0d8f0, 0x9aacc8],
+      rotate: { min: -10, max: 14 },
+    });
+    em.setDepth(9);
+    this._napZzz = em;
+  }
+
+  _killNapZzz() {
+    if (!this._napZzz) return;
+    try {
+      this._napZzz.stop();
+      this._napZzz.destroy();
+    } catch {
+      /* ignore */
+    }
+    this._napZzz = null;
+  }
+
   /**
    * Stop wander, face toward a world point (boss), short idle bounce.
    * @param {number} durationMs
@@ -72,6 +178,7 @@ export class Mascot {
    * @param {number} [faceY]
    */
   startPet(durationMs, faceX, faceY) {
+    if (this.isNapping()) this.endNap();
     if (this.isZoomies()) this.endZoomies();
     const now = this.scene.time.now;
     this.path = [];
@@ -123,6 +230,7 @@ export class Mascot {
    * @param {{x:number,y:number}[]} destinations
    */
   startZoomies(durationMs, destinations) {
+    if (this.isNapping()) this.endNap();
     if (this.isPetting()) this.endPet();
     this.path = [];
     this.pathIndex = 0;
@@ -238,7 +346,9 @@ export class Mascot {
   }
 
   async wander() {
-    if (this.busy || this.isZoomies() || this.isPetting()) return;
+    if (this.busy || this.isZoomies() || this.isPetting() || this.isNapBusy()) {
+      return;
+    }
     this.busy = true;
     const dest = this.pickLoungeSpot();
     const from = this.tilePos();
@@ -306,6 +416,9 @@ export class Mascot {
     if (this.petUntil && time >= this.petUntil) {
       this.endPet();
     }
+    if (this.napUntil && time >= this.napUntil) {
+      this.endNap();
+    }
 
     if (this.isZoomies(time)) {
       if (!this.path.length) {
@@ -344,12 +457,29 @@ export class Mascot {
       return;
     }
 
+    if (this.isNapping(time)) {
+      const idleKey = `${ID}-idle-down`;
+      if (this.sprite.anims.currentAnim?.key !== idleKey) {
+        try {
+          this.sprite.anims.play(idleKey, true);
+        } catch {
+          /* ignore */
+        }
+      }
+      this.syncShadow();
+      return;
+    }
+
     if (!this.path.length) {
       const idleKey = `${ID}-idle-${this.lastDir || "down"}`;
       if (this.sprite.anims.currentAnim?.key !== idleKey) {
         this.sprite.anims.play(idleKey, true);
       }
-      if (!this.busy && time >= this.idleUntil) {
+      if (
+        !this.busy &&
+        !this._napTraveling &&
+        time >= this.idleUntil
+      ) {
         // long pauses so we don't clog agent pathfinding
         this.idleUntil = time + 3500 + Math.random() * 6500;
         this.wander();
