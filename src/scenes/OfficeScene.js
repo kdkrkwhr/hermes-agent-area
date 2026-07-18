@@ -30,6 +30,8 @@ import { OfficeEvents } from "../effects/officeEvents.js";
 import { IdleChatter } from "../effects/idleChatter.js";
 import { WindowRain } from "../effects/windowRain.js";
 import { SnowFlakes } from "../effects/snowFlakes.js";
+import { FogMist } from "../effects/fogMist.js";
+import { WindowBirds } from "../effects/windowBirds.js";
 import { WeatherFx } from "../effects/weatherFx.js";
 import { NightFlashlight } from "../effects/nightFlashlight.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
@@ -48,9 +50,12 @@ import { OpenDeskIdle } from "../effects/openDeskIdle.js";
 import { GlassDoorSwing } from "../effects/glassDoorSwing.js";
 import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { WallClock } from "../effects/wallClock.js";
+import { WallCalendar } from "../effects/wallCalendar.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
 import { FocusDndSign } from "../effects/focusDndSign.js";
 import { MonitorCode } from "../effects/monitorCode.js";
+import { RobotVacuum } from "../effects/robotVacuum.js";
+import { ExitNeon } from "../effects/exitNeon.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -509,6 +514,12 @@ export class OfficeScene extends Phaser.Scene {
     this.openDeskIdle = new OpenDeskIdle(this);
     this.glassDoorSwing = new GlassDoorSwing(this);
     this.napPodBreathe = new NapPodBreathe(this);
+    // weatherFx contracts: fogMist / windowBirds must exist before WeatherFx
+    this.fogMist = new FogMist(this, { mapW, mapH });
+    this.windowBirds = new WindowBirds(this);
+    this.robotVacuum = new RobotVacuum(this);
+    this.exitNeon = new ExitNeon(this);
+    this.wallCalendar = new WallCalendar(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
@@ -516,6 +527,7 @@ export class OfficeScene extends Phaser.Scene {
     this.weatherFx.start();
     maybeForceCelebrate(this, this.agents);
     maybeForceChatPing(this, this.agents);
+    this._visualEffectsReady = true;
 
     this.input.keyboard?.on("keydown-L", () => {
       this.devTimeIndex =
@@ -550,6 +562,11 @@ export class OfficeScene extends Phaser.Scene {
     this.openDeskIdle?.sync();
     this.glassDoorSwing?.sync();
     this.napPodBreathe?.sync();
+    this.fogMist?.sync();
+    this.windowBirds?.sync();
+    this.robotVacuum?.sync();
+    this.exitNeon?.sync();
+    this.wallCalendar?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -622,6 +639,9 @@ export class OfficeScene extends Phaser.Scene {
     this.openDeskIdle?.update(this.time.now, delta);
     this.glassDoorSwing?.update(this.time.now, delta);
     this.napPodBreathe?.update(this.time.now);
+    this.robotVacuum?.update(this.time.now, delta);
+    this.exitNeon?.update(this.time.now);
+    this.wallCalendar?.update(this.time.now, delta);
     this.lobbyPoster?.update(this.time.now, delta);
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
@@ -1100,7 +1120,7 @@ export class OfficeScene extends Phaser.Scene {
     const snap = msg ?? this.lastSnapshot;
     window.__HERMES_AREA__ = {
       ...(window.__HERMES_AREA__ || {}),
-      ready: true,
+      ready: !!this._visualEffectsReady,
       live: this.live,
       snapshot: snap,
       wsUrl: url,
@@ -1152,6 +1172,11 @@ export class OfficeScene extends Phaser.Scene {
       chatter: this.idleChatter?.snapshot?.() ?? null,
       rain: this.windowRain?.snapshot?.() ?? null,
       snow: this.snowFlakes?.snapshot?.() ?? null,
+      fog: this.fogMist?.snapshot?.() ?? null,
+      birds: this.windowBirds?.snapshot?.() ?? null,
+      vacuum: this.robotVacuum?.snapshot?.() ?? null,
+      exitNeon: this.exitNeon?.snapshot?.() ?? null,
+      wallCalendar: this.wallCalendar?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([

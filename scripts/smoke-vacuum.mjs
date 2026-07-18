@@ -78,6 +78,11 @@ await page.goto(`${base}/?vacuum=1&events=0&sfx=0`, {
 await page.waitForFunction(() => window.__HERMES_AREA__?.ready === true, null, {
   timeout: 30000,
 });
+await page.waitForFunction(
+  () => window.__HERMES_AREA__?.vacuum?.active === true && window.__HERMES_AREA__?.vacuum?.x != null,
+  null,
+  { timeout: 10000 },
+);
 const a = await page.evaluate(() => {
   const v = window.__HERMES_AREA__?.vacuum;
   return v ? { x: v.x, y: v.y, active: v.active } : null;
