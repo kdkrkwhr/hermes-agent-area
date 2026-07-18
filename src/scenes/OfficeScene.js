@@ -53,6 +53,7 @@ import { PrinterScan } from "../effects/printerScan.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
 import { AquariumFish } from "../effects/aquariumFish.js";
 import { MeetingProjector } from "../effects/meetingProjector.js";
+import { MeetingDoorSign } from "../effects/meetingDoorSign.js";
 import { PlantSway } from "../effects/plantSway.js";
 import { BeanbagBounce } from "../effects/beanbagBounce.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
@@ -296,9 +297,18 @@ export class OfficeScene extends Phaser.Scene {
     this.live = false;
     this.lastSnapshot = null;
     this.locateEnabled = this.parseLocateEnabled();
+    this.activeZone = "all";
     this.kanbanPanel = createKanbanPanel({
-      onLocate: (agentId) => this.locateAgent(agentId),
+      onLocate: (agentId) => {
+        // locating an agent → jump back to office wing view
+        if (typeof document !== "undefined" && document.body?.dataset?.page === "board") {
+          window.__HERMES_PAGES__?.setPage?.("office");
+        }
+        this.locateAgent(agentId);
+      },
     });
+    // office default: tuck kanban — board page owns the full panels
+    document.querySelector(".kanban-panel")?.classList.add("is-collapsed");
     this.deskBriefPanel = createDeskBriefPanel({
       onPayload: (payload) => this.weatherFx?.onDeskBriefPayload(payload),
     });
@@ -533,6 +543,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles = new AquariumBubbles(this);
     this.aquariumFish = new AquariumFish(this);
     this.meetingProjector = new MeetingProjector(this);
+    this.meetingDoorSign = new MeetingDoorSign(this);
     this.wallClock = new WallClock(this);
     this.wallCalendar = new WallCalendar(this);
     this.deskSticky = new DeskSticky(this);
@@ -620,6 +631,7 @@ export class OfficeScene extends Phaser.Scene {
     this.roundTableIdle?.sync();
     this.dualDeskIdle?.sync();
     this.focusDndSign?.sync();
+    this.meetingDoorSign?.sync();
     this.openDeskIdle?.sync();
     this.focusAcVent?.sync();
     this.glassDoorSwing?.sync();
@@ -690,6 +702,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles?.update(this.time.now);
     this.aquariumFish?.update(this.time.now);
     this.meetingProjector?.update(this.time.now, delta);
+    this.meetingDoorSign?.update(this.time.now, delta);
     this.deskSticky?.sync();
     this.focusHeadphones?.sync();
     this.focusDndSign?.update(this.time.now, delta);
@@ -846,9 +859,65 @@ export class OfficeScene extends Phaser.Scene {
     this.cameraFreePan = false;
     if (this.cameraFollow && this.boss?.sprite) {
       this.enableFollowCamera();
+    } else if (this.activeZone && this.activeZone !== "all") {
+      this.focusZone(this.activeZone);
     } else {
       this.fitOfficeCamera();
     }
+  }
+
+  /**
+   * Zoom camera into one office wing (page-like zones).
+   * `all` = full overview stretch. Used by appPages floor chips.
+   */
+  focusZone(zoneId) {
+    const tw = this.map?.tileWidth || 48;
+    const zones = {
+      open: { x0: 1, y0: 1, x1: 12, y1: 25 },
+      meeting: { x0: 14, y0: 2, x1: 35, y1: 13 },
+      lounge: { x0: 14, y0: 14, x1: 35, y1: 24 },
+      lobby: { x0: 12, y0: 25, x1: 27, y1: 29 },
+    };
+    this.activeZone = zoneId || "all";
+    if (this.cameraFollow) {
+      this.cameraFollow = false;
+      this.refreshFollowHud();
+    }
+    if (!zoneId || zoneId === "all" || !zones[zoneId]) {
+      this.fitOfficeCamera();
+      this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
+      return { ok: true, zone: "all" };
+    }
+    const z = zones[zoneId];
+    const cam = this.cameras.main;
+    const mapW = this.map.widthInPixels;
+    const mapH = this.map.heightInPixels;
+    const wx0 = z.x0 * tw;
+    const wy0 = z.y0 * tw;
+    const wx1 = (z.x1 + 1) * tw;
+    const wy1 = (z.y1 + 1) * tw;
+    const zw = wx1 - wx0;
+    const zh = wy1 - wy0;
+    cam.stopFollow();
+    cam.setBounds(0, 0, mapW, mapH);
+    cam.roundPixels = true;
+    const pad = 1.08;
+    const zx = cam.width / (zw * pad) || 1;
+    const zy = cam.height / (zh * pad) || 1;
+    // uniform zoom so paths aren't stretched weird in a wing view
+    const zUniform = Math.min(zx, zy, 2.4);
+    cam.setZoom(zUniform, zUniform);
+    const cx = (wx0 + wx1) / 2;
+    const cy = (wy0 + wy1) / 2;
+    const halfW = cam.width / (2 * cam.zoomX);
+    const halfH = cam.height / (2 * cam.zoomY);
+    const clampedX = Math.min(Math.max(cx, halfW), Math.max(halfW, mapW - halfW));
+    const clampedY = Math.min(Math.max(cy, halfH), Math.max(halfH, mapH - halfH));
+    cam.centerOn(clampedX, clampedY);
+    if (typeof cam.preRender === "function") cam.preRender(1);
+    this.cameraFreePan = true;
+    this.publishDebug(this.ws?.url ?? resolveWsUrl(), this.lastSnapshot);
+    return { ok: true, zone: zoneId, x: clampedX, y: clampedY };
   }
 
   /**
@@ -1230,6 +1299,7 @@ export class OfficeScene extends Phaser.Scene {
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,
       meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
+      meetingDoorSign: this.meetingDoorSign?.snapshot?.() ?? null,
       wallClock: this.wallClock?.snapshot?.() ?? null,
       wallCalendar: this.wallCalendar?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,

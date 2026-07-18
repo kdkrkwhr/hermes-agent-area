@@ -3,6 +3,7 @@ import Phaser from "phaser";
 import { OfficeScene } from "./scenes/OfficeScene.js";
 import { MAP_W, MAP_H } from "./constants.js";
 import { mountConnectPanel } from "./connectPanel.js";
+import { mountAppPages } from "./ui/appPages.js";
 import {
   notifyEnabled,
   notifyToolbarLabel,
@@ -19,18 +20,20 @@ if ("serviceWorker" in navigator) {
   });
 }
 
+document.body.dataset.page = "office";
+
 const toolbar = document.createElement("div");
 toolbar.className = "toolbar";
 toolbar.innerHTML = `
   <div class="toolbar__brand">
     <strong>Hermes Agent Area</strong>
-    <span class="toolbar__hint">WASD · F 팔로우 · E 데스크/커피/자판기/낮잠/칸반 · M 뮤트 · L 시간대</span>
+    <span class="toolbar__hint">WASD · F 팔로우 · E 상호작용 · M 뮤트 · 구역탭으로 방 확대</span>
   </div>
   <div class="toolbar__actions">
     <button type="button" class="toolbar__btn" data-role="toggle-connect">연결</button>
     <button type="button" class="toolbar__btn" data-role="toggle-notify">알림</button>
     <button type="button" class="toolbar__btn is-off" data-role="toggle-follow" aria-pressed="false">팔로우</button>
-    <button type="button" class="toolbar__btn" data-role="toggle-kanban" aria-pressed="true">칸반</button>
+    <button type="button" class="toolbar__btn is-off" data-role="toggle-kanban" aria-pressed="false">칸반</button>
     <button type="button" class="toolbar__btn" data-role="toggle-timeline">타임라인</button>
   </div>
 `;
@@ -93,6 +96,12 @@ const game = new Phaser.Game({
 
 window.__HERMES_GAME__ = game;
 
+const appPages = mountAppPages({
+  game,
+  getScene: () => game.scene.getScene("OfficeScene"),
+});
+window.__HERMES_PAGES__ = appPages;
+
 toolbar.querySelector('[data-role="toggle-connect"]')?.addEventListener("click", () => {
   connectPanel.open();
 });
@@ -124,6 +133,11 @@ toolbar.querySelector('[data-role="toggle-follow"]')?.addEventListener("click", 
 });
 
 toolbar.querySelector('[data-role="toggle-kanban"]')?.addEventListener("click", (ev) => {
+  if (appPages.getPage() === "board") {
+    // already on board (full kanban) — go back to clean office
+    appPages.setPage("office");
+    return;
+  }
   const btn = ev.currentTarget;
   const panel = document.querySelector(".kanban-panel");
   if (!panel) return;
@@ -133,6 +147,14 @@ toolbar.querySelector('[data-role="toggle-kanban"]')?.addEventListener("click", 
 });
 
 toolbar.querySelector('[data-role="toggle-timeline"]')?.addEventListener("click", () => {
+  if (appPages.getPage() === "board") {
+    appPages.setPage("office");
+  }
   const sc = game.scene.getScene("OfficeScene");
   sc?.activityTimeline?.toggle();
+});
+
+// start: office clean (kanban tucked away)
+queueMicrotask(() => {
+  document.querySelector(".kanban-panel")?.classList.add("is-collapsed");
 });
