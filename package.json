@@ -24,6 +24,7 @@
     "smoke:vending": "node scripts/smoke-vending.mjs",
     "smoke:vendingidle": "node scripts/smoke-vendingidle.mjs",
     "smoke:roundtable": "node scripts/smoke-roundtable.mjs",
+    "smoke:meettable": "node scripts/smoke-meettable.mjs",
     "smoke:dualdesk": "node scripts/smoke-dualdesk.mjs",
     "smoke:acvent": "node scripts/smoke-acvent.mjs",
     "smoke:headphones": "node scripts/smoke-headphones.mjs",

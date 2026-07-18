@@ -74,6 +74,7 @@ const BOOKSHELF_TIPS = [
   "?glassfx=force 는 War Room 유리파티션 shimmer 스모크용",
   "?exitneon=force 는 야간 EXIT 네온 스모크용",
   "?roundtable=force 는 원탁 머그/서류 bob 스모크용",
+  "?meettable=force 는 War Room 테이블 leaf 서류 bob 스모크용",
   "?dnd=force 는 Focus 방해금지 사인 스모크용",
   "?statusring=0 으로 발밑 상태색 링 끄기",
   "WS 끊기면 mock 에이전트로 폴백",

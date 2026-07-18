@@ -614,7 +614,7 @@ def make_map_json() -> None:
     put(8, 18, 7)
     put(5, 18, 7)
 
-    # meeting War Room: table + chairs + board
+    # meeting War Room: table + chairs + board + leaf tables (GID8)
     put(19, 7, 23)
     put(20, 7, 23)
     put(19, 8, 23)
@@ -627,6 +627,10 @@ def make_map_json() -> None:
     put(18, 5, 15)
     put(22, 5, 15)         # extra board strip
     put(17, 9, 7)          # side chair (meeting WP 18,9 clear)
+    put(18, 8, 8)          # leaf W of round table (WP 18,9 / x=22 clear)
+    put(21, 8, 8)          # leaf E
+    put(17, 8, 8)          # leaf further W
+    put(21, 6, 8)          # leaf NE
 
     # ceo office: mahogany desk, executive chair, city windows, shelves
     put(28, 4, 31)

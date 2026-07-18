@@ -77,6 +77,7 @@ import { ExecChairSwivel } from "../effects/execChairSwivel.js";
 import { RugSheen } from "../effects/rugSheen.js";
 import { SleepRugSheen } from "../effects/sleepRugSheen.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
+import { MeetingTableIdle } from "../effects/meetingTableIdle.js";
 import { MahoDeskGleam } from "../effects/mahoDeskGleam.js";
 import { CeoCityWindow } from "../effects/ceoCityWindow.js";
 import { CityLights } from "../effects/cityLights.js";
@@ -570,6 +571,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rugSheen = new RugSheen(this);
     this.sleepRugSheen = new SleepRugSheen(this);
     this.roundTableIdle = new RoundTableIdle(this);
+    this.meetingTableIdle = new MeetingTableIdle(this);
     this.mahoDeskGleam = new MahoDeskGleam(this);
     this.ceoCityWindow = new CeoCityWindow(this);
     this.cityLights = new CityLights(this);
@@ -640,6 +642,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rugSheen?.sync();
     this.sleepRugSheen?.sync();
     this.roundTableIdle?.sync();
+    this.meetingTableIdle?.sync();
     this.mahoDeskGleam?.sync();
     this.ceoCityWindow?.sync();
     this.cityLights?.sync();
@@ -737,6 +740,7 @@ export class OfficeScene extends Phaser.Scene {
     this.rugSheen?.update(this.time.now, delta);
     this.sleepRugSheen?.update(this.time.now, delta);
     this.roundTableIdle?.update(this.time.now, delta);
+    this.meetingTableIdle?.update(this.time.now, delta);
     this.mahoDeskGleam?.update(this.time.now, delta);
     this.ceoCityWindow?.update(this.time.now);
     this.cityLights?.update(this.time.now);
@@ -1294,6 +1298,7 @@ export class OfficeScene extends Phaser.Scene {
       rug: this.rugSheen?.snapshot?.() ?? null,
       sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
+      meetingTable: this.meetingTableIdle?.snapshot?.() ?? null,
       maho: this.mahoDeskGleam?.snapshot?.() ?? null,
       ceoWindow: this.ceoCityWindow?.snapshot?.() ?? null,
       cityLights: this.cityLights?.snapshot?.() ?? null,
