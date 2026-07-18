@@ -37,6 +37,7 @@
     "smoke:ceowindow": "node scripts/smoke-ceowindow.mjs",
     "smoke:vacuum": "node scripts/smoke-vacuum.mjs",
     "smoke:footprints": "node scripts/smoke-footprints.mjs",
+    "smoke:statusring": "node scripts/smoke-statusring.mjs",
     "smoke:fog": "node scripts/smoke-fog.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:scribble": "node scripts/smoke-scribble.mjs",
@@ -44,6 +45,7 @@
     "smoke:happyhour": "node scripts/smoke-happyhour.mjs",
     "smoke:allhands": "node scripts/smoke-allhands.mjs",
     "smoke:exitneon": "node scripts/smoke-exitneon.mjs",
+    "smoke:calendar": "node scripts/smoke-calendar.mjs",
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },

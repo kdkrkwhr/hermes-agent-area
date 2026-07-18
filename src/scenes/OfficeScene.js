@@ -25,6 +25,7 @@ import {
 import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } from "../effects/deskGlow.js";
 import { shadowSnapshot } from "../effects/spriteShadow.js";
 import { footprintSnapshot } from "../effects/footprintTrail.js";
+import { statusFootRingSnapshot } from "../effects/statusFootRing.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { IdleChatter } from "../effects/idleChatter.js";
@@ -71,6 +72,7 @@ import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ThunderFx } from "../effects/thunderFx.js";
 import { WallClock } from "../effects/wallClock.js";
+import { WallCalendar } from "../effects/wallCalendar.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
 import { FocusDndSign } from "../effects/focusDndSign.js";
@@ -532,6 +534,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumFish = new AquariumFish(this);
     this.meetingProjector = new MeetingProjector(this);
     this.wallClock = new WallClock(this);
+    this.wallCalendar = new WallCalendar(this);
     this.deskSticky = new DeskSticky(this);
     this.focusHeadphones = new FocusHeadphones(this);
     this.focusDndSign = new FocusDndSign(this);
@@ -595,6 +598,7 @@ export class OfficeScene extends Phaser.Scene {
     this.umbrellaStand?.sync();
     this.lobbyPoster?.sync();
     this.wallPosterAmbient?.sync();
+    this.wallCalendar?.sync();
     this.exitNeon?.sync();
     this.sunBeams?.sync();
     this.cityLights?.sync();
@@ -1200,6 +1204,7 @@ export class OfficeScene extends Phaser.Scene {
         this.boss,
         this.mascot,
       ].filter(Boolean)),
+      statusFootRing: statusFootRingSnapshot(this.agents || []),
       footprints: footprintSnapshot([
         ...(this.agents || []),
         this.boss,
@@ -1225,6 +1230,7 @@ export class OfficeScene extends Phaser.Scene {
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,
       meetingProjector: this.meetingProjector?.snapshot?.() ?? null,
       wallClock: this.wallClock?.snapshot?.() ?? null,
+      wallCalendar: this.wallCalendar?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
       focusDnd: this.focusDndSign?.snapshot?.() ?? null,

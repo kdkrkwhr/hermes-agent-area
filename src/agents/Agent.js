@@ -13,6 +13,11 @@ import {
   updateFootprintTrail,
   destroyFootprintTrail,
 } from "../effects/footprintTrail.js";
+import {
+  createStatusFootRing,
+  updateStatusFootRing,
+  resolveStatusRingKey,
+} from "../effects/statusFootRing.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -106,6 +111,8 @@ export class Agent {
     this.deskGlowGfx = createDeskGlow(scene);
     // soft foot shadow — see ?shadow=0; depth just under sprite (10 → 9)
     this.shadowGfx = createSpriteShadow(scene, { depth: 9 });
+    // status-color soft foot ring — see ?statusring=0; above shadow, below sprite
+    this.statusRingGfx = createStatusFootRing(scene, { depth: 9.5 });
     // walk footprint trail — see ?footprints=0; under shadow/sprite
     this.footprintTrail = createFootprintTrail(scene, { depth: 8 });
 
@@ -386,6 +393,8 @@ export class Agent {
     this.elapsedLabel?.destroy();
     this.deskGlowGfx?.destroy();
     this.shadowGfx?.destroy();
+    this.statusRingGfx?.destroy();
+    this.statusRingGfx = null;
     destroyFootprintTrail(this.footprintTrail);
     this.footprintTrail = null;
   }
@@ -559,6 +568,10 @@ export class Agent {
     );
     updateSpriteShadow(this.shadowGfx, this.sprite, {
       moving: this.path.length > 0,
+    });
+    updateStatusFootRing(this.statusRingGfx, this.sprite, {
+      moving: this.path.length > 0,
+      statusKey: resolveStatusRingKey(this),
     });
     updateFootprintTrail(this.footprintTrail, this.sprite, {
       moving: this.path.length > 0,
