@@ -81,6 +81,7 @@ import { ChairSwivel } from "../effects/chairSwivel.js";
 import { ExecChairSwivel } from "../effects/execChairSwivel.js";
 import { RugSheen } from "../effects/rugSheen.js";
 import { SleepRugSheen } from "../effects/sleepRugSheen.js";
+import { MascotNap } from "../effects/mascotNap.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { MeetingTableIdle } from "../effects/meetingTableIdle.js";
 import { MahoDeskGleam } from "../effects/mahoDeskGleam.js";
@@ -90,6 +91,7 @@ import { SeasonalDrift } from "../effects/seasonalDrift.js";
 import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { LampMoths } from "../effects/lampMoths.js";
+import { OvertimeDesk } from "../effects/overtimeDesk.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -547,6 +549,7 @@ export class OfficeScene extends Phaser.Scene {
     this.monitorCode = new MonitorCode(this);
     this.monitorScreensaver = new MonitorScreensaver(this);
     this.deskSticky = new DeskSticky(this);
+    this.overtimeDesk = new OvertimeDesk(this);
     this.rubberDuck = new RubberDuck(this);
     this.whiteboardScribble = new WhiteboardScribble(this);
     this.bookshelfPages = new BookshelfPages(this);
@@ -580,6 +583,7 @@ export class OfficeScene extends Phaser.Scene {
     this.execChairSwivel = new ExecChairSwivel(this);
     this.rugSheen = new RugSheen(this);
     this.sleepRugSheen = new SleepRugSheen(this);
+    this.mascotNap = new MascotNap(this);
     this.roundTableIdle = new RoundTableIdle(this);
     this.meetingTableIdle = new MeetingTableIdle(this);
     this.mahoDeskGleam = new MahoDeskGleam(this);
@@ -660,6 +664,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lobbyUmbrellaStand?.sync();
     this.lampGlow?.sync();
     this.lampMoths?.sync();
+    this.overtimeDesk?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -727,6 +732,7 @@ export class OfficeScene extends Phaser.Scene {
     this.monitorCode?.sync(delta);
     this.monitorScreensaver?.sync(this.time.now);
     this.deskSticky?.sync();
+    this.overtimeDesk?.update(this.time.now);
     this.rubberDuck?.sync(this.time.now);
     this.whiteboardScribble?.update(this.time.now, delta);
     this.printerScan?.update(this.time.now, delta);
@@ -754,6 +760,7 @@ export class OfficeScene extends Phaser.Scene {
     this.execChairSwivel?.update(this.time.now, delta);
     this.rugSheen?.update(this.time.now, delta);
     this.sleepRugSheen?.update(this.time.now, delta);
+    this.mascotNap?.update(this.time.now, delta);
     this.roundTableIdle?.update(this.time.now, delta);
     this.meetingTableIdle?.update(this.time.now, delta);
     this.mahoDeskGleam?.update(this.time.now, delta);
@@ -1312,6 +1319,7 @@ export class OfficeScene extends Phaser.Scene {
       execChair: this.execChairSwivel?.snapshot?.() ?? null,
       rug: this.rugSheen?.snapshot?.() ?? null,
       sleeprug: this.sleepRugSheen?.snapshot?.() ?? null,
+      mascotNap: this.mascotNap?.snapshot?.() ?? null,
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       meetingTable: this.meetingTableIdle?.snapshot?.() ?? null,
       maho: this.mahoDeskGleam?.snapshot?.() ?? null,
@@ -1345,6 +1353,7 @@ export class OfficeScene extends Phaser.Scene {
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
       monitorScreensaver: this.monitorScreensaver?.snapshot?.() ?? null,
       deskSticky: this.deskSticky?.snapshot?.() ?? null,
+      overtime: this.overtimeDesk?.snapshot?.() ?? null,
       rubberDuck: this.rubberDuck?.snapshot?.() ?? null,
       whiteboardScribble: this.whiteboardScribble?.snapshot?.() ?? null,
       printerScan: this.printerScan?.snapshot?.() ?? null,
