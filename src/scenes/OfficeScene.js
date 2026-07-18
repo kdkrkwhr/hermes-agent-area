@@ -58,7 +58,12 @@ import { WallClock } from "../effects/wallClock.js";
 import { WallCalendar } from "../effects/wallCalendar.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
 import { FocusDndSign } from "../effects/focusDndSign.js";
+import { FocusAcVent } from "../effects/focusAcVent.js";
 import { MonitorCode } from "../effects/monitorCode.js";
+import { MonitorScreensaver } from "../effects/monitorScreensaver.js";
+import { DeskSticky } from "../effects/deskSticky.js";
+import { RubberDuck } from "../effects/rubberDuck.js";
+import { WhiteboardScribble } from "../effects/whiteboardScribble.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ExitNeon } from "../effects/exitNeon.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
@@ -521,7 +526,12 @@ export class OfficeScene extends Phaser.Scene {
     this.wallClock = new WallClock(this);
     this.focusHeadphones = new FocusHeadphones(this);
     this.focusDndSign = new FocusDndSign(this);
+    this.focusAcVent = new FocusAcVent(this);
     this.monitorCode = new MonitorCode(this);
+    this.monitorScreensaver = new MonitorScreensaver(this);
+    this.deskSticky = new DeskSticky(this);
+    this.rubberDuck = new RubberDuck(this);
+    this.whiteboardScribble = new WhiteboardScribble(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
     this.dualDeskIdle = new DualDeskIdle(this);
@@ -586,6 +596,7 @@ export class OfficeScene extends Phaser.Scene {
     this.aquariumBubbles?.sync();
     this.aquariumFish?.sync();
     this.focusDndSign?.sync();
+    this.focusAcVent?.sync();
     this.meetingDoorSign?.sync();
     this.dualDeskIdle?.sync();
     this.openDeskIdle?.sync();
@@ -674,6 +685,10 @@ export class OfficeScene extends Phaser.Scene {
     this.focusHeadphones?.sync();
     this.focusDndSign?.update(this.time.now, delta);
     this.monitorCode?.sync(delta);
+    this.monitorScreensaver?.sync(this.time.now);
+    this.deskSticky?.sync();
+    this.rubberDuck?.sync(this.time.now);
+    this.whiteboardScribble?.update(this.time.now, delta);
     this.printerScan?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
@@ -1265,7 +1280,12 @@ export class OfficeScene extends Phaser.Scene {
       wallClock: this.wallClock?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
       focusDnd: this.focusDndSign?.snapshot?.() ?? null,
+      acvent: this.focusAcVent?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,
+      monitorScreensaver: this.monitorScreensaver?.snapshot?.() ?? null,
+      deskSticky: this.deskSticky?.snapshot?.() ?? null,
+      rubberDuck: this.rubberDuck?.snapshot?.() ?? null,
+      whiteboardScribble: this.whiteboardScribble?.snapshot?.() ?? null,
       printerScan: this.printerScan?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
