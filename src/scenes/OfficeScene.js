@@ -75,6 +75,11 @@ import { SleepRugSheen } from "../effects/sleepRugSheen.js";
 import { RoundTableIdle } from "../effects/roundTableIdle.js";
 import { MahoDeskGleam } from "../effects/mahoDeskGleam.js";
 import { CeoCityWindow } from "../effects/ceoCityWindow.js";
+import { CityLights } from "../effects/cityLights.js";
+import { SeasonalDrift } from "../effects/seasonalDrift.js";
+import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
+import { LampGlow } from "../effects/lampGlow.js";
+import { LampMoths } from "../effects/lampMoths.js";
 import {
   burstTaskCelebrate,
   celebrateEnabledFromQuery,
@@ -558,6 +563,11 @@ export class OfficeScene extends Phaser.Scene {
     this.roundTableIdle = new RoundTableIdle(this);
     this.mahoDeskGleam = new MahoDeskGleam(this);
     this.ceoCityWindow = new CeoCityWindow(this);
+    this.cityLights = new CityLights(this);
+    this.seasonalDrift = new SeasonalDrift(this);
+    this.lobbyUmbrellaStand = new LobbyUmbrellaStand(this);
+    this.lampGlow = new LampGlow(this);
+    this.lampMoths = new LampMoths(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
@@ -620,6 +630,11 @@ export class OfficeScene extends Phaser.Scene {
     this.roundTableIdle?.sync();
     this.mahoDeskGleam?.sync();
     this.ceoCityWindow?.sync();
+    this.cityLights?.sync();
+    this.seasonalDrift?.sync();
+    this.lobbyUmbrellaStand?.sync();
+    this.lampGlow?.sync();
+    this.lampMoths?.sync();
     this.weatherFx?.onLightingChanged();
   }
 
@@ -710,6 +725,10 @@ export class OfficeScene extends Phaser.Scene {
     this.roundTableIdle?.update(this.time.now, delta);
     this.mahoDeskGleam?.update(this.time.now, delta);
     this.ceoCityWindow?.update(this.time.now);
+    this.cityLights?.update(this.time.now);
+    this.lobbyUmbrellaStand?.update();
+    this.lampGlow?.update(this.time.now);
+    this.lampMoths?.update(this.time.now);
     this.lobbyPoster?.update(this.time.now, delta);
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
@@ -1260,6 +1279,11 @@ export class OfficeScene extends Phaser.Scene {
       roundTable: this.roundTableIdle?.snapshot?.() ?? null,
       maho: this.mahoDeskGleam?.snapshot?.() ?? null,
       ceoWindow: this.ceoCityWindow?.snapshot?.() ?? null,
+      cityLights: this.cityLights?.snapshot?.() ?? null,
+      season: this.seasonalDrift?.snapshot?.() ?? null,
+      umbrella: this.lobbyUmbrellaStand?.snapshot?.() ?? null,
+      lampGlow: this.lampGlow?.snapshot?.() ?? null,
+      moths: this.lampMoths?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([

@@ -1,6 +1,6 @@
 /** Seasonal petal/leaf soft ADD drift over north GID-12 windows + Open Desk sky.
  * Mar–May petal, Sep–Nov leaf; else off.
- * `?season=0|off` off · `spring|autumn|petal|leaf` force · `1` calendar on.
+ * `?season=` / `?seasonal=` — `0|off` off · `spring|autumn|petal|leaf|force` force · `1` calendar on.
  */
 
 import { findWindowTiles, MAX_EMITTERS } from "./windowRain.js";
@@ -16,7 +16,8 @@ const PETAL_TINTS = [0xffb7c5, 0xffc8d6, 0xff9eb5, 0xffd0dc];
 const LEAF_TINTS = [0xe89a3c, 0xc4682a, 0xd4a04a, 0xa85a28];
 
 /**
- * Query parse.
+ * Query parse. Accepts `?season=` or `?seasonal=` (alias).
+ * `force` → petal (smoke). spring/petal / autumn/leaf override calendar.
  * @returns {{ forcedOff: boolean, forcedKind: null|'petal'|'leaf', forceCalendar: boolean }}
  */
 export function parseSeasonMode() {
@@ -24,7 +25,8 @@ export function parseSeasonMode() {
     return { forcedOff: false, forcedKind: null, forceCalendar: false };
   }
   try {
-    const raw = new URLSearchParams(location.search).get("season");
+    const qs = new URLSearchParams(location.search);
+    const raw = qs.get("seasonal") ?? qs.get("season");
     if (raw == null || raw === "") {
       return { forcedOff: false, forcedKind: null, forceCalendar: false };
     }
@@ -32,7 +34,7 @@ export function parseSeasonMode() {
     if (v === "0" || v === "off" || v === "false") {
       return { forcedOff: true, forcedKind: null, forceCalendar: false };
     }
-    if (v === "spring" || v === "petal") {
+    if (v === "spring" || v === "petal" || v === "force") {
       return { forcedOff: false, forcedKind: "petal", forceCalendar: false };
     }
     if (v === "autumn" || v === "fall" || v === "leaf") {

@@ -670,6 +670,22 @@ def make_map_json() -> None:
     put(15, 26, 19)
     put(24, 26, 19)
 
+    # standlamps (GID 20) — Open Desk / lounge / corridor / focus / ceo walls
+    # collision left clear (walk-through decor); lampGlow/moths scan these
+    for lx, ly in (
+        (1, 5),
+        (10, 3),
+        (1, 11),
+        (10, 10),
+        (1, 16),
+        (10, 20),
+        (15, 14),
+        (23, 18),
+        (14, 18),
+        (34, 5),
+    ):
+        put(lx, ly, 20, False)
+
     waypoints = {
         "desks": [
             {"x": 3, "y": 5},
