@@ -18,6 +18,11 @@ import {
   updateStatusFootRing,
   resolveStatusRingKey,
 } from "../effects/statusFootRing.js";
+import {
+  createSkillChips,
+  updateSkillChips,
+  destroySkillChips,
+} from "../effects/skillChips.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -115,6 +120,8 @@ export class Agent {
     this.statusRingGfx = createStatusFootRing(scene, { depth: 9.5 });
     // walk footprint trail — see ?footprints=0; under shadow/sprite
     this.footprintTrail = createFootprintTrail(scene, { depth: 8 });
+    // skill chips under nameplate — see ?skills=0 / ?skills=force
+    this.skillChips = createSkillChips(scene);
 
     this.setStatus(pickStatus(def, "desk"));
     this.ensureAnims();
@@ -397,6 +404,8 @@ export class Agent {
     this.statusRingGfx = null;
     destroyFootprintTrail(this.footprintTrail);
     this.footprintTrail = null;
+    destroySkillChips(this.skillChips);
+    this.skillChips = null;
   }
 
   async applyServer(agentMsg) {
@@ -577,5 +586,6 @@ export class Agent {
       moving: this.path.length > 0,
       dir: this.lastDir || "down",
     });
+    updateSkillChips(this.skillChips, this);
   }
 }
