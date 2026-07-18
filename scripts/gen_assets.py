@@ -658,17 +658,27 @@ def make_map_json() -> None:
     put(24, 16, 36)  # second printer on lounge/corridor edge
     put(24, 17, 38)  # vending south of printer (lounge edge)
     put(14, 16, 38)  # vending east of corridor spine @ lounge height
+    put(19, 17, 24)  # beanbag (idle / mascot pass-by)
+    put(15, 18, 24)  # beanbag SE lounge corner
+    put(20, 16, 18, False)  # lounge rug sheen
+    put(19, 16, 18, False)
 
-    # sleep Nap Pod: bed only
+    # sleep Nap Pod: bed + sleep rugs (walk-through sheen)
     put(31, 20, 14)
     put(32, 20, 14)
+    put(30, 22, 28, False)
+    put(31, 22, 28, False)
     # keep (30,21) clear — sleep door at (29,21)
 
-    # lobby entrance: posters only (E-key quotes) — no plants/rugs/lamps
+    # lobby entrance: posters + bigPlant + rugs (queue WPs stay clear of blockers)
     door(19, H - 1)
     door(20, H - 1)
     put(15, 26, 19)
     put(24, 26, 19)
+    put(16, 27, 27)
+    put(23, 27, 27)
+    put(17, 27, 18, False)
+    put(21, 27, 18, False)
 
     # standlamps (GID 20) — Open Desk / lounge / corridor / focus / ceo walls
     # collision left clear (walk-through decor); lampGlow/moths scan these
@@ -685,6 +695,15 @@ def make_map_json() -> None:
         (34, 5),
     ):
         put(lx, ly, 20, False)
+
+    # wall plants (GID 10) — Open Desk / Focus edges (avoid flowerPot 35 tiles)
+    for px, py in (
+        (1, 4),
+        (10, 4),
+        (1, 18),
+        (10, 18),
+    ):
+        put(px, py, 10)
 
     # flower pots (GID 35) — Open Desk / Focus / lounge corners
     # walk-through decor (same as lamps); plantSway + daytime pollinators scan these
