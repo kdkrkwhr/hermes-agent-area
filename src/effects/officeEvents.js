@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` / `?events=mascot_zoomies` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=microwave_ding` / `?events=birthday_balloons` force. */
 
 import Phaser from "phaser";
 
@@ -24,6 +24,7 @@ const RANDOM_KINDS = [
   "microwave_ding",
   "deploy_celebrate",
   "mascot_zoomies",
+  "birthday_balloons",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -59,6 +60,13 @@ const ZOOMIES_HOLD_MIN_MS = 4000;
 const ZOOMIES_HOLD_MAX_MS = 7000;
 const ZOOMIES_TOASTS = ["줌이즈!", "냥 가즈아"];
 const ZOOMIES_DUST_TEX = "fx-zoomies-dust";
+/** birthday_balloons: lounge gather + soft balloons (ms); weight=1 */
+const BIRTHDAY_HOLD_MIN_MS = 6000;
+const BIRTHDAY_HOLD_MAX_MS = 10000;
+const BIRTHDAY_TOASTS = ["생일이다!", "생일 ㅊㅋ", "케이크 각?"];
+const BIRTHDAY_BALLOON_TEX = "fx-balloon";
+/** pastel pink / sky / lavender */
+const BIRTHDAY_TINTS = [0xff8eb8, 0x7ec8ff, 0xc9a0ff];
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -211,6 +219,20 @@ function ensureZoomiesDustTexture(scene) {
   g.fillStyle(0xc0b8ac, 0.55);
   g.fillCircle(2, 5, 2);
   g.generateTexture(ZOOMIES_DUST_TEX, 8, 8);
+  g.destroy();
+}
+
+/** Soft oval balloon (tinted at emit) + tiny string nub. */
+function ensureBirthdayBalloonTexture(scene) {
+  if (scene.textures.exists(BIRTHDAY_BALLOON_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillEllipse(8, 7, 12, 14);
+  g.fillStyle(0xffffff, 0.55);
+  g.fillEllipse(6, 5, 4, 5);
+  g.fillStyle(0xe8e0d8, 0.9);
+  g.fillRect(7, 14, 2, 4);
+  g.generateTexture(BIRTHDAY_BALLOON_TEX, 16, 20);
   g.destroy();
 }
 
@@ -453,6 +475,7 @@ export class OfficeEvents {
     this.wifiOutageAffected = 0;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
+    this.birthdayBalloonsGathered = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -615,6 +638,7 @@ export class OfficeEvents {
     else if (kind === "microwave_ding") this.runMicrowaveDing();
     else if (kind === "deploy_celebrate") this.runDeployCelebrate();
     else if (kind === "mascot_zoomies") this.runMascotZoomies();
+    else if (kind === "birthday_balloons") this.runBirthdayBalloons();
 
     this.publish();
   }
@@ -2268,6 +2292,160 @@ export class OfficeEvents {
     });
   }
 
+  /**
+   * Birthday balloons: toast + soft pastel balloons at lounge + idle 2–3 gather 6–10s.
+   * Skip if another gather is active. Optional soft pop SFX (mute-safe).
+   */
+  runBirthdayBalloons() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      BIRTHDAY_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (BIRTHDAY_HOLD_MAX_MS - BIRTHDAY_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      BIRTHDAY_TOASTS[Math.floor(Math.random() * BIRTHDAY_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playBirthdayPop();
+
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    this.spawnBirthdayBalloons(x, y - 12, Math.min(5500, holdMs));
+    void this.gatherIdleToBirthdayBalloons(holdMs);
+  }
+
+  /** Soft rising oval balloons — runtime texture, pastel tints. */
+  spawnBirthdayBalloons(x, y, ms = 5000) {
+    ensureBirthdayBalloonTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, BIRTHDAY_BALLOON_TEX, {
+      speedX: { min: -28, max: 28 },
+      speedY: { min: -55, max: -22 },
+      gravityY: -12,
+      scale: { start: 0.95, end: 0.35 },
+      alpha: { start: 0.92, end: 0 },
+      lifespan: { min: 900, max: 1600 },
+      frequency: 90,
+      quantity: 1,
+      tint: BIRTHDAY_TINTS,
+      rotate: { min: -12, max: 12 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(900, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/break 2–3 → lounge spots; hold 6–10s → wander restore. */
+  async gatherIdleToBirthdayBalloons(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 2));
+    const candidates = pool.slice(0, want);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const hold =
+      holdMs ??
+      BIRTHDAY_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (BIRTHDAY_HOLD_MAX_MS - BIRTHDAY_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.birthdayBalloonsGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft balloon-pop blip — skip if muted/locked. */
+  playBirthdayPop() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(520, t0);
+      osc.frequency.exponentialRampToValueAtTime(180, t0 + 0.12);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.045, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.16);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   /** Brief blackout flicker on lighting overlay, then restore TOD preset. */
   runPowerFlicker() {
     this.showToast("정전");
@@ -2462,6 +2640,7 @@ export class OfficeEvents {
       wifiOutageAffected: this.wifiOutageAffected,
       happyHourGathered: this.happyHourGathered,
       deployCelebrateGathered: this.deployCelebrateGathered,
+      birthdayBalloonsGathered: this.birthdayBalloonsGathered,
       mascotZoomiesActive: this.mascotZoomiesActive,
       microwaveDingAt: this.microwaveDingAt,
       parcelActive: this.parcelActive,

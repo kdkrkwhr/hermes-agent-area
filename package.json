@@ -50,7 +50,9 @@
     "smoke:calendar": "node scripts/smoke-calendar.mjs",
     "smoke:paperairplane": "node scripts/smoke-paperairplane.mjs",
     "smoke:mascotzoomies": "node scripts/smoke-mascotzoomies.mjs",
+    "smoke:birthdayballoons": "node scripts/smoke-birthdayballoons.mjs",
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
+    "smoke:stars": "node scripts/smoke-stars.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {
