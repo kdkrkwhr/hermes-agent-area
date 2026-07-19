@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -34,12 +34,14 @@ const RANDOM_KINDS = [
   "merge_conflict",
   "hotfix_scramble",
   "build_fail",
+  "flaky_test",
   "code_freeze",
   "sprint_retro",
   "donut_friday",
   "midnight_snack",
   "food_delivery",
   "tea_time",
+  "rollback",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -209,6 +211,21 @@ const BUILD_FAIL_ALPHA_MIN = 0.12;
 const BUILD_FAIL_ALPHA_MAX = 0.18;
 /** weekday 10–12 · 14–18: same window as deploy (one pick per tick) */
 const BUILD_FAIL_WEIGHT = 3;
+/** flaky_test: soft amber/yellow flicker + idle bubbles (ms) — no gather */
+const FLAKY_MIN_MS = 3000;
+const FLAKY_MAX_MS = 6000;
+const FLAKY_TOASTS = ["플레이키!", "재시도 각"];
+const FLAKY_LINES = ["flake…", "재시도?", "플레임?"];
+/** soft amber/yellow — CI flake vibe (distinct from build_fail rose) */
+const FLAKY_AMBER = 0xe8b040;
+const FLAKY_ALPHA_MIN = 0.12;
+const FLAKY_ALPHA_MAX = 0.2;
+/** weekday 10–12 · 14–17: higher pick weight */
+const FLAKY_AM_START = 10;
+const FLAKY_AM_END = 12;
+const FLAKY_PM_START = 14;
+const FLAKY_PM_END = 17;
+const FLAKY_WEIGHT = 3;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -284,6 +301,22 @@ const TEA_MUG_TINTS = [0xffe8c8, 0xe8c090, 0xd4a060, 0xfff0d8];
 const TEA_HOUR_START = 14;
 const TEA_HOUR_END = 16;
 const TEA_WEIGHT = 3;
+/** rollback: Open Desk/lobby gather + soft rose/coral overlay (ms) — deploy undo vibe */
+const ROLLBACK_MIN_MS = 4000;
+const ROLLBACK_MAX_MS = 7000;
+const ROLLBACK_TOASTS = ["롤백!", "이전 버전으로"];
+const ROLLBACK_LINES = ["되돌리자", "canary 아웃?", "핫픽스?"];
+/** soft coral — distinct from build_fail rose / deploy teal */
+const ROLLBACK_CORAL = 0xd45868;
+const ROLLBACK_ALPHA_MIN = 0.12;
+const ROLLBACK_ALPHA_MAX = 0.18;
+/** weekday 14–19: higher pick weight; mutual cooldown w/ deploy_celebrate */
+const ROLLBACK_HOUR_START = 14;
+const ROLLBACK_HOUR_END = 19;
+const ROLLBACK_WEIGHT = 3;
+/** shared cool-down after deploy_celebrate ↔ rollback (ms) */
+const DEPLOY_BEAT_COOLDOWN_MS = 45000;
+const DEPLOY_BEAT_COOLDOWN_FAST_MS = 8000;
 /** Tiny confetti bit for deploy_celebrate (taskCelebrate-style). */
 const DEPLOY_CONFETTI_TEX = "fx-confetti";
 /** while raining: higher pick weight for wet_floor */
@@ -989,6 +1022,10 @@ export class OfficeEvents {
     this.mergeConflictGathered = 0;
     this.hotfixScrambleGathered = 0;
     this.buildFailGathered = 0;
+    this.flakyTestAffected = 0;
+    this.rollbackGathered = 0;
+    /** shared cool-down: deploy_celebrate ↔ rollback */
+    this._deployBeatCooldownUntil = 0;
     this.mascotZoomiesActive = false;
     this.microwaveDingAt = 0;
     this.parcelActive = false;
@@ -1119,12 +1156,34 @@ export class OfficeEvents {
         (hour >= FOOD_DINNER_START && hour < FOOD_DINNER_END));
     const teaWindow =
       weekday && hour >= TEA_HOUR_START && hour < TEA_HOUR_END;
+    const rollbackWindow =
+      weekday && hour >= ROLLBACK_HOUR_START && hour < ROLLBACK_HOUR_END;
+    const flakyWindow =
+      weekday &&
+      ((hour >= FLAKY_AM_START && hour < FLAKY_AM_END) ||
+        (hour >= FLAKY_PM_START && hour < FLAKY_PM_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
+    const deployBeatCool =
+      this.scene.time.now < (this._deployBeatCooldownUntil || 0);
+    const last = this.lastEvent;
     const pool = [];
     for (const k of RANDOM_KINDS) {
       if (k === "quiet_hours" && !night) continue;
       if (k === "midnight_snack" && !eveningNight) continue;
+      // deploy_celebrate ↔ rollback: skip if peer was last or shared cool-down
+      if (
+        k === "rollback" &&
+        (last === "deploy_celebrate" || deployBeatCool)
+      ) {
+        continue;
+      }
+      if (
+        k === "deploy_celebrate" &&
+        (last === "rollback" || deployBeatCool)
+      ) {
+        continue;
+      }
       let weight = 1;
       if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
       else if (k === "microwave_ding" && microwaveWindow)
@@ -1136,6 +1195,7 @@ export class OfficeEvents {
       else if (k === "midnight_snack" && snackWindow) weight = SNACK_WEIGHT;
       else if (k === "food_delivery" && foodWindow) weight = FOOD_WEIGHT;
       else if (k === "tea_time" && teaWindow) weight = TEA_WEIGHT;
+      else if (k === "rollback" && rollbackWindow) weight = ROLLBACK_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
@@ -1148,6 +1208,7 @@ export class OfficeEvents {
       else if (k === "merge_conflict") weight = MERGE_WEIGHT;
       else if (k === "hotfix_scramble" && hotfixWindow) weight = HOTFIX_WEIGHT;
       else if (k === "build_fail" && deployWindow) weight = BUILD_FAIL_WEIGHT;
+      else if (k === "flaky_test" && flakyWindow) weight = FLAKY_WEIGHT;
       else if (k === "code_freeze" && freezeWindow) weight = FREEZE_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
@@ -1191,6 +1252,7 @@ export class OfficeEvents {
     else if (kind === "midnight_snack") this.runMidnightSnack();
     else if (kind === "food_delivery") this.runFoodDelivery();
     else if (kind === "tea_time") this.runTeaTime();
+    else if (kind === "rollback") this.runRollback();
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
@@ -1208,6 +1270,7 @@ export class OfficeEvents {
     else if (kind === "merge_conflict") this.runMergeConflict();
     else if (kind === "hotfix_scramble") this.runHotfixScramble();
     else if (kind === "build_fail") this.runBuildFail();
+    else if (kind === "flaky_test") this.runFlakyTest();
     else if (kind === "code_freeze") this.runCodeFreeze();
 
     this.publish();
@@ -3081,7 +3144,8 @@ export class OfficeEvents {
             agent._stretchBackup == null &&
             agent._phoneBackup == null &&
             agent._waterBackup == null &&
-            agent._freezeBackup == null
+            agent._freezeBackup == null &&
+            agent._flakyBackup == null
           ) {
             agent.setStatus(agent._wifiBackup);
           }
@@ -3165,7 +3229,8 @@ export class OfficeEvents {
             agent._stretchBackup == null &&
             agent._phoneBackup == null &&
             agent._waterBackup == null &&
-            agent._wifiBackup == null
+            agent._wifiBackup == null &&
+            agent._flakyBackup == null
           ) {
             agent.setStatus(agent._freezeBackup);
           }
@@ -3213,6 +3278,134 @@ export class OfficeEvents {
         osc.start(start);
         osc.stop(start + 0.3);
       }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Flaky test: toast + soft amber/yellow flicker overlay 3–6s +
+   * idle bubbles on 1–2 agents. No gather / no move of running·blocked.
+   * Skip if gather active. Optional soft click respects mute/lock.
+   */
+  runFlakyTest() {
+    if (this.isGathering()) return;
+
+    const toast =
+      FLAKY_TOASTS[Math.floor(Math.random() * FLAKY_TOASTS.length)];
+    this.showToast(toast, 3000);
+    this.playFlakyClick();
+
+    const duration =
+      FLAKY_MIN_MS +
+      Math.floor(Math.random() * (FLAKY_MAX_MS - FLAKY_MIN_MS + 1));
+    const alpha =
+      FLAKY_ALPHA_MIN +
+      Math.random() * (FLAKY_ALPHA_MAX - FLAKY_ALPHA_MIN);
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+
+    let amberOn = true;
+    if (overlay && preset) {
+      overlay.setFillStyle(FLAKY_AMBER, alpha);
+    }
+
+    const pulse = this.scene.time.addEvent({
+      delay: 90,
+      loop: true,
+      callback: () => {
+        if (!overlay) return;
+        amberOn = !amberOn;
+        if (amberOn) overlay.setFillStyle(FLAKY_AMBER, alpha);
+        else restoreOverlay();
+      },
+    });
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 2), // 1–2
+    );
+    const picked = pool.slice(0, want);
+    this.flakyTestAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._flakyBackup = agent.statusText;
+      agent.setStatus(
+        FLAKY_LINES[Math.floor(Math.random() * FLAKY_LINES.length)],
+      );
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      pulse.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._flakyBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null
+          ) {
+            agent.setStatus(agent._flakyBackup);
+          }
+          agent._flakyBackup = null;
+        }
+      }
+      this.flakyTestAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      pulse.remove(false);
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._flakyBackup != null) {
+          agent.setStatus(agent._flakyBackup);
+          agent._flakyBackup = null;
+        }
+      }
+      this.flakyTestAffected = 0;
+    });
+  }
+
+  /** Soft click (short tick) — skip if muted/locked. */
+  playFlakyClick() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(880, t0);
+      osc.frequency.exponentialRampToValueAtTime(440, t0 + 0.06);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.04, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.1);
     } catch {
       /* autoplay / headless */
     }
@@ -3364,11 +3557,15 @@ export class OfficeEvents {
    */
   runDeployCelebrate() {
     if (this.isGathering()) return;
+    if (this.scene.time.now < (this._deployBeatCooldownUntil || 0)) return;
 
     const holdMs =
       DEPLOY_HOLD_MIN_MS +
       Math.floor(Math.random() * (DEPLOY_HOLD_MAX_MS - DEPLOY_HOLD_MIN_MS + 1));
     this.markGathering(holdMs + 12000);
+    this._deployBeatCooldownUntil =
+      this.scene.time.now +
+      (this.fast ? DEPLOY_BEAT_COOLDOWN_FAST_MS : DEPLOY_BEAT_COOLDOWN_MS);
     const toast =
       DEPLOY_TOASTS[Math.floor(Math.random() * DEPLOY_TOASTS.length)];
     this.showToast(toast, 3200);
@@ -4768,7 +4965,8 @@ export class OfficeEvents {
             agent._phoneBackup == null &&
             agent._waterBackup == null &&
             agent._wifiBackup == null &&
-            agent._freezeBackup == null
+            agent._freezeBackup == null &&
+            agent._flakyBackup == null
           ) {
             agent.setStatus(agent._buildFailBackup);
           }
@@ -4798,6 +4996,159 @@ export class OfficeEvents {
         }
       }
       this.buildFailGathered = 0;
+    });
+  }
+
+  /**
+   * Rollback: toast + soft rose/coral overlay 4–7s +
+   * idle 1–3 → Open Desk/lobby gather. Skip if gather active.
+   * Shared cool-down with deploy_celebrate. No running-agent path.
+   */
+  runRollback() {
+    if (this.isGathering()) return;
+    if (this.scene.time.now < (this._deployBeatCooldownUntil || 0)) return;
+
+    const holdMs =
+      ROLLBACK_MIN_MS +
+      Math.floor(Math.random() * (ROLLBACK_MAX_MS - ROLLBACK_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    this._deployBeatCooldownUntil =
+      this.scene.time.now +
+      (this.fast ? DEPLOY_BEAT_COOLDOWN_FAST_MS : DEPLOY_BEAT_COOLDOWN_MS);
+    const toast =
+      ROLLBACK_TOASTS[Math.floor(Math.random() * ROLLBACK_TOASTS.length)];
+    this.showToast(toast, 3200);
+
+    const alpha =
+      ROLLBACK_ALPHA_MIN +
+      Math.random() * (ROLLBACK_ALPHA_MAX - ROLLBACK_ALPHA_MIN);
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(ROLLBACK_CORAL, alpha);
+      const clearOverlay = this.scene.time.delayedCall(holdMs, () => {
+        restoreOverlay();
+      });
+      this.track(() => {
+        clearOverlay.remove(false);
+        restoreOverlay();
+      });
+    }
+
+    void this.gatherIdleToRollback(holdMs);
+  }
+
+  /** Idle 1–3 → Open Desk or lobby; hold 4–7s → restore + clear bubbles. */
+  async gatherIdleToRollback(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 1 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const openWp = this.scene.waypoints?.desks;
+    const opens = findOpenDeskTiles(this.scene);
+    const lob = findDeployGatherAnchor(this.scene);
+    const spots =
+      Array.isArray(openWp) && openWp.length >= 2
+        ? shuffleInPlace(openWp.slice()).slice(0, 3)
+        : opens.length
+          ? shuffleInPlace(
+              opens.map((d) => ({ x: d.tx, y: d.ty + 1 })),
+            ).slice(0, 3)
+          : [
+              lob,
+              { x: lob.x - 1, y: lob.y + 1 },
+              { x: lob.x + 1, y: lob.y },
+              { x: lob.x + 2, y: lob.y - 1 },
+            ];
+    const hold =
+      holdMs ??
+      ROLLBACK_MIN_MS +
+        Math.floor(Math.random() * (ROLLBACK_MAX_MS - ROLLBACK_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+      agent._rollbackBackup = agent.statusText;
+      agent.setStatus(
+        ROLLBACK_LINES[Math.floor(Math.random() * ROLLBACK_LINES.length)],
+      );
+    }
+
+    this.rollbackGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (agent._rollbackBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null &&
+            agent._buildFailBackup == null
+          ) {
+            agent.setStatus(agent._rollbackBackup);
+          }
+          agent._rollbackBackup = null;
+        }
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      this.rollbackGathered = 0;
+      this.publish();
+    });
+    this.track(() => {
+      restore.remove(false);
+      for (const agent of moved) {
+        if (agent._rollbackBackup != null) {
+          agent.setStatus(agent._rollbackBackup);
+          agent._rollbackBackup = null;
+        }
+      }
+      this.rollbackGathered = 0;
     });
   }
 
@@ -4996,9 +5347,11 @@ export class OfficeEvents {
       midnightSnackGathered: this.midnightSnackGathered,
       foodDeliveryGathered: this.foodDeliveryGathered,
       teaTimeGathered: this.teaTimeGathered,
+      rollbackGathered: this.rollbackGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       codeFreezeAffected: this.codeFreezeAffected,
+      flakyTestAffected: this.flakyTestAffected,
       happyHourGathered: this.happyHourGathered,
       deployCelebrateGathered: this.deployCelebrateGathered,
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
