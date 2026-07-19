@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -38,6 +38,7 @@ const RANDOM_KINDS = [
   "sprint_retro",
   "donut_friday",
   "midnight_snack",
+  "food_delivery",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -256,6 +257,21 @@ const SNACK_CRUMB_TINTS = [0xffe8c0, 0xd4a574, 0xfff0d8, 0xc09060];
 const SNACK_HOUR_START = 20;
 const SNACK_HOUR_END = 24;
 const SNACK_WEIGHT = 3;
+/** food_delivery: lobby/entrance bag particles + idle gather (ms) */
+const FOOD_HOLD_MIN_MS = 5000;
+const FOOD_HOLD_MAX_MS = 8000;
+const FOOD_BAG_MIN_MS = 2500;
+const FOOD_BAG_MAX_MS = 4000;
+const FOOD_TOASTS = ["배달 왔다!", "점심 각?", "문 앞 봉투"];
+const FOOD_BAG_TEX = "fx-food-bag";
+/** soft brown / orange — distinct from parcel cardboard box */
+const FOOD_BAG_TINTS = [0xc4783a, 0xe09050, 0xd46828, 0xf0a868, 0xb86830];
+/** weekday 11–13 · 17–20: higher pick weight; else weight=1 */
+const FOOD_LUNCH_START = 11;
+const FOOD_LUNCH_END = 13;
+const FOOD_DINNER_START = 17;
+const FOOD_DINNER_END = 20;
+const FOOD_WEIGHT = 3;
 /** Tiny confetti bit for deploy_celebrate (taskCelebrate-style). */
 const DEPLOY_CONFETTI_TEX = "fx-confetti";
 /** while raining: higher pick weight for wet_floor */
@@ -511,6 +527,31 @@ function ensureSnackCrumbTexture(scene) {
   g.fillStyle(0xffffff, 0.55);
   g.fillCircle(3, 3, 1.5);
   g.generateTexture(SNACK_CRUMB_TEX, 8, 8);
+  g.destroy();
+}
+
+/**
+ * Soft delivery bag silhouette for food_delivery (brown/orange tint at emit).
+ * Shape distinct from parcel cardboard box (PARCEL_TEX).
+ */
+function ensureFoodBagTexture(scene) {
+  if (scene.textures.exists(FOOD_BAG_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  // bag body — rounded pouch (not cardboard box)
+  g.fillStyle(0xffffff, 1);
+  g.fillRoundedRect(2, 5, 12, 10, 2);
+  // folded top flap
+  g.fillStyle(0xffffff, 0.95);
+  g.fillTriangle(2, 6, 8, 1, 14, 6);
+  // handle — two verticals + top bar (no strokeEllipse)
+  g.fillStyle(0xffffff, 0.9);
+  g.fillRect(5, 1, 1.5, 4);
+  g.fillRect(9.5, 1, 1.5, 4);
+  g.fillRect(5, 1, 6, 1.5);
+  // soft highlight
+  g.fillStyle(0xffffff, 0.4);
+  g.fillRect(4, 8, 3, 5);
+  g.generateTexture(FOOD_BAG_TEX, 16, 16);
   g.destroy();
 }
 
@@ -903,6 +944,7 @@ export class OfficeEvents {
     this.pizzaPartyGathered = 0;
     this.donutFridayGathered = 0;
     this.midnightSnackGathered = 0;
+    this.foodDeliveryGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.codeFreezeAffected = 0;
@@ -1039,6 +1081,10 @@ export class OfficeEvents {
       weekday && hour >= FREEZE_HOUR_START && hour < FREEZE_HOUR_END;
     const snackWindow =
       hour >= SNACK_HOUR_START && hour < SNACK_HOUR_END;
+    const foodWindow =
+      weekday &&
+      ((hour >= FOOD_LUNCH_START && hour < FOOD_LUNCH_END) ||
+        (hour >= FOOD_DINNER_START && hour < FOOD_DINNER_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -1054,6 +1100,7 @@ export class OfficeEvents {
       else if (k === "donut_friday")
         weight = friday ? DONUT_FRIDAY_WEIGHT : DONUT_WEEKDAY_WEIGHT;
       else if (k === "midnight_snack" && snackWindow) weight = SNACK_WEIGHT;
+      else if (k === "food_delivery" && foodWindow) weight = FOOD_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
@@ -1107,6 +1154,7 @@ export class OfficeEvents {
     else if (kind === "pizza_party") this.runPizzaParty();
     else if (kind === "donut_friday") this.runDonutFriday();
     else if (kind === "midnight_snack") this.runMidnightSnack();
+    else if (kind === "food_delivery") this.runFoodDelivery();
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
@@ -2449,6 +2497,155 @@ export class OfficeEvents {
       }
     });
     this.track(() => restore.remove(false));
+  }
+
+  /**
+   * Food delivery: toast + soft brown/orange bags at lobby/entrance + idle 1–3 gather 5–8s.
+   * Skip if another gather is active. Short ding respects mute/?sfx=0.
+   * No running/blocked (isStandupGatherable). Weekday 11–13 · 17–20 weight↑.
+   */
+  runFoodDelivery() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      FOOD_HOLD_MIN_MS +
+      Math.floor(Math.random() * (FOOD_HOLD_MAX_MS - FOOD_HOLD_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    const toast =
+      FOOD_TOASTS[Math.floor(Math.random() * FOOD_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playFoodDing();
+
+    const bagMs =
+      FOOD_BAG_MIN_MS +
+      Math.floor(Math.random() * (FOOD_BAG_MAX_MS - FOOD_BAG_MIN_MS + 1));
+    const spot = findParcelSpot(this.scene);
+    this.spawnFoodBagParticles(spot.x, spot.y - 8, bagMs);
+    void this.gatherIdleToFoodDelivery(holdMs);
+  }
+
+  /** Soft brown/orange delivery-bag flecks near lobby entrance. */
+  spawnFoodBagParticles(x, y, ms = 3000) {
+    ensureFoodBagTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, FOOD_BAG_TEX, {
+      speed: { min: 16, max: 52 },
+      angle: { min: 0, max: 360 },
+      gravityY: 32,
+      scale: { start: 0.95, end: 0.28 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 650, max: 1200 },
+      frequency: 75,
+      quantity: 1,
+      tint: FOOD_BAG_TINTS,
+      rotate: { min: -35, max: 35 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle 1–3 → entrance/lobby ring; hold 5–8s → wander restore. */
+  async gatherIdleToFoodDelivery(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 1 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const ent = this.scene.waypoints?.entrance || { x: 20, y: 27 };
+    const anchor = findDeployGatherAnchor(this.scene);
+    const spots = [
+      ...meetingOffsets(ent),
+      ...meetingOffsets(anchor),
+      { x: ent.x, y: ent.y },
+      { x: anchor.x, y: anchor.y },
+    ];
+    const hold =
+      holdMs ??
+      FOOD_HOLD_MIN_MS +
+        Math.floor(Math.random() * (FOOD_HOLD_MAX_MS - FOOD_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.foodDeliveryGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Short delivery ding — skip if muted/locked (?sfx=0). */
+  playFoodDing() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1320, t0);
+      osc.frequency.exponentialRampToValueAtTime(990, t0 + 0.12);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.045, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.2);
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /**
@@ -4607,6 +4804,7 @@ export class OfficeEvents {
       pizzaPartyGathered: this.pizzaPartyGathered,
       donutFridayGathered: this.donutFridayGathered,
       midnightSnackGathered: this.midnightSnackGathered,
+      foodDeliveryGathered: this.foodDeliveryGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       codeFreezeAffected: this.codeFreezeAffected,
