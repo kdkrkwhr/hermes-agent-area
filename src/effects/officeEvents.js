@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -35,6 +35,7 @@ const RANDOM_KINDS = [
   "hotfix_scramble",
   "build_fail",
   "flaky_test",
+  "green_ci",
   "code_freeze",
   "sprint_retro",
   "donut_friday",
@@ -42,6 +43,7 @@ const RANDOM_KINDS = [
   "food_delivery",
   "tea_time",
   "rollback",
+  "oncall_page",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -126,6 +128,16 @@ const PHONE_MAX_MS = 5000;
 const PHONE_LINES = ["여보세요?", "네 듣고 있어요"];
 /** green tone — distinct from chatPing cyan (0x88aaff) */
 const PHONE_PULSE_COLOR = 0x44dd88;
+/** oncall_page: amber/red pager pulse + beep (ms); evening/night weight↑ */
+const ONCALL_MIN_MS = 3000;
+const ONCALL_MAX_MS = 5500;
+const ONCALL_TOASTS = ["온콜!", "페이저 울림"];
+const ONCALL_LINES = ["온콜…", "페이저?"];
+/** amber / red — night pager urgency (distinct from phone green / hotfix overlay) */
+const ONCALL_PULSE_AMBER = 0xe8a040;
+const ONCALL_PULSE_RED = 0xe85030;
+/** evening/night TOD: higher pick weight; day stays 1 */
+const ONCALL_WEIGHT = 3;
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
 const FLICKER_MAX_MS = 1200;
@@ -226,6 +238,23 @@ const FLAKY_AM_END = 12;
 const FLAKY_PM_START = 14;
 const FLAKY_PM_END = 17;
 const FLAKY_WEIGHT = 3;
+/** green_ci: soft mint/green overlay + Open Desk confetti + idle bubbles (ms) — no gather */
+const GREEN_CI_MIN_MS = 4000;
+const GREEN_CI_MAX_MS = 7000;
+const GREEN_CI_TOASTS = ["CI 통과!", "테스트 그린"];
+const GREEN_CI_LINES = ["그린!", "머지 각?"];
+/** soft mint/green — CI green vibe (distinct from deploy teal / flaky amber) */
+const GREEN_CI_MINT = 0x5ec89a;
+const GREEN_CI_ALPHA_MIN = 0.1;
+const GREEN_CI_ALPHA_MAX = 0.16;
+/** soft mint confetti tints near Open Desk */
+const GREEN_CI_TINTS = [0x5ee0c8, 0x7eecc8, 0xa8fff0, 0x5ec89a, 0xffffff];
+/** weekday 10–12 · 14–18: higher pick weight */
+const GREEN_CI_AM_START = 10;
+const GREEN_CI_AM_END = 12;
+const GREEN_CI_PM_START = 14;
+const GREEN_CI_PM_END = 18;
+const GREEN_CI_WEIGHT = 3;
 /** furniture tileset gid 36 (office printer) — missing → lobby/entrance fallback */
 export const PRINTER_GID = 36;
 const PARCEL_TEX = "fx-parcel";
@@ -713,6 +742,27 @@ function findMergeConflictSparkPx(scene, gatherTile) {
   return tileCenter(scene, gatherTile.x, gatherTile.y);
 }
 
+/** Open Desk (or dual) center for green_ci confetti — no gather needed. */
+function findGreenCiDeskPx(scene) {
+  const opens = findOpenDeskTiles(scene);
+  if (opens.length) {
+    const d = opens[Math.floor(Math.random() * opens.length)];
+    return { x: d.x, y: d.y };
+  }
+  const duals = findDualDeskTiles(scene);
+  if (duals.length) {
+    const d = duals[Math.floor(Math.random() * duals.length)];
+    return { x: d.x, y: d.y };
+  }
+  const desks = scene.waypoints?.desks;
+  if (Array.isArray(desks) && desks.length) {
+    const spot = desks[Math.floor(Math.random() * desks.length)];
+    return tileCenter(scene, spot.x, spot.y);
+  }
+  const anchor = findDeployGatherAnchor(scene);
+  return tileCenter(scene, anchor.x, anchor.y);
+}
+
 /** Soft red/amber conflict spark speck. */
 function ensureMergeSparkTexture(scene) {
   if (scene.textures.exists(MERGE_SPARK_TEX)) return;
@@ -952,6 +1002,11 @@ function isMergeConflictGatherable(agent) {
   return isPairProgrammingGatherable(agent);
 }
 
+/** idle / ready — on-call pager target (skip running; fallback abort). */
+function isOncallEligible(agent) {
+  return isPairProgrammingGatherable(agent);
+}
+
 /** idle or running (desk/focus) — stretch in place, no gather move. */
 function isStretchEligible(agent) {
   if (!agent?.sprite) return false;
@@ -1023,6 +1078,7 @@ export class OfficeEvents {
     this.hotfixScrambleGathered = 0;
     this.buildFailGathered = 0;
     this.flakyTestAffected = 0;
+    this.greenCiAffected = 0;
     this.rollbackGathered = 0;
     /** shared cool-down: deploy_celebrate ↔ rollback */
     this._deployBeatCooldownUntil = 0;
@@ -1032,6 +1088,7 @@ export class OfficeEvents {
     this.parcelNearBoss = false;
     this.paperAirplaneActive = false;
     this.phoneRingTarget = null;
+    this.oncallPageTarget = null;
     this.wetFloorActive = false;
     this.coffeeSpillGathered = 0;
     this.coffeeSpillActive = false;
@@ -1162,6 +1219,10 @@ export class OfficeEvents {
       weekday &&
       ((hour >= FLAKY_AM_START && hour < FLAKY_AM_END) ||
         (hour >= FLAKY_PM_START && hour < FLAKY_PM_END));
+    const greenCiWindow =
+      weekday &&
+      ((hour >= GREEN_CI_AM_START && hour < GREEN_CI_AM_END) ||
+        (hour >= GREEN_CI_PM_START && hour < GREEN_CI_PM_END));
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const deployBeatCool =
@@ -1209,7 +1270,9 @@ export class OfficeEvents {
       else if (k === "hotfix_scramble" && hotfixWindow) weight = HOTFIX_WEIGHT;
       else if (k === "build_fail" && deployWindow) weight = BUILD_FAIL_WEIGHT;
       else if (k === "flaky_test" && flakyWindow) weight = FLAKY_WEIGHT;
+      else if (k === "green_ci" && greenCiWindow) weight = GREEN_CI_WEIGHT;
       else if (k === "code_freeze" && freezeWindow) weight = FREEZE_WEIGHT;
+      else if (k === "oncall_page" && eveningNight) weight = ONCALL_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -1271,7 +1334,9 @@ export class OfficeEvents {
     else if (kind === "hotfix_scramble") this.runHotfixScramble();
     else if (kind === "build_fail") this.runBuildFail();
     else if (kind === "flaky_test") this.runFlakyTest();
+    else if (kind === "green_ci") this.runGreenCi();
     else if (kind === "code_freeze") this.runCodeFreeze();
+    else if (kind === "oncall_page") this.runOncallPage();
 
     this.publish();
   }
@@ -1609,6 +1674,161 @@ export class OfficeEvents {
         gain.connect(ctx.destination);
         osc.start(start);
         osc.stop(start + 0.13);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * On-call pager: one idle/ready agent + amber/red pulse 2–4× + beep.
+   * Skip if gather active. Prefer idle; if pick is running → other idle; else abort.
+   * Does not mark gathering.
+   */
+  runOncallPage() {
+    if (this.isGathering()) return;
+
+    const candidates = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isOncallEligible(a)),
+    );
+    let agent = candidates[0];
+    if (!agent?.sprite) return;
+    if (agent.getEffectKind?.() === "running") {
+      agent = candidates.find((a) => a !== agent && a.getEffectKind?.() !== "running");
+      if (!agent?.sprite || agent.getEffectKind?.() === "running") return;
+    }
+
+    const toast =
+      ONCALL_TOASTS[Math.floor(Math.random() * ONCALL_TOASTS.length)];
+    this.showToast(toast, 2800);
+    this.playPagerBeep();
+
+    const duration =
+      ONCALL_MIN_MS +
+      Math.floor(Math.random() * (ONCALL_MAX_MS - ONCALL_MIN_MS + 1));
+    const pulses = 2 + Math.floor(Math.random() * 3); // 2–4
+    const spr = agent.sprite;
+    const x = spr.x;
+    const y = spr.y - 6;
+
+    this.oncallPageTarget = agent.def?.id ?? agent.def?.name ?? "agent";
+    this.publish();
+
+    agent._oncallBackup = agent.statusText;
+    agent.setStatus(
+      ONCALL_LINES[Math.floor(Math.random() * ONCALL_LINES.length)],
+    );
+
+    const pulseCleanups = [];
+    for (let i = 0; i < pulses; i++) {
+      const delay = i * 380;
+      const color = i % 2 === 0 ? ONCALL_PULSE_AMBER : ONCALL_PULSE_RED;
+      const call = this.scene.time.delayedCall(delay, () => {
+        const cleanup = this.spawnOncallPulse(x, y, color);
+        if (cleanup) pulseCleanups.push(cleanup);
+      });
+      pulseCleanups.push(() => call.remove(false));
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      if (agent._oncallBackup != null) {
+        if (
+          !agent._expandTimer &&
+          agent._bossGreetBackup == null &&
+          agent._coffeeBackup == null &&
+          agent._workBackup == null &&
+          agent._specBackup == null &&
+          agent._stretchBackup == null &&
+          agent._waterBackup == null &&
+          agent._wifiBackup == null &&
+          agent._phoneBackup == null
+        ) {
+          agent.setStatus(agent._oncallBackup);
+        }
+        agent._oncallBackup = null;
+      }
+      this.oncallPageTarget = null;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      for (const fn of pulseCleanups) {
+        try {
+          fn();
+        } catch {
+          /* ignore */
+        }
+      }
+      if (agent._oncallBackup != null) {
+        agent.setStatus(agent._oncallBackup);
+        agent._oncallBackup = null;
+      }
+      this.oncallPageTarget = null;
+    });
+  }
+
+  /** Amber/red ADD stroke ring — pager pulse. */
+  spawnOncallPulse(x, y, color = ONCALL_PULSE_AMBER) {
+    const gfx = this.scene.add.graphics().setDepth(11);
+    gfx.setBlendMode("ADD");
+    const state = { r: 5, alpha: 0.95 };
+    const draw = () => {
+      gfx.clear();
+      if (state.alpha <= 0.01) return;
+      gfx.lineStyle(2.4, color, state.alpha);
+      gfx.strokeCircle(x, y, state.r);
+    };
+    draw();
+    const tween = this.scene.tweens.add({
+      targets: state,
+      r: 36,
+      alpha: 0,
+      duration: 620,
+      ease: "Sine.easeOut",
+      onUpdate: draw,
+      onComplete: () => {
+        try {
+          gfx.destroy();
+        } catch {
+          /* ignore */
+        }
+      },
+    });
+    return () => {
+      tween.stop();
+      try {
+        gfx.destroy();
+      } catch {
+        /* ignore */
+      }
+    };
+  }
+
+  /** Short pager beep chirps — skip if muted / locked / ?sfx=0. */
+  playPagerBeep() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked || audio.sfxEnabled === false) {
+      return;
+    }
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      for (let i = 0; i < 3; i++) {
+        const start = t0 + i * 0.11;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "square";
+        osc.frequency.setValueAtTime(980, start);
+        osc.frequency.setValueAtTime(620, start + 0.04);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.035, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.09);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.1);
       }
     } catch {
       /* autoplay / headless */
@@ -3406,6 +3626,164 @@ export class OfficeEvents {
       gain.connect(ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.1);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Green CI: toast + soft mint overlay 4–7s + Open Desk confetti +
+   * idle bubbles on 1–2 agents. No gather / no move of running·blocked.
+   * Skip if gather active. Optional short chime respects mute/lock.
+   */
+  runGreenCi() {
+    if (this.isGathering()) return;
+
+    const toast =
+      GREEN_CI_TOASTS[Math.floor(Math.random() * GREEN_CI_TOASTS.length)];
+    this.showToast(toast, 3000);
+    this.playGreenCiChime();
+
+    const duration =
+      GREEN_CI_MIN_MS +
+      Math.floor(Math.random() * (GREEN_CI_MAX_MS - GREEN_CI_MIN_MS + 1));
+    const alpha =
+      GREEN_CI_ALPHA_MIN +
+      Math.random() * (GREEN_CI_ALPHA_MAX - GREEN_CI_ALPHA_MIN);
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(GREEN_CI_MINT, alpha);
+    }
+
+    const deskPx = findGreenCiDeskPx(this.scene);
+    this.spawnGreenCiConfetti(deskPx.x, deskPx.y - 8);
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 2), // 1–2
+    );
+    const picked = pool.slice(0, want);
+    this.greenCiAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._greenBackup = agent.statusText;
+      agent.setStatus(
+        GREEN_CI_LINES[Math.floor(Math.random() * GREEN_CI_LINES.length)],
+      );
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._greenBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null &&
+            agent._flakyBackup == null
+          ) {
+            agent.setStatus(agent._greenBackup);
+          }
+          agent._greenBackup = null;
+        }
+      }
+      this.greenCiAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._greenBackup != null) {
+          agent.setStatus(agent._greenBackup);
+          agent._greenBackup = null;
+        }
+      }
+      this.greenCiAffected = 0;
+    });
+  }
+
+  /** Soft mint confetti near Open Desk — reuse deploy confetti tex. */
+  spawnGreenCiConfetti(x, y) {
+    ensureDeployConfettiTexture(this.scene);
+    const qty = 8 + Math.floor(Math.random() * 5);
+    const confetti = this.scene.add.particles(x, y, DEPLOY_CONFETTI_TEX, {
+      speed: { min: 22, max: 58 },
+      angle: { min: 210, max: 330 },
+      gravityY: 36,
+      scale: { start: 0.75, end: 0.12 },
+      alpha: { start: 0.85, end: 0 },
+      lifespan: { min: 500, max: 800 },
+      quantity: qty,
+      frequency: -1,
+      tint: GREEN_CI_TINTS,
+      blendMode: "ADD",
+      rotate: { min: -30, max: 30 },
+    });
+    confetti.setDepth(12);
+    confetti.explode(qty);
+
+    const clear = this.scene.time.delayedCall(1000, () => {
+      try {
+        confetti.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+    this.track(() => {
+      clear.remove(false);
+      try {
+        confetti.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Soft ascending mint chime — skip if muted/locked. */
+  playGreenCiChime() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // C5 → E5 — short “pass” lift
+      const notes = [523, 659];
+      for (let i = 0; i < notes.length; i++) {
+        const start = t0 + i * 0.07;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(notes[i], start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.035, start + 0.015);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.24);
+      }
     } catch {
       /* autoplay / headless */
     }
@@ -5352,6 +5730,7 @@ export class OfficeEvents {
       wifiOutageAffected: this.wifiOutageAffected,
       codeFreezeAffected: this.codeFreezeAffected,
       flakyTestAffected: this.flakyTestAffected,
+      greenCiAffected: this.greenCiAffected,
       happyHourGathered: this.happyHourGathered,
       deployCelebrateGathered: this.deployCelebrateGathered,
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
@@ -5367,6 +5746,7 @@ export class OfficeEvents {
       parcelNearBoss: this.parcelNearBoss,
       paperAirplaneActive: this.paperAirplaneActive,
       phoneRingTarget: this.phoneRingTarget,
+      oncallPageTarget: this.oncallPageTarget,
       wetFloorActive: this.wetFloorActive,
       coffeeSpillGathered: this.coffeeSpillGathered,
       coffeeSpillActive: this.coffeeSpillActive,
