@@ -70,6 +70,7 @@ import { NapPodBreathe } from "../effects/napPodBreathe.js";
 import { WallClock } from "../effects/wallClock.js";
 import { WallCalendar } from "../effects/wallCalendar.js";
 import { FocusHeadphones } from "../effects/focusHeadphones.js";
+import { FocusPomodoro } from "../effects/focusPomodoro.js";
 import { FocusDndSign } from "../effects/focusDndSign.js";
 import { FocusAcVent } from "../effects/focusAcVent.js";
 import { MonitorCode } from "../effects/monitorCode.js";
@@ -556,6 +557,7 @@ export class OfficeScene extends Phaser.Scene {
     this.meetingDoorSign = new MeetingDoorSign(this);
     this.wallClock = new WallClock(this);
     this.focusHeadphones = new FocusHeadphones(this);
+    this.focusPomodoro = new FocusPomodoro(this);
     this.focusDndSign = new FocusDndSign(this);
     this.focusAcVent = new FocusAcVent(this);
     this.monitorCode = new MonitorCode(this);
@@ -748,6 +750,7 @@ export class OfficeScene extends Phaser.Scene {
     this.meetingProjector?.update(this.time.now, delta);
     this.meetingDoorSign?.update(this.time.now, delta);
     this.focusHeadphones?.sync();
+    this.focusPomodoro?.sync(this.time.now);
     this.focusDndSign?.update(this.time.now, delta);
     this.monitorCode?.sync(delta);
     this.monitorScreensaver?.sync(this.time.now);
@@ -1379,6 +1382,7 @@ export class OfficeScene extends Phaser.Scene {
       meetingDoorSign: this.meetingDoorSign?.snapshot?.() ?? null,
       wallClock: this.wallClock?.snapshot?.() ?? null,
       focusHeadphones: this.focusHeadphones?.snapshot?.() ?? null,
+      focusPomodoro: this.focusPomodoro?.snapshot?.() ?? null,
       focusDnd: this.focusDndSign?.snapshot?.() ?? null,
       acvent: this.focusAcVent?.snapshot?.() ?? null,
       monitorCode: this.monitorCode?.snapshot?.() ?? null,

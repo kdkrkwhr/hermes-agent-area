@@ -35,6 +35,8 @@ const PRINT_MS = 400;
 const FRIDGE_MS = 500;
 const HEATER_MS = 600;
 const MICROWAVE_MS = 450;
+/** Soft pomodoro cycle-complete ding — quieter / lower than microwave. */
+const POMODORO_DING_MS = 600;
 const COOLER_MS = 450;
 const COAT_RUSTLE_MS = 450;
 const RACK_BLIP_MS = 400;
@@ -706,6 +708,34 @@ export class OfficeAudio {
       gain.connect(ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.3);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Soft focus pomodoro cycle ding (C6) — quieter than microwave; mute / ?sfx=0. */
+  playPomodoroDing() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastPomodoroDingAt && now - this._lastPomodoroDingAt < POMODORO_DING_MS) {
+      return;
+    }
+    this._lastPomodoroDingAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(1046.5, t0);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.028, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.22);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.24);
     } catch {
       /* autoplay / headless */
     }
