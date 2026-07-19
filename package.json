@@ -76,6 +76,8 @@
     "smoke:mergeconflict": "node scripts/smoke-mergeconflict.mjs",
     "smoke:hotfixscramble": "node scripts/smoke-hotfixscramble.mjs",
     "smoke:oncallpage": "node scripts/smoke-oncallpage.mjs",
+    "smoke:ratelimit": "node scripts/smoke-ratelimit.mjs",
+    "smoke:gatewayblip": "node scripts/smoke-gatewayblip.mjs",
     "smoke:buildfail": "node scripts/smoke-buildfail.mjs",
     "smoke:flakytest": "node scripts/smoke-flakytest.mjs",
     "smoke:greenci": "node scripts/smoke-greenci.mjs",

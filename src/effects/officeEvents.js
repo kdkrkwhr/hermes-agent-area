@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -44,6 +44,8 @@ const RANDOM_KINDS = [
   "tea_time",
   "rollback",
   "oncall_page",
+  "rate_limit",
+  "gateway_blip",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -51,6 +53,19 @@ const WIFI_MAX_MS = 4000;
 const WIFI_LINES = ["와이파이?", "버퍼링…"];
 const WIFI_GRAY = 0x7a7a88;
 const WIFI_ALPHA = 0.22;
+/** gateway_blip: short amber/red overlay pulse + idle reconnect bubbles (ms) */
+const GATEWAY_BLIP_MIN_MS = 1500;
+const GATEWAY_BLIP_MAX_MS = 3000;
+const GATEWAY_BLIP_TOASTS = ["게이트웨이?", "재연결…"];
+const GATEWAY_BLIP_LINE = "재연결…";
+/** warm amber / soft red — shorter & warmer than wifi gray; not oncall pager rings */
+const GATEWAY_BLIP_AMBER = 0xe8a040;
+const GATEWAY_BLIP_RED = 0xd06048;
+const GATEWAY_BLIP_ALPHA = 0.16;
+/** pulse toggle interval (ms) */
+const GATEWAY_BLIP_PULSE_MS = 220;
+/** weight=1 always (no TOD boost — avoid spam) */
+const GATEWAY_BLIP_WEIGHT = 1;
 /** code_freeze: cool-blue overlay + idle bubbles (ms) — no gather/move */
 const FREEZE_MIN_MS = 4000;
 const FREEZE_MAX_MS = 7000;
@@ -138,6 +153,17 @@ const ONCALL_PULSE_AMBER = 0xe8a040;
 const ONCALL_PULSE_RED = 0xe85030;
 /** evening/night TOD: higher pick weight; day stays 1 */
 const ONCALL_WEIGHT = 3;
+/** rate_limit: 429 toast + running/chatting bubble + soft magenta foot pulse (ms) */
+const RATE_LIMIT_MIN_MS = 2000;
+const RATE_LIMIT_MAX_MS = 4000;
+const RATE_LIMIT_TOASTS = ["429!", "한도 찼다"];
+const RATE_LIMIT_LINE = "한도…";
+/** soft magenta — LLM quota vibe (distinct from phone green / oncall amber-red / build_fail rose) */
+const RATE_LIMIT_MAGENTA = 0xd060c0;
+/** business hours 10–18: higher pick weight; else weight=1 */
+const RATE_LIMIT_HOUR_START = 10;
+const RATE_LIMIT_HOUR_END = 18;
+const RATE_LIMIT_WEIGHT = 2;
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
 const FLICKER_MAX_MS = 1200;
@@ -1014,6 +1040,12 @@ function isStretchEligible(agent) {
   return kind === "idle" || kind === "running";
 }
 
+/** running/chatting only — rate_limit stays at desk (chatting maps to running). */
+function isRateLimitEligible(agent) {
+  if (!agent?.sprite) return false;
+  return agent.getEffectKind?.() === "running";
+}
+
 /** idle/break only — wifi outage bubbles (mock break → idle kind). */
 function isWifiEligible(agent) {
   if (!agent?.sprite) return false;
@@ -1067,6 +1099,7 @@ export class OfficeEvents {
     this.teaTimeGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
+    this.gatewayBlipAffected = 0;
     this.codeFreezeAffected = 0;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
@@ -1089,6 +1122,7 @@ export class OfficeEvents {
     this.paperAirplaneActive = false;
     this.phoneRingTarget = null;
     this.oncallPageTarget = null;
+    this.rateLimitTarget = null;
     this.wetFloorActive = false;
     this.coffeeSpillGathered = 0;
     this.coffeeSpillActive = false;
@@ -1205,6 +1239,8 @@ export class OfficeEvents {
         (hour >= HOTFIX_PM_START && hour < HOTFIX_PM_END));
     const freezeWindow =
       weekday && hour >= FREEZE_HOUR_START && hour < FREEZE_HOUR_END;
+    const rateLimitWindow =
+      hour >= RATE_LIMIT_HOUR_START && hour < RATE_LIMIT_HOUR_END;
     const snackWindow =
       hour >= SNACK_HOUR_START && hour < SNACK_HOUR_END;
     const foodWindow =
@@ -1273,6 +1309,8 @@ export class OfficeEvents {
       else if (k === "green_ci" && greenCiWindow) weight = GREEN_CI_WEIGHT;
       else if (k === "code_freeze" && freezeWindow) weight = FREEZE_WEIGHT;
       else if (k === "oncall_page" && eveningNight) weight = ONCALL_WEIGHT;
+      else if (k === "rate_limit" && rateLimitWindow) weight = RATE_LIMIT_WEIGHT;
+      else if (k === "gateway_blip") weight = GATEWAY_BLIP_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -1337,6 +1375,8 @@ export class OfficeEvents {
     else if (kind === "green_ci") this.runGreenCi();
     else if (kind === "code_freeze") this.runCodeFreeze();
     else if (kind === "oncall_page") this.runOncallPage();
+    else if (kind === "rate_limit") this.runRateLimit();
+    else if (kind === "gateway_blip") this.runGatewayBlip();
 
     this.publish();
   }
@@ -1588,7 +1628,8 @@ export class OfficeEvents {
           agent._specBackup == null &&
           agent._stretchBackup == null &&
           agent._waterBackup == null &&
-          agent._wifiBackup == null
+          agent._wifiBackup == null &&
+          agent._rateLimitBackup == null
         ) {
           agent.setStatus(agent._phoneBackup);
         }
@@ -1741,7 +1782,8 @@ export class OfficeEvents {
           agent._stretchBackup == null &&
           agent._waterBackup == null &&
           agent._wifiBackup == null &&
-          agent._phoneBackup == null
+          agent._phoneBackup == null &&
+          agent._rateLimitBackup == null
         ) {
           agent.setStatus(agent._oncallBackup);
         }
@@ -1829,6 +1871,181 @@ export class OfficeEvents {
         gain.connect(ctx.destination);
         osc.start(start);
         osc.stop(start + 0.1);
+      }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Rate limit (429): one running/chatting agent bubble + soft magenta
+   * foot pulse + tick SFX. No gather/move. Skip if gather active or no target.
+   */
+  runRateLimit() {
+    if (this.isGathering()) return;
+
+    const agents = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isRateLimitEligible(a)),
+    );
+    const agent = agents[0];
+    if (!agent?.sprite) return;
+
+    const toast =
+      RATE_LIMIT_TOASTS[Math.floor(Math.random() * RATE_LIMIT_TOASTS.length)];
+    this.showToast(toast, 2600);
+    this.playRateLimitTick();
+
+    const duration =
+      RATE_LIMIT_MIN_MS +
+      Math.floor(Math.random() * (RATE_LIMIT_MAX_MS - RATE_LIMIT_MIN_MS + 1));
+    const pulses = 1 + Math.floor(Math.random() * 2); // 1–2 soft pulses
+    const spr = agent.sprite;
+    const x = spr.x;
+    // under feet — distinct from phone/oncall head-ring (y - 6)
+    const y = spr.y + 10;
+
+    this.rateLimitTarget = agent.def?.id ?? agent.def?.name ?? "agent";
+    this.publish();
+
+    agent._rateLimitBackup = agent.statusText;
+    agent.setStatus(RATE_LIMIT_LINE);
+
+    const pulseCleanups = [];
+    for (let i = 0; i < pulses; i++) {
+      const delay = i * 480;
+      const call = this.scene.time.delayedCall(delay, () => {
+        const cleanup = this.spawnRateLimitPulse(x, y);
+        if (cleanup) pulseCleanups.push(cleanup);
+      });
+      pulseCleanups.push(() => call.remove(false));
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      if (agent._rateLimitBackup != null) {
+        if (
+          !agent._expandTimer &&
+          agent._bossGreetBackup == null &&
+          agent._coffeeBackup == null &&
+          agent._workBackup == null &&
+          agent._specBackup == null &&
+          agent._stretchBackup == null &&
+          agent._waterBackup == null &&
+          agent._wifiBackup == null &&
+          agent._phoneBackup == null &&
+          agent._oncallBackup == null
+        ) {
+          agent.setStatus(agent._rateLimitBackup);
+        }
+        agent._rateLimitBackup = null;
+      }
+      this.rateLimitTarget = null;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      for (const fn of pulseCleanups) {
+        try {
+          fn();
+        } catch {
+          /* ignore */
+        }
+      }
+      if (agent._rateLimitBackup != null) {
+        agent.setStatus(agent._rateLimitBackup);
+        agent._rateLimitBackup = null;
+      }
+      this.rateLimitTarget = null;
+    });
+  }
+
+  /** Soft magenta ADD stroke under feet — quieter than phone/oncall head pulse. */
+  spawnRateLimitPulse(x, y) {
+    const gfx = this.scene.add.graphics().setDepth(11);
+    gfx.setBlendMode("ADD");
+    const state = { r: 4, alpha: 0.72 };
+    const draw = () => {
+      gfx.clear();
+      if (state.alpha <= 0.01) return;
+      gfx.lineStyle(1.8, RATE_LIMIT_MAGENTA, state.alpha);
+      gfx.strokeCircle(x, y, state.r);
+    };
+    draw();
+    const tween = this.scene.tweens.add({
+      targets: state,
+      r: 26,
+      alpha: 0,
+      duration: 780,
+      ease: "Sine.easeOut",
+      onUpdate: draw,
+      onComplete: () => {
+        try {
+          gfx.destroy();
+        } catch {
+          /* ignore */
+        }
+      },
+    });
+    return () => {
+      tween.stop();
+      try {
+        gfx.destroy();
+      } catch {
+        /* ignore */
+      }
+    };
+  }
+
+  /** Soft rate-limit tick — skip if muted/locked. */
+  playRateLimitTick() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(420, t0);
+      osc.frequency.exponentialRampToValueAtTime(280, t0 + 0.08);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.028, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.11);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Soft reconnect blip (gateway) — skip if muted/locked / ?sfx=0. */
+  playGatewayBlip() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked || audio.sfxEnabled === false) {
+      return;
+    }
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // two quick ascending chirps — reconnect handshake vibe
+      for (let i = 0; i < 2; i++) {
+        const start = t0 + i * 0.09;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(520 + i * 140, start);
+        osc.frequency.exponentialRampToValueAtTime(720 + i * 100, start + 0.06);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.03, start + 0.008);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.07);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.08);
       }
     } catch {
       /* autoplay / headless */
@@ -3386,6 +3603,115 @@ export class OfficeEvents {
         }
       }
       this.wifiOutageAffected = 0;
+    });
+  }
+
+  /**
+   * Gateway blip: toast + soft amber/red overlay pulse 1.5–3s (warmer &
+   * shorter than wifi gray) + idle bubbles "재연결…" on 1–2 agents.
+   * Hermes reconnect vibe — not wifi outage / not oncall pager rings.
+   * Skip if gather active. Optional blip SFX respects mute/lock.
+   */
+  runGatewayBlip() {
+    if (this.isGathering()) return;
+
+    const toast =
+      GATEWAY_BLIP_TOASTS[
+        Math.floor(Math.random() * GATEWAY_BLIP_TOASTS.length)
+      ];
+    this.showToast(toast, 2400);
+    this.playGatewayBlip();
+
+    const duration =
+      GATEWAY_BLIP_MIN_MS +
+      Math.floor(
+        Math.random() * (GATEWAY_BLIP_MAX_MS - GATEWAY_BLIP_MIN_MS + 1),
+      );
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+
+    let amber = true;
+    if (overlay && preset) {
+      overlay.setFillStyle(GATEWAY_BLIP_AMBER, GATEWAY_BLIP_ALPHA);
+    }
+
+    const pulse =
+      overlay && preset
+        ? this.scene.time.addEvent({
+            delay: GATEWAY_BLIP_PULSE_MS,
+            loop: true,
+            callback: () => {
+              amber = !amber;
+              overlay.setFillStyle(
+                amber ? GATEWAY_BLIP_AMBER : GATEWAY_BLIP_RED,
+                GATEWAY_BLIP_ALPHA,
+              );
+            },
+          })
+        : null;
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 2), // 1–2
+    );
+    const picked = pool.slice(0, want);
+    this.gatewayBlipAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._gatewayBackup = agent.statusText;
+      agent.setStatus(GATEWAY_BLIP_LINE);
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      if (pulse) pulse.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._gatewayBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null &&
+            agent._flakyBackup == null &&
+            agent._oncallBackup == null
+          ) {
+            agent.setStatus(agent._gatewayBackup);
+          }
+          agent._gatewayBackup = null;
+        }
+      }
+      this.gatewayBlipAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      if (pulse) pulse.remove(false);
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._gatewayBackup != null) {
+          agent.setStatus(agent._gatewayBackup);
+          agent._gatewayBackup = null;
+        }
+      }
+      this.gatewayBlipAffected = 0;
     });
   }
 
@@ -5728,6 +6054,7 @@ export class OfficeEvents {
       rollbackGathered: this.rollbackGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
+      gatewayBlipAffected: this.gatewayBlipAffected,
       codeFreezeAffected: this.codeFreezeAffected,
       flakyTestAffected: this.flakyTestAffected,
       greenCiAffected: this.greenCiAffected,
@@ -5747,6 +6074,7 @@ export class OfficeEvents {
       paperAirplaneActive: this.paperAirplaneActive,
       phoneRingTarget: this.phoneRingTarget,
       oncallPageTarget: this.oncallPageTarget,
+      rateLimitTarget: this.rateLimitTarget,
       wetFloorActive: this.wetFloorActive,
       coffeeSpillGathered: this.coffeeSpillGathered,
       coffeeSpillActive: this.coffeeSpillActive,
