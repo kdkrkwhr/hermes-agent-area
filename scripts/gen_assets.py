@@ -569,8 +569,32 @@ def make_tileset() -> None:
     px(buf, w, ox + 5, oy + 8, COAT_TRIM)
     rect(buf, w, ox + 4, oy + 2, ox + 12, oy + 4, (150, 165, 180, 255))
 
+    # 44 recycleBin (gid 45) — dual blue/yellow lounge recycle bin
+    BIN_BODY = (70, 78, 88, 255)
+    BIN_LIP = (100, 110, 122, 255)
+    BIN_BLUE = (70, 150, 220, 255)
+    BIN_BLUE2 = (50, 120, 190, 255)
+    BIN_YELLOW = (230, 190, 60, 255)
+    BIN_YELLOW2 = (200, 160, 40, 255)
+    PAPER_W = (245, 245, 240, 255)
+    ox, oy = tile_at(4, 5)
+    fill(buf, w, ox, oy, ox + TILE, oy + TILE, TRANS)
+    fill(buf, w, ox + 2, oy + 4, ox + 14, oy + 15, BIN_BODY)  # body
+    fill(buf, w, ox + 2, oy + 4, ox + 14, oy + 6, BIN_LIP)  # lip
+    # left blue (paper) / right yellow (mixed)
+    fill(buf, w, ox + 3, oy + 6, ox + 7, oy + 14, BIN_BLUE)
+    fill(buf, w, ox + 3, oy + 6, ox + 7, oy + 8, BIN_BLUE2)
+    fill(buf, w, ox + 9, oy + 6, ox + 13, oy + 14, BIN_YELLOW)
+    fill(buf, w, ox + 9, oy + 6, ox + 13, oy + 8, BIN_YELLOW2)
+    fill(buf, w, ox + 7, oy + 5, ox + 9, oy + 14, BIN_LIP)  # divider
+    # paper peek in blue slot
+    fill(buf, w, ox + 4, oy + 5, ox + 6, oy + 7, PAPER_W)
+    px(buf, w, ox + 5, oy + 9, (220, 230, 240, 200))
+    px(buf, w, ox + 10, oy + 10, (180, 140, 40, 200))
+    rect(buf, w, ox + 2, oy + 4, ox + 14, oy + 15, (140, 150, 165, 255))
+
     # fill remaining unused slots with light floor noise
-    for ti, tj in [(4, 5), (5, 5), (6, 5), (7, 5)]:
+    for ti, tj in [(5, 5), (6, 5), (7, 5)]:
         ox, oy = tile_at(ti, tj)
         fill(buf, w, ox, oy, ox + TILE, oy + TILE, FLOOR2)
 
@@ -600,7 +624,7 @@ def make_map_json() -> None:
       29 creamWall  30 mahoFloor  31 mahoDesk  32 execChair  33 cityWindow
       34 bookshelf  35 flowerPot  36 printer  37 aquarium  38 vending
       39 fridge  40 microwave  41 waterCooler  42 serverRack  43 deskFan
-      44 coatRack
+      44 coatRack  45 recycleBin
     """
     W, H = 40, 30
     floor = [[22 for _ in range(W)] for _ in range(H)]
@@ -826,6 +850,10 @@ def make_map_json() -> None:
         (34, 5),
     ):
         put(lx, ly, 20, False)
+
+    # recycleBin after lamps so GID20 doesn't overwrite lounge bins
+    put(16, 18, 45)  # recycleBin SE lounge (clears lounge WPs @17/18/19,18)
+    put(22, 18, 45)  # recycleBin east lounge (avoids lamp@23,18)
 
     # wall plants (GID 10) — Open Desk / Focus edges (avoid flowerPot 35 tiles)
     for px, py in (

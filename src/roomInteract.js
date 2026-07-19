@@ -21,6 +21,7 @@ const FRIDGE_GID = 39;
 const MICROWAVE_GID = 40;
 const WATER_COOLER_GID = 41;
 const COAT_RACK_GID = 44;
+const RECYCLE_BIN_GID = 45;
 const LINGER_MS = 4500;
 const AQUAFEED_MS = 7000;
 const AQUAFEED_COOLDOWN_MS = 15000;
@@ -108,6 +109,7 @@ const BOOKSHELF_TIPS = [
   "WS 끊기면 mock 에이전트로 폴백",
   "skills_list → skill_view 로 절차 로드",
   "?coatrack=force 는 로비 코트랙 wet 스모크용",
+  "?recycle=force 는 라운지 분리수거함 스모크용",
   "?rack=force 는 Focus 서버랙 LED 스모크용",
   "?printer=force 는 Open Desk 프린터 출력 스모크용",
   "playwright smoke는 ?events=0&sfx=0 추천",
@@ -149,6 +151,12 @@ const COAT_RACK_TOASTS_TAKE = [
   "코트 벗었다",
   "코트 챙김",
   "옷 가져감",
+];
+const RECYCLE_TOASTS = [
+  "분리수거 각!",
+  "종이만!",
+  "재활용 고고",
+  "쓰레기통에 탁",
 ];
 const VISIT_KEY = "hermes-area-visit-count";
 const TYPING_FRAMES = ["·", "··", "···"];
@@ -268,6 +276,20 @@ function findCoatRackInteractTiles(scene) {
       for (let tx = 0; tx < scene.map.width; tx++) {
         const tile = layer.getTileAt(tx, ty);
         if (tile?.index === COAT_RACK_GID) hits.push(tileCenter(scene, tx, ty));
+      }
+    }
+  }
+  return hits;
+}
+
+function findRecycleBinInteractTiles(scene) {
+  const hits = [];
+  const layer = scene.furniture;
+  if (layer?.getTileAt && scene.map) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === RECYCLE_BIN_GID) hits.push(tileCenter(scene, tx, ty));
       }
     }
   }
@@ -457,6 +479,18 @@ function coatRackEnabledFromQuery() {
   }
 }
 
+/** Default on; `?recycle=0|false|off` disables E-interact (idle FX uses same query). */
+function recycleEnabledFromQuery() {
+  if (typeof location === "undefined") return true;
+  try {
+    const v = new URLSearchParams(location.search).get("recycle");
+    if (v == null || v === "") return true;
+    return !(v === "0" || v === "false" || v === "off");
+  } catch {
+    return true;
+  }
+}
+
 /** Default on; `?rack=0|false|off` disables E-interact (same query as LED FX). */
 function rackEnabledFromQuery() {
   return serverRackEnabledFromQuery();
@@ -594,6 +628,16 @@ function nearCoatRack(scene, coatRackTiles) {
   return false;
 }
 
+function nearRecycle(scene, recycleTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map || !recycleTiles?.length) return false;
+  const reach = scene.map.tileWidth * KITCHEN_NEAR_TILES;
+  for (const c of recycleTiles) {
+    if (Math.hypot(b.x - c.x, b.y - c.y) <= reach) return true;
+  }
+  return false;
+}
+
 function nearRack(scene, rackTiles) {
   const b = scene.boss?.sprite;
   if (!b || !scene.map || !rackTiles?.length) return false;
@@ -625,6 +669,21 @@ function nearestCoatRack(scene, coatRackTiles) {
   let best = null;
   let bestD = Infinity;
   for (const c of coatRackTiles) {
+    const d = Math.hypot(b.x - c.x, b.y - c.y);
+    if (d < bestD) {
+      bestD = d;
+      best = c;
+    }
+  }
+  return best;
+}
+
+function nearestRecycle(scene, recycleTiles) {
+  const b = scene.boss?.sprite;
+  if (!b || !recycleTiles?.length) return null;
+  let best = null;
+  let bestD = Infinity;
+  for (const c of recycleTiles) {
     const d = Math.hypot(b.x - c.x, b.y - c.y);
     if (d < bestD) {
       bestD = d;
@@ -962,6 +1021,44 @@ function burstPrinterPaper(scene, x, y, durationMs = 1200) {
   return { emitter, qty, durationMs: dur };
 }
 
+/** Soft paper toss into recycle bin for 1–1.5s. */
+function burstRecyclePaper(scene, x, y, durationMs = 1200) {
+  if (!scene?.add) return null;
+  ensurePaperTexture(scene);
+  const qty = 4 + Math.floor(Math.random() * 4); // 4–7
+  const emitter = scene.add.particles(x, y - 6, "fx-paper", {
+    speed: { min: 18, max: 70 },
+    angle: { min: 240, max: 300 },
+    gravityY: 160,
+    scale: { start: 0.95, end: 0.2 },
+    alpha: { start: 0.9, end: 0 },
+    lifespan: { min: 400, max: 900 },
+    quantity: 1,
+    frequency: 90,
+    tint: PAPER_TINTS,
+    blendMode: "NORMAL",
+    rotate: { min: -70, max: 70 },
+  });
+  emitter.setDepth(12);
+  emitter.explode(qty);
+  const dur = Math.max(900, durationMs);
+  scene.time.delayedCall(dur, () => {
+    try {
+      emitter.stop();
+    } catch {
+      /* ignore */
+    }
+  });
+  scene.time.delayedCall(dur + 900, () => {
+    try {
+      emitter.destroy();
+    } catch {
+      /* ignore */
+    }
+  });
+  return { emitter, qty, durationMs: dur };
+}
+
 function loungeAgents(scene) {
   return (scene.agents || []).filter((a) => {
     if (a.serverStatus === "idle" || a.currentKind === "break") return true;
@@ -1001,6 +1098,7 @@ export class RoomInteract {
     this.microwaveTiles = findMicrowaveTiles(scene);
     this.coolerTiles = findWaterCoolerTiles(scene);
     this.coatRackTiles = findCoatRackInteractTiles(scene);
+    this.recycleTiles = findRecycleBinInteractTiles(scene);
     this.rackTiles = findServerRackTiles(scene);
     this.printerTiles = findPrinterTiles(scene);
     this.plantTiles = findPlantTiles(scene);
@@ -1065,6 +1163,14 @@ export class RoomInteract {
     this._lastCoatRackTile = null;
     this._lastCoatRackToast = null;
     this._coatHung = false;
+
+    this.recycleEnabled = recycleEnabledFromQuery();
+    this.recycleActiveUntil = 0;
+    this.recycleCooldownUntil = 0;
+    this.lastRecycleAt = 0;
+    this._lastRecycleTile = null;
+    this._lastRecycleToast = null;
+    this._lastRecyclePaperQty = 0;
     this.rackEnabled = rackEnabledFromQuery();
     this.rackActiveUntil = 0;
     this.rackCooldownUntil = 0;
@@ -1126,7 +1232,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > coatrack > rack > printer > nap > mascotpet > plantwater > poster > bookshelf > work
+    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > recycle > coatrack > rack > printer > nap > mascotpet > plantwater > poster > bookshelf > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -1162,6 +1268,13 @@ export class RoomInteract {
       !this.coolerActive()
     ) {
       return "cooler";
+    }
+    if (
+      this.recycleEnabled &&
+      nearRecycle(this.scene, this.recycleTiles) &&
+      !this.recycleActive()
+    ) {
+      return "recycle";
     }
     if (
       this.coatRackEnabled &&
@@ -1252,6 +1365,12 @@ export class RoomInteract {
       }
       return "E 물마시기";
     }
+    if (k === "recycle") {
+      if (this.recycleCoolingDown()) {
+        return `분리수거 쿨다운 ${this.recycleCooldownLeftSec()}s`;
+      }
+      return "E 분리수거";
+    }
     if (k === "coatrack") {
       if (this.coatRackCoolingDown()) {
         return `코트랙 쿨다운 ${this.coatRackCooldownLeftSec()}s`;
@@ -1321,6 +1440,9 @@ export class RoomInteract {
     }
     if (this.coolerEnabled && nearCooler(this.scene, this.coolerTiles)) {
       return this.startCooler();
+    }
+    if (this.recycleEnabled && nearRecycle(this.scene, this.recycleTiles)) {
+      return this.startRecycle();
     }
     if (this.coatRackEnabled && nearCoatRack(this.scene, this.coatRackTiles)) {
       return this.startCoatRack();
@@ -1895,6 +2017,69 @@ export class RoomInteract {
     return true;
   }
 
+  recycleActive() {
+    return this.scene.time.now < this.recycleActiveUntil;
+  }
+
+  recycleCoolingDown() {
+    return this.scene.time.now < this.recycleCooldownUntil;
+  }
+
+  recycleCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.recycleCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  startRecycle() {
+    if (!this.recycleEnabled) return false;
+    if (this.recycleActive()) return true;
+    if (this.recycleCoolingDown()) {
+      this.showToast(`분리수거 쿨다운 ${this.recycleCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "recycle_cooldown",
+        cooldownSec: this.recycleCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const machine = nearestRecycle(this.scene, this.recycleTiles);
+    if (!machine) return false;
+    const now = this.scene.time.now;
+    const dur =
+      KITCHEN_MS_MIN +
+      Math.floor(Math.random() * (KITCHEN_MS_MAX - KITCHEN_MS_MIN + 1));
+    const cool =
+      KITCHEN_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (KITCHEN_COOLDOWN_MS_MAX - KITCHEN_COOLDOWN_MS_MIN + 1),
+      );
+    const toast =
+      RECYCLE_TOASTS[Math.floor(Math.random() * RECYCLE_TOASTS.length)];
+    this.lastRecycleAt = now;
+    this.recycleActiveUntil = now + dur;
+    this.recycleCooldownUntil = now + cool;
+    this._lastRecycleTile = { tx: machine.tx, ty: machine.ty };
+    this._lastRecycleToast = toast;
+    const burst = burstRecyclePaper(this.scene, machine.x, machine.y, dur);
+    this._lastRecyclePaperQty = burst?.qty ?? 0;
+    this.scene.officeAudio?.playCoatRustle?.();
+    this.showToast(toast);
+    this.lastAction = {
+      kind: "recycle_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      toast,
+      papers: this._lastRecyclePaperQty,
+      machine: this._lastRecycleTile,
+    };
+    this.publish();
+    return true;
+  }
+
   rackActive() {
     return this.scene.time.now < this.rackActiveUntil;
   }
@@ -2203,6 +2388,14 @@ export class RoomInteract {
       };
       this.publish();
     }
+    if (this.recycleActiveUntil && time >= this.recycleActiveUntil) {
+      this.recycleActiveUntil = 0;
+      this.lastAction = {
+        kind: "recycle_end",
+        lastRecycleAt: this.lastRecycleAt,
+      };
+      this.publish();
+    }
     if (this.rackActiveUntil && time >= this.rackActiveUntil) {
       this.rackActiveUntil = 0;
       this.lastAction = {
@@ -2478,6 +2671,23 @@ export class RoomInteract {
     };
   }
 
+  recycleSnapshot() {
+    return {
+      enabled: !!this.recycleEnabled,
+      active: this.recycleActive(),
+      cooldown: this.recycleCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.recycleCooldownUntil - this.scene.time.now),
+      ),
+      lastRecycleAt: this.lastRecycleAt || null,
+      recycleCount: this.recycleTiles?.length ?? 0,
+      lastMachine: this._lastRecycleTile,
+      lastToast: this._lastRecycleToast,
+      papers: this._lastRecyclePaperQty || 0,
+    };
+  }
+
   rackSnapshot() {
     return {
       enabled: !!this.rackEnabled,
@@ -2543,6 +2753,7 @@ export class RoomInteract {
       fridgeTiles: this.fridgeTiles.map((f) => ({ tx: f.tx, ty: f.ty })),
       microwaveTiles: this.microwaveTiles.map((m) => ({ tx: m.tx, ty: m.ty })),
       coolerTiles: this.coolerTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
+      recycleTiles: this.recycleTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       coatRackTiles: this.coatRackTiles.map((c) => ({ tx: c.tx, ty: c.ty })),
       rackTiles: this.rackTiles.map((r) => ({ tx: r.tx, ty: r.ty })),
       printerTiles: this.printerTiles.map((p) => ({ tx: p.tx, ty: p.ty })),
@@ -2586,6 +2797,9 @@ export class RoomInteract {
       coolerEnabled: !!this.coolerEnabled,
       coolerActive: this.coolerActive(),
       coolerCooldown: this.coolerCoolingDown(),
+      recycleEnabled: !!this.recycleEnabled,
+      recycleActive: this.recycleActive(),
+      recycleCooldown: this.recycleCoolingDown(),
       coatRackEnabled: !!this.coatRackEnabled,
       coatRackActive: this.coatRackActive(),
       coatRackCooldown: this.coatRackCoolingDown(),
@@ -2616,6 +2830,7 @@ export class RoomInteract {
       fridge: this.fridgeSnapshot(),
       microwave: this.microwaveSnapshot(),
       cooler: this.coolerSnapshot(),
+      recycle: this.recycleSnapshot(),
       coatRack: this.coatRackSnapshot(),
       rack: this.rackSnapshot(),
       printer: this.printerSnapshot(),
@@ -2633,6 +2848,7 @@ export {
   findMicrowaveTiles,
   findWaterCoolerTiles,
   findCoatRackInteractTiles,
+  findRecycleBinInteractTiles,
   findPrinterTiles,
   COFFEE_GID,
   AQUARIUM_GID,
@@ -2641,6 +2857,7 @@ export {
   MICROWAVE_GID,
   WATER_COOLER_GID,
   COAT_RACK_GID,
+  RECYCLE_BIN_GID,
   PRINTER_GID,
   nearCoffee,
   nearAquarium,
@@ -2648,6 +2865,7 @@ export {
   nearFridge,
   nearMicrowave,
   nearCooler,
+  nearRecycle,
   nearCoatRack,
   nearRack,
   nearPrinter,
@@ -2660,6 +2878,7 @@ export {
   fridgeEnabledFromQuery,
   microwaveEnabledFromQuery,
   coolerEnabledFromQuery,
+  recycleEnabledFromQuery,
   coatRackEnabledFromQuery,
   rackEnabledFromQuery,
   printerEnabledFromQuery,

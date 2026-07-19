@@ -56,6 +56,7 @@ import { VendingIdle } from "../effects/vendingIdle.js";
 import { KitchenIdle } from "../effects/kitchenIdle.js";
 import { WaterCoolerIdle } from "../effects/waterCoolerIdle.js";
 import { CoatRackIdle } from "../effects/coatRackIdle.js";
+import { RecycleBinIdle } from "../effects/recycleBinIdle.js";
 import { ServerRackLeds } from "../effects/serverRackLeds.js";
 import { DeskFanSpin } from "../effects/deskFanSpin.js";
 import { DualDeskIdle } from "../effects/dualDeskIdle.js";
@@ -559,6 +560,7 @@ export class OfficeScene extends Phaser.Scene {
     this.kitchenIdle = new KitchenIdle(this);
     this.waterCoolerIdle = new WaterCoolerIdle(this);
     this.coatRackIdle = new CoatRackIdle(this);
+    this.recycleBinIdle = new RecycleBinIdle(this);
     this.serverRackLeds = new ServerRackLeds(this);
     this.deskFanSpin = new DeskFanSpin(this);
     this.dualDeskIdle = new DualDeskIdle(this);
@@ -745,6 +747,7 @@ export class OfficeScene extends Phaser.Scene {
     this.kitchenIdle?.update(this.time.now);
     this.waterCoolerIdle?.update(this.time.now);
     this.coatRackIdle?.update(this.time.now);
+    this.recycleBinIdle?.update(this.time.now);
     this.serverRackLeds?.update(this.time.now);
     this.deskFanSpin?.update(this.time.now);
     this.dualDeskIdle?.update(this.time.now, delta);
@@ -1366,6 +1369,7 @@ export class OfficeScene extends Phaser.Scene {
       kitchenIdle: this.kitchenIdle?.snapshot?.() ?? null,
       waterCoolerIdle: this.waterCoolerIdle?.snapshot?.() ?? null,
       coatRackIdle: this.coatRackIdle?.snapshot?.() ?? null,
+      recycleBinIdle: this.recycleBinIdle?.snapshot?.() ?? null,
       serverRack: this.serverRackLeds?.snapshot?.() ?? null,
       deskFan: this.deskFanSpin?.snapshot?.() ?? null,
       dualDesk: this.dualDeskIdle?.snapshot?.() ?? null,
@@ -1386,6 +1390,7 @@ export class OfficeScene extends Phaser.Scene {
       fridge: this.roomInteract?.fridgeSnapshot?.() ?? null,
       microwave: this.roomInteract?.microwaveSnapshot?.() ?? null,
       coatRack: this.roomInteract?.coatRackSnapshot?.() ?? null,
+      recycle: this.roomInteract?.recycleSnapshot?.() ?? null,
       rack: this.roomInteract?.rackSnapshot?.() ?? null,
       posterQuote: this.roomInteract?.posterSnapshot?.() ?? null,
       printer: this.roomInteract?.printerSnapshot?.() ?? null,
