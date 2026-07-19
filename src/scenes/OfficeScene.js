@@ -111,6 +111,7 @@ import {
   maybeForceChatPing,
   pingEnabledFromQuery,
 } from "../effects/chatPing.js";
+import { thinkingDotsSnapshot } from "../effects/thinkingDots.js";
 import { Minimap } from "../ui/minimap.js";
 import { WhiteboardTicker } from "../ui/whiteboardTicker.js";
 import { LobbySignage } from "../ui/lobbySignage.js";
@@ -1354,6 +1355,7 @@ export class OfficeScene extends Phaser.Scene {
       heater: this.winterHeater?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
+      thinkingDots: thinkingDotsSnapshot(this.agents || []),
       spriteShadow: shadowSnapshot([
         ...(this.agents || []),
         this.boss,
