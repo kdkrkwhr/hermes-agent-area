@@ -93,11 +93,13 @@
     "smoke:codefreeze": "node scripts/smoke-codefreeze.mjs",
     "smoke:mondayblues": "node scripts/smoke-mondayblues.mjs",
     "smoke:sundaychill": "node scripts/smoke-sundaychill.mjs",
+    "smoke:docsday": "node scripts/smoke-docsday.mjs",
     "smoke:glassfx": "node scripts/smoke-glassfx.mjs",
     "smoke:stars": "node scripts/smoke-stars.mjs",
     "smoke:pollinator": "node scripts/smoke-pollinator.mjs",
     "smoke:thunder": "node scripts/smoke-thunder.mjs",
     "smoke:heater": "node scripts/smoke-heater.mjs",
+    "smoke:haze": "node scripts/smoke-haze.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

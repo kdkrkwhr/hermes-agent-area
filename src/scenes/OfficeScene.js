@@ -99,6 +99,7 @@ import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { LampMoths } from "../effects/lampMoths.js";
 import { WinterHeater } from "../effects/winterHeater.js";
+import { SummerHaze } from "../effects/summerHaze.js";
 import { OvertimeDesk } from "../effects/overtimeDesk.js";
 import {
   burstTaskCelebrate,
@@ -612,6 +613,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow = new LampGlow(this);
     this.lampMoths = new LampMoths(this);
     this.winterHeater = new WinterHeater(this);
+    this.summerHaze = new SummerHaze(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
@@ -686,6 +688,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.sync();
     this.lampMoths?.sync();
     this.winterHeater?.sync();
+    this.summerHaze?.sync();
     this.overtimeDesk?.sync();
     this.weatherFx?.onLightingChanged();
   }
@@ -797,6 +800,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lampGlow?.update(this.time.now);
     this.lampMoths?.update(this.time.now);
     this.winterHeater?.update(this.time.now);
+    this.summerHaze?.update(this.time.now);
     this.lobbyPoster?.update(this.time.now, delta);
     this.agentHighFive?.update(this.time.now, delta);
     this.agentBumpSorry?.update(this.time.now, delta);
@@ -1360,6 +1364,7 @@ export class OfficeScene extends Phaser.Scene {
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
       moths: this.lampMoths?.snapshot?.() ?? null,
       heater: this.winterHeater?.snapshot?.() ?? null,
+      haze: this.summerHaze?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       thinkingDots: thinkingDotsSnapshot(this.agents || []),
