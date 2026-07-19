@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` / `?events=vending_jam` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -49,6 +49,7 @@ const RANDOM_KINDS = [
   "gateway_blip",
   "latency_spike",
   "context_overflow",
+  "vending_jam",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -384,6 +385,17 @@ const SNACK_CRUMB_TINTS = [0xffe8c0, 0xd4a574, 0xfff0d8, 0xc09060];
 const SNACK_HOUR_START = 20;
 const SNACK_HOUR_END = 24;
 const SNACK_WEIGHT = 3;
+/** vending_jam: GID38 spark/shake + idle gather (ms); weekday 14–18 weight↑ */
+const VENDING_JAM_HOLD_MIN_MS = 6000;
+const VENDING_JAM_HOLD_MAX_MS = 10000;
+const VENDING_JAM_FX_MIN_MS = 2000;
+const VENDING_JAM_FX_MAX_MS = 4000;
+const VENDING_JAM_TOASTS = ["자판기 고장?", "동전 먹힘"];
+const VENDING_JAM_LINES = ["환불해줘", "발로 차?"];
+/** weekday 14–18: higher pick weight */
+const VENDING_JAM_HOUR_START = 14;
+const VENDING_JAM_HOUR_END = 18;
+const VENDING_JAM_WEIGHT = 3;
 /** food_delivery: lobby/entrance bag particles + idle gather (ms) */
 const FOOD_HOLD_MIN_MS = 5000;
 const FOOD_HOLD_MAX_MS = 8000;
@@ -524,6 +536,29 @@ function findMidnightSnackTile(scene) {
   }
   if (anchors.length) {
     return anchors[Math.floor(Math.random() * anchors.length)];
+  }
+  const lou = scene.waypoints?.lounge;
+  if (Array.isArray(lou) && lou.length) {
+    const spot = lou[Math.floor(Math.random() * lou.length)];
+    return { x: spot.x, y: spot.y };
+  }
+  const br = scene.waypoints?.break || { x: 31, y: 4 };
+  return { x: br.x, y: br.y };
+}
+
+/**
+ * vending_jam anchor: lounge vending (GID38) → lounge/break.
+ * @returns {{x:number,y:number}} tile coords
+ */
+function findVendingJamTile(scene) {
+  const layer = scene.furniture;
+  if (layer?.getTileAt) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (tile?.index === VENDING_GID) return { x: tx, y: ty };
+      }
+    }
   }
   const lou = scene.waypoints?.lounge;
   if (Array.isArray(lou) && lou.length) {
@@ -1197,6 +1232,8 @@ export class OfficeEvents {
     this.pizzaPartyGathered = 0;
     this.donutFridayGathered = 0;
     this.midnightSnackGathered = 0;
+    this.vendingJamGathered = 0;
+    this.vendingJamAt = 0;
     this.foodDeliveryGathered = 0;
     this.teaTimeGathered = 0;
     this.allHandsGathered = 0;
@@ -1362,6 +1399,10 @@ export class OfficeEvents {
       hour >= CONTEXT_OVERFLOW_HOUR_START && hour < CONTEXT_OVERFLOW_HOUR_END;
     const snackWindow =
       hour >= SNACK_HOUR_START && hour < SNACK_HOUR_END;
+    const vendingJamWindow =
+      weekday &&
+      hour >= VENDING_JAM_HOUR_START &&
+      hour < VENDING_JAM_HOUR_END;
     const foodWindow =
       weekday &&
       ((hour >= FOOD_LUNCH_START && hour < FOOD_LUNCH_END) ||
@@ -1409,6 +1450,8 @@ export class OfficeEvents {
       else if (k === "donut_friday")
         weight = friday ? DONUT_FRIDAY_WEIGHT : DONUT_WEEKDAY_WEIGHT;
       else if (k === "midnight_snack" && snackWindow) weight = SNACK_WEIGHT;
+      else if (k === "vending_jam" && vendingJamWindow)
+        weight = VENDING_JAM_WEIGHT;
       else if (k === "food_delivery" && foodWindow) weight = FOOD_WEIGHT;
       else if (k === "tea_time" && teaWindow) weight = TEA_WEIGHT;
       else if (k === "rollback" && rollbackWindow) weight = ROLLBACK_WEIGHT;
@@ -1474,6 +1517,7 @@ export class OfficeEvents {
     else if (kind === "pizza_party") this.runPizzaParty();
     else if (kind === "donut_friday") this.runDonutFriday();
     else if (kind === "midnight_snack") this.runMidnightSnack();
+    else if (kind === "vending_jam") this.runVendingJam();
     else if (kind === "food_delivery") this.runFoodDelivery();
     else if (kind === "tea_time") this.runTeaTime();
     else if (kind === "rollback") this.runRollback();
@@ -3344,6 +3388,220 @@ export class OfficeEvents {
 
     const restore = this.scene.time.delayedCall(hold, () => {
       for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /**
+   * Vending jam: toast + soft spark/shake at GID38 + idle 2–3 gather 6–10s +
+   * bubble lines. Skip if gather active. Weekday 14–18 weight↑. Optional clunk SFX.
+   */
+  runVendingJam() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      VENDING_JAM_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() *
+          (VENDING_JAM_HOLD_MAX_MS - VENDING_JAM_HOLD_MIN_MS + 1),
+      );
+    const fxMs =
+      VENDING_JAM_FX_MIN_MS +
+      Math.floor(
+        Math.random() * (VENDING_JAM_FX_MAX_MS - VENDING_JAM_FX_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      VENDING_JAM_TOASTS[
+        Math.floor(Math.random() * VENDING_JAM_TOASTS.length)
+      ];
+    this.showToast(toast, 3000);
+    this.playVendingJamClunk();
+
+    const pt = findVendingJamTile(this.scene);
+    const { x, y } = tileCenter(this.scene, pt.x, pt.y);
+    this.spawnVendingJamSpark(x, y - 8, fxMs);
+    const cam = this.scene.cameras?.main;
+    if (cam?.shake) {
+      try {
+        cam.shake(Math.min(fxMs, 480), 0.0032);
+      } catch {
+        /* ignore */
+      }
+    }
+    this.vendingJamAt = Date.now();
+    this.publish();
+    void this.gatherIdleToVendingJam(holdMs, pt);
+  }
+
+  /** Soft amber/rose spark at jammed vending — gentler than printer_jam. */
+  spawnVendingJamSpark(x, y, ms = 2500) {
+    const emitter = this.scene.add.particles(x, y, "fx-spark", {
+      speed: { min: 28, max: 78 },
+      angle: { min: 200, max: 340 },
+      gravityY: 40,
+      scale: { start: 0.85, end: 0.15 },
+      alpha: { start: 0.75, end: 0 },
+      lifespan: { min: 350, max: 700 },
+      frequency: 55,
+      quantity: 2,
+      tint: [0xffc078, 0xff8866, 0xffe8a0, 0xffffff],
+      blendMode: "ADD",
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(700, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Short mechanical clunk — skip if muted/locked. */
+  playVendingJamClunk() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const n = Math.floor(ctx.sampleRate * 0.09);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / n) * 0.7;
+      }
+      const noise = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(420, t0);
+      noise.buffer = buf;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.06, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.085);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + 0.1);
+
+      const thump = ctx.createOscillator();
+      const thumpGain = ctx.createGain();
+      thump.type = "triangle";
+      thump.frequency.setValueAtTime(110, t0);
+      thump.frequency.exponentialRampToValueAtTime(55, t0 + 0.07);
+      thumpGain.gain.setValueAtTime(0.0001, t0);
+      thumpGain.gain.exponentialRampToValueAtTime(0.045, t0 + 0.01);
+      thumpGain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.08);
+      thump.connect(thumpGain);
+      thumpGain.connect(ctx.destination);
+      thump.start(t0);
+      thump.stop(t0 + 0.09);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Idle/break 2–3 → vending ±1 ring; hold 6–10s + 1–2 bubbles → wander restore. */
+  async gatherIdleToVendingJam(holdMs, anchorTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 2));
+    const candidates = pool.slice(0, want);
+    const pt = anchorTile || findVendingJamTile(this.scene);
+    const spots = meetingOffsets(pt);
+    const hold =
+      holdMs ??
+      VENDING_JAM_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() *
+            (VENDING_JAM_HOLD_MAX_MS - VENDING_JAM_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    // 1–2 speech bubbles among gathered
+    const bubbleWant = Math.min(
+      moved.length,
+      1 + Math.floor(Math.random() * 2),
+    );
+    const bubbled = shuffleInPlace([...moved]).slice(0, bubbleWant);
+    for (const agent of bubbled) {
+      agent._vendingJamBackup = agent.statusText;
+      agent.setStatus(
+        VENDING_JAM_LINES[
+          Math.floor(Math.random() * VENDING_JAM_LINES.length)
+        ],
+      );
+    }
+
+    this.vendingJamGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (agent._vendingJamBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null
+          ) {
+            agent.setStatus(agent._vendingJamBackup);
+          }
+          agent._vendingJamBackup = null;
+        }
         if (!isStandupGatherable(agent)) continue;
         agent.idleUntil = this.scene.time.now + 200;
         try {
@@ -6748,6 +7006,8 @@ export class OfficeEvents {
       pizzaPartyGathered: this.pizzaPartyGathered,
       donutFridayGathered: this.donutFridayGathered,
       midnightSnackGathered: this.midnightSnackGathered,
+      vendingJamGathered: this.vendingJamGathered,
+      vendingJamAt: this.vendingJamAt,
       foodDeliveryGathered: this.foodDeliveryGathered,
       teaTimeGathered: this.teaTimeGathered,
       rollbackGathered: this.rollbackGathered,
