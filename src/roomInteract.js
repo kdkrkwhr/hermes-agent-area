@@ -12,6 +12,11 @@ import {
   findServerRackTiles,
   serverRackEnabledFromQuery,
 } from "./effects/serverRackLeds.js";
+import {
+  parseTrophyEnabled,
+  trophyShelfAnchor,
+  buildShelfItems,
+} from "./effects/achievementShelf.js";
 import { PRINTER_GID } from "./effects/officeEvents.js";
 import { wbvoteEnabledFromQuery } from "./effects/whiteboardVote.js";
 import { findWhiteboardAnchor } from "./ui/whiteboardTicker.js";
@@ -89,6 +94,13 @@ const BOOKSHELF_MS_MAX = 5000;
 const BOOKSHELF_COOLDOWN_MS_MIN = 12000;
 const BOOKSHELF_COOLDOWN_MS_MAX = 18000;
 const BOOKSHELF_NEAR_TILES = 2.0;
+/** Trophy shelf peek: soft sparkle 0.8–1.2s, 12–18s cooldown, ≤2.0 tile. */
+const TROPHY_MS_MIN = 800;
+const TROPHY_MS_MAX = 1200;
+const TROPHY_COOLDOWN_MS_MIN = 12000;
+const TROPHY_COOLDOWN_MS_MAX = 18000;
+const TROPHY_NEAR_TILES = 2.0;
+const TROPHY_SPARKLE_TINTS = [0xf3c96a, 0xffe8a8, 0xffffff, 0x77d3ff];
 /** War Room whiteboard vote: toast + sticker burst, 8s cooldown, ≤2.5 tile. */
 const WBVOTE_COOLDOWN_MS = 8000;
 const WBVOTE_NEAR_TILES = 2.5;
@@ -117,6 +129,7 @@ const BOOKSHELF_TIPS = [
   "?recycle=force 는 라운지 분리수거함 스모크용",
   "?rack=force 는 Focus 서버랙 LED 스모크용",
   "?printer=force 는 Open Desk 프린터 출력 스모크용",
+  "?trophy=force 는 트로피 선반 스모크용",
   "playwright smoke는 ?events=0&sfx=0 추천",
   "가상사무실 FX 대부분 ?쿼리=0 로 끔",
   "칸반 blocked면 clarify 말고 kanban_block",
@@ -551,6 +564,16 @@ function printerForceFromQuery() {
   }
 }
 
+/** `?trophy=force` → smoke auto-peek once after boot. */
+function trophyForceFromQuery() {
+  if (typeof location === "undefined") return false;
+  try {
+    return new URLSearchParams(location.search).get("trophy") === "force";
+  } catch {
+    return false;
+  }
+}
+
 /** Default on; `?bookshelftip=0|false|off` disables E-tip only (ambient FX still on). */
 function bookshelfTipEnabledFromQuery() {
   if (typeof location === "undefined") return true;
@@ -835,6 +858,26 @@ function nearWhiteboard(scene) {
   return Math.hypot(b.x - anchor.x, b.y - anchor.y) <= reach;
 }
 
+function trophyAnchorPx(scene) {
+  const shelf = scene.trophyShelf;
+  if (shelf?.root && Number.isFinite(shelf.root.x)) {
+    return { x: shelf.root.x, y: shelf.root.y };
+  }
+  if (shelf?.anchor && Number.isFinite(shelf.anchor.x)) {
+    return { x: shelf.anchor.x, y: shelf.anchor.y };
+  }
+  return trophyShelfAnchor(scene);
+}
+
+function nearTrophy(scene) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map) return false;
+  const anchor = trophyAnchorPx(scene);
+  if (!anchor || !Number.isFinite(anchor.x)) return false;
+  const reach = scene.map.tileWidth * TROPHY_NEAR_TILES;
+  return Math.hypot(b.x - anchor.x, b.y - anchor.y) <= reach;
+}
+
 function nearestBookshelf(scene, bookshelfTiles) {
   const b = scene.boss?.sprite;
   if (!b || !bookshelfTiles?.length) return null;
@@ -895,6 +938,51 @@ function ensurePaperTexture(scene) {
   g.fillRect(1, 6, 5, 1);
   g.generateTexture("fx-paper", 7, 9);
   g.destroy();
+}
+
+
+function ensureTrophySparkTexture(scene) {
+  if (scene.textures.exists("fx-trophy-spark")) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(3, 3, 2.4);
+  g.generateTexture("fx-trophy-spark", 6, 6);
+  g.destroy();
+}
+
+/** Soft gold sparkle at trophy shelf for 0.8–1.2s. */
+function burstTrophySparkle(scene, x, y, durationMs = 1000) {
+  if (!scene?.add) return null;
+  ensureTrophySparkTexture(scene);
+  const dur = Math.max(800, durationMs);
+  const emitter = scene.add.particles(x, y - 8, "fx-trophy-spark", {
+    speed: { min: 12, max: 42 },
+    angle: { min: 200, max: 340 },
+    gravityY: -12,
+    scale: { start: 0.9, end: 0.15 },
+    alpha: { start: 0.9, end: 0 },
+    lifespan: { min: 450, max: 900 },
+    quantity: 1,
+    frequency: 70,
+    tint: TROPHY_SPARKLE_TINTS,
+    blendMode: "ADD",
+  });
+  emitter.setDepth(12);
+  scene.time.delayedCall(dur, () => {
+    try {
+      emitter.stop();
+    } catch {
+      /* ignore */
+    }
+  });
+  scene.time.delayedCall(dur + 900, () => {
+    try {
+      emitter.destroy();
+    } catch {
+      /* ignore */
+    }
+  });
+  return { emitter, durationMs: dur };
 }
 
 function burstMascotHearts(scene, x, y) {
@@ -1213,6 +1301,12 @@ export class RoomInteract {
     this.lastBookshelfAt = 0;
     this._lastBookshelfTip = null;
     this._lastBookshelfTile = null;
+    this.trophyEnabled = parseTrophyEnabled();
+    this.trophyActiveUntil = 0;
+    this.trophyCooldownUntil = 0;
+    this.lastTrophyAt = 0;
+    this._lastTrophyToast = null;
+    this._lastTrophyItems = null;
     this.wbvoteEnabled = wbvoteEnabledFromQuery();
     this.wbvoteCooldownUntil = 0;
     this.lastWbvoteAt = 0;
@@ -1223,6 +1317,22 @@ export class RoomInteract {
         if (!machine || !this.scene.boss?.sprite) return;
         this.scene.boss.sprite.setPosition(machine.x + 12, machine.y + 18);
         this.startPrinterPrint();
+      });
+    }
+    if (this.trophyEnabled && trophyForceFromQuery()) {
+      this.scene.time.delayedCall(1800, () => {
+        const anchor = trophyAnchorPx(this.scene);
+        if (!anchor || !this.scene.boss?.sprite) return;
+        // clear greets / competing interact so force peek is visible for smoke
+        this._lobbyWelcomed = true;
+        this.aquariumFeedEnabled = false;
+        this.mascotPetEnabled = false;
+        this.posterEnabled = false;
+        this.bookshelfTipEnabled = false;
+        this.trophyCooldownUntil = 0;
+        this.trophyActiveUntil = 0;
+        this.scene.boss.sprite.setPosition(anchor.x + 10, anchor.y + 28);
+        this.startTrophyPeek();
       });
     }
   }
@@ -1252,7 +1362,7 @@ export class RoomInteract {
   }
 
   hintKind() {
-    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > recycle > coatrack > rack > printer > nap > mascotpet > plantwater > poster > bookshelf > work
+    // priority: coffee > aquafeed > vending > fridge > microwave > cooler > recycle > coatrack > rack > printer > nap > mascotpet > plantwater > poster > trophy > bookshelf > wbvote > work
     if (nearCoffee(this.scene, this.coffeeTiles)) return "coffee";
     if (
       this.aquariumFeedEnabled &&
@@ -1339,6 +1449,13 @@ export class RoomInteract {
       !this.posterCoolingDown()
     ) {
       return "poster";
+    }
+    if (
+      this.trophyEnabled &&
+      nearTrophy(this.scene) &&
+      !this.trophyActive()
+    ) {
+      return "trophy";
     }
     if (
       this.bookshelfTipEnabled &&
@@ -1435,6 +1552,12 @@ export class RoomInteract {
       }
       return "E 한마디";
     }
+    if (k === "trophy") {
+      if (this.trophyCoolingDown()) {
+        return `트로피 쿨다운 ${this.trophyCooldownLeftSec()}s`;
+      }
+      return "E 트로피";
+    }
     if (k === "bookshelf") {
       if (this.bookshelfCoolingDown()) {
         return `책장 쿨다운 ${this.bookshelfCooldownLeftSec()}s`;
@@ -1502,6 +1625,9 @@ export class RoomInteract {
     }
     if (this.posterEnabled && nearPoster(this.scene, this.posterTiles)) {
       return this.startPosterQuote();
+    }
+    if (this.trophyEnabled && nearTrophy(this.scene)) {
+      return this.startTrophyPeek();
     }
     if (
       this.bookshelfTipEnabled &&
@@ -1743,6 +1869,93 @@ export class RoomInteract {
       quote,
       poster: this._lastPosterTile,
       cooldownMs: POSTER_COOLDOWN_MS,
+    };
+    this.publish();
+    return true;
+  }
+
+  trophyActive() {
+    return this.scene.time.now < this.trophyActiveUntil;
+  }
+
+  trophyCoolingDown() {
+    return this.scene.time.now < this.trophyCooldownUntil;
+  }
+
+  trophyCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.trophyCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  /** E near trophy shelf — toast recent done titles + soft gold sparkle. */
+  startTrophyPeek() {
+    if (!this.trophyEnabled) return false;
+    if (this.trophyActive()) return true;
+    if (this.trophyCoolingDown()) {
+      this.showToast(`트로피 쿨다운 ${this.trophyCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "trophy_peek_cooldown",
+        cooldownSec: this.trophyCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const anchor = trophyAnchorPx(this.scene);
+    if (!anchor) return false;
+    const now = this.scene.time.now;
+    const dur =
+      TROPHY_MS_MIN +
+      Math.floor(Math.random() * (TROPHY_MS_MAX - TROPHY_MS_MIN + 1));
+    const cool =
+      TROPHY_COOLDOWN_MS_MIN +
+      Math.floor(
+        Math.random() *
+          (TROPHY_COOLDOWN_MS_MAX - TROPHY_COOLDOWN_MS_MIN + 1),
+      );
+    const shelf = this.scene.trophyShelf;
+    shelf?.refreshFromScene?.();
+    const raw =
+      Array.isArray(shelf?.items) && shelf.items.length
+        ? shelf.items
+        : buildShelfItems(this.scene.lastSnapshot);
+    const items = raw.slice(0, 2).map((item) => ({
+      assignee: item.assignee,
+      title: item.title,
+      doneCount: item.doneCount,
+    }));
+    const rows = items.map(
+      (item) => `${truncate(item.assignee, 10)}: ${truncate(item.title, 14)}`,
+    );
+    const toast = rows.length ? `🏆 ${rows.join(" · ")}` : "🏆 아직 done 없음";
+    this.lastTrophyAt = now;
+    this.trophyActiveUntil = now + dur;
+    this.trophyCooldownUntil = now + cool;
+    this._lastTrophyToast = toast;
+    this._lastTrophyItems = items;
+    burstTrophySparkle(this.scene, anchor.x, anchor.y, dur);
+    const root = shelf?.root;
+    if (root?.setScale && this.scene?.tweens) {
+      root.setScale(1);
+      this.scene.tweens.add({
+        targets: root,
+        scaleX: 1.06,
+        scaleY: 1.06,
+        duration: Math.min(220, dur / 2),
+        yoyo: true,
+        ease: "Sine.easeOut",
+      });
+    }
+    this.showToast(toast, Math.max(2800, dur + 1200));
+    this.lastAction = {
+      kind: "trophy_peek_start",
+      startedAt: now,
+      durationMs: dur,
+      cooldownMs: cool,
+      toast,
+      items,
+      anchor: { x: anchor.x, y: anchor.y },
     };
     this.publish();
     return true;
@@ -2494,6 +2707,14 @@ export class RoomInteract {
       };
       this.publish();
     }
+    if (this.trophyActiveUntil && time >= this.trophyActiveUntil) {
+      this.trophyActiveUntil = 0;
+      this.lastAction = {
+        kind: "trophy_peek_end",
+        lastTrophyAt: this.lastTrophyAt,
+      };
+      this.publish();
+    }
   }
 
   updateTyping(time) {
@@ -2660,6 +2881,25 @@ export class RoomInteract {
       shelfCount: this.bookshelfTiles?.length ?? 0,
       lastTip: this._lastBookshelfTip,
       lastShelf: this._lastBookshelfTile,
+    };
+  }
+
+  trophySnapshot() {
+    const anchor = trophyAnchorPx(this.scene);
+    return {
+      enabled: !!this.trophyEnabled,
+      active: this.trophyActive(),
+      cooldown: this.trophyCoolingDown(),
+      cooldownMsLeft: Math.max(
+        0,
+        Math.round(this.trophyCooldownUntil - this.scene.time.now),
+      ),
+      lastTrophyAt: this.lastTrophyAt || null,
+      lastToast: this._lastTrophyToast,
+      lastItems: this._lastTrophyItems,
+      anchor: anchor
+        ? { x: anchor.x, y: anchor.y }
+        : null,
     };
   }
 
@@ -2893,6 +3133,11 @@ export class RoomInteract {
       posterCooldown: this.posterCoolingDown(),
       lastPosterAt: this.lastPosterAt || null,
       lastPosterQuote: this._lastPosterQuote,
+      trophyEnabled: !!this.trophyEnabled,
+      trophyActive: this.trophyActive(),
+      trophyCooldown: this.trophyCoolingDown(),
+      lastTrophyAt: this.lastTrophyAt || null,
+      lastTrophyToast: this._lastTrophyToast,
     };
   }
 
@@ -2913,6 +3158,7 @@ export class RoomInteract {
       printer: this.printerSnapshot(),
       posterQuote: this.posterSnapshot(),
       bookshelfTip: this.bookshelfSnapshot(),
+      trophyPeek: this.trophySnapshot(),
     };
   }
 }
@@ -2960,7 +3206,9 @@ export {
   rackEnabledFromQuery,
   printerEnabledFromQuery,
   printerForceFromQuery,
+  trophyForceFromQuery,
   bookshelfTipEnabledFromQuery,
   nearBookshelf,
+  nearTrophy,
   BOOKSHELF_TIPS,
 };
