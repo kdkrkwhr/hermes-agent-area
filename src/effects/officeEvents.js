@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` / `?events=vending_jam` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` / `?events=vending_jam` / `?events=monday_blues` / `?events=sunday_chill` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -50,7 +50,28 @@ const RANDOM_KINDS = [
   "latency_spike",
   "context_overflow",
   "vending_jam",
+  "monday_blues",
+  "sunday_chill",
 ];
+/** monday_blues: soft slate overlay + idle bubbles (ms); Mon only — no gather */
+const MONDAY_BLUES_MIN_MS = 5000;
+const MONDAY_BLUES_MAX_MS = 8000;
+const MONDAY_BLUES_TOASTS = ["월요병…", "월요일이다"];
+const MONDAY_BLUES_LINES = ["한숨…", "커피 각"];
+/** soft slate — weekday blues (not wifi gray / not quiet night boost) */
+const MONDAY_BLUES_SLATE = 0x5a6578;
+const MONDAY_BLUES_ALPHA = 0.1;
+/** Monday weight↑; Tue–Sun weight=0 */
+const MONDAY_BLUES_WEIGHT = 4;
+/** sunday_chill: lounge warm tint + steam (ms); Sun only — no gather */
+const SUNDAY_CHILL_MIN_MS = 5000;
+const SUNDAY_CHILL_MAX_MS = 8000;
+const SUNDAY_CHILL_TOASTS = ["일요일 감성", "느긋한 하루"];
+/** soft warm lounge tint — weekend chill (not happy amber / not donut glaze) */
+const SUNDAY_CHILL_WARM = 0xe8c090;
+const SUNDAY_CHILL_ALPHA = 0.1;
+/** Sunday weight↑; Mon–Sat weight=0 */
+const SUNDAY_CHILL_WEIGHT = 4;
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
 const WIFI_MAX_MS = 4000;
@@ -1241,6 +1262,8 @@ export class OfficeEvents {
     this.gatewayBlipAffected = 0;
     this.latencySpikeAffected = 0;
     this.codeFreezeAffected = 0;
+    this.mondayBluesAffected = 0;
+    this.sundayChillActive = false;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
     this.birthdayBalloonsGathered = 0;
@@ -1279,13 +1302,15 @@ export class OfficeEvents {
     return this.scene.time.now < (this._gatherUntil || 0);
   }
 
-  /** Soft overlay events that shouldn't stack (wifi / gateway / freeze / latency). */
+  /** Soft overlay events that shouldn't stack (wifi / gateway / freeze / latency / day mood). */
   isOverlayEventActive() {
     return (
       (this.wifiOutageAffected || 0) > 0 ||
       (this.gatewayBlipAffected || 0) > 0 ||
       (this.latencySpikeAffected || 0) > 0 ||
-      (this.codeFreezeAffected || 0) > 0
+      (this.codeFreezeAffected || 0) > 0 ||
+      (this.mondayBluesAffected || 0) > 0 ||
+      !!this.sundayChillActive
     );
   }
 
@@ -1420,6 +1445,8 @@ export class OfficeEvents {
       ((hour >= GREEN_CI_AM_START && hour < GREEN_CI_AM_END) ||
         (hour >= GREEN_CI_PM_START && hour < GREEN_CI_PM_END));
     const friday = now.getDay() === 5;
+    const monday = now.getDay() === 1;
+    const sunday = now.getDay() === 0;
     const raining = isRainingNow(this.scene);
     const deployBeatCool =
       this.scene.time.now < (this._deployBeatCooldownUntil || 0);
@@ -1477,6 +1504,10 @@ export class OfficeEvents {
         weight = CONTEXT_OVERFLOW_WEIGHT;
       else if (k === "gateway_blip") weight = GATEWAY_BLIP_WEIGHT;
       else if (k === "latency_spike") weight = LATENCY_SPIKE_WEIGHT;
+      else if (k === "monday_blues")
+        weight = monday ? MONDAY_BLUES_WEIGHT : 0;
+      else if (k === "sunday_chill")
+        weight = sunday ? SUNDAY_CHILL_WEIGHT : 0;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -1547,6 +1578,8 @@ export class OfficeEvents {
     else if (kind === "context_overflow") this.runContextOverflow();
     else if (kind === "gateway_blip") this.runGatewayBlip();
     else if (kind === "latency_spike") this.runLatencySpike();
+    else if (kind === "monday_blues") this.runMondayBlues();
+    else if (kind === "sunday_chill") this.runSundayChill();
 
     this.publish();
   }
@@ -4574,6 +4607,149 @@ export class OfficeEvents {
   }
 
   /**
+   * Monday blues: toast + soft slate overlay 5–8s + idle bubbles on 1–2 agents.
+   * No gather / no move. Mon weight↑ (else 0). Skip if gather or overlay active.
+   * Toast/lines distinct from quiet_hours / donut_friday.
+   */
+  runMondayBlues() {
+    if (this.isGathering()) return;
+    if (this.isOverlayEventActive()) return;
+
+    const toast =
+      MONDAY_BLUES_TOASTS[
+        Math.floor(Math.random() * MONDAY_BLUES_TOASTS.length)
+      ];
+    this.showToast(toast, 3000);
+
+    const duration =
+      MONDAY_BLUES_MIN_MS +
+      Math.floor(
+        Math.random() * (MONDAY_BLUES_MAX_MS - MONDAY_BLUES_MIN_MS + 1),
+      );
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(MONDAY_BLUES_SLATE, MONDAY_BLUES_ALPHA);
+    }
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 2), // 1–2
+    );
+    const picked = pool.slice(0, want);
+    this.mondayBluesAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._mondayBluesBackup = agent.statusText;
+      agent.setStatus(
+        MONDAY_BLUES_LINES[
+          Math.floor(Math.random() * MONDAY_BLUES_LINES.length)
+        ],
+      );
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._mondayBluesBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._flakyBackup == null &&
+            agent._freezeBackup == null
+          ) {
+            agent.setStatus(agent._mondayBluesBackup);
+          }
+          agent._mondayBluesBackup = null;
+        }
+      }
+      this.mondayBluesAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._mondayBluesBackup != null) {
+          agent.setStatus(agent._mondayBluesBackup);
+          agent._mondayBluesBackup = null;
+        }
+      }
+      this.mondayBluesAffected = 0;
+    });
+  }
+
+  /**
+   * Sunday chill: toast + soft warm lounge tint 5–8s + idle steam at lounge.
+   * No gather / no move. Sun weight↑ (else 0). Skip if gather or overlay active.
+   * Toast distinct from quiet_hours / donut_friday / happy_hour.
+   */
+  runSundayChill() {
+    if (this.isGathering()) return;
+    if (this.isOverlayEventActive()) return;
+
+    const toast =
+      SUNDAY_CHILL_TOASTS[
+        Math.floor(Math.random() * SUNDAY_CHILL_TOASTS.length)
+      ];
+    this.showToast(toast, 3000);
+
+    const duration =
+      SUNDAY_CHILL_MIN_MS +
+      Math.floor(
+        Math.random() * (SUNDAY_CHILL_MAX_MS - SUNDAY_CHILL_MIN_MS + 1),
+      );
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+    if (overlay && preset) {
+      overlay.setFillStyle(SUNDAY_CHILL_WARM, SUNDAY_CHILL_ALPHA);
+    }
+
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    this.spawnSteamBurst(x, y - 8, Math.min(4500, duration));
+
+    this.sundayChillActive = true;
+    this.publish();
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      restoreOverlay();
+      this.sundayChillActive = false;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      restoreOverlay();
+      this.sundayChillActive = false;
+    });
+  }
+
+  /**
    * Flaky test: toast + soft amber/yellow flicker overlay 3–6s +
    * idle bubbles on 1–2 agents. No gather / no move of running·blocked.
    * Skip if gather active. Optional soft click respects mute/lock.
@@ -7016,6 +7192,8 @@ export class OfficeEvents {
       gatewayBlipAffected: this.gatewayBlipAffected,
       latencySpikeAffected: this.latencySpikeAffected,
       codeFreezeAffected: this.codeFreezeAffected,
+      mondayBluesAffected: this.mondayBluesAffected,
+      sundayChillActive: !!this.sundayChillActive,
       flakyTestAffected: this.flakyTestAffected,
       greenCiAffected: this.greenCiAffected,
       happyHourGathered: this.happyHourGathered,
