@@ -49,6 +49,7 @@
     "smoke:fog": "node scripts/smoke-fog.mjs",
     "smoke:projector": "node scripts/smoke-projector.mjs",
     "smoke:scribble": "node scripts/smoke-scribble.mjs",
+    "smoke:wbvote": "node scripts/smoke-wbvote.mjs",
     "smoke:pizzaparty": "node scripts/smoke-pizzaparty.mjs",
     "smoke:happyhour": "node scripts/smoke-happyhour.mjs",
     "smoke:deploycelebrate": "node scripts/smoke-deploycelebrate.mjs",

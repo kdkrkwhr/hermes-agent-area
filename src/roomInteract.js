@@ -13,6 +13,8 @@ import {
   serverRackEnabledFromQuery,
 } from "./effects/serverRackLeds.js";
 import { PRINTER_GID } from "./effects/officeEvents.js";
+import { wbvoteEnabledFromQuery } from "./effects/whiteboardVote.js";
+import { findWhiteboardAnchor } from "./ui/whiteboardTicker.js";
 
 const COFFEE_GID = 16;
 const AQUARIUM_GID = 37;
@@ -87,6 +89,9 @@ const BOOKSHELF_MS_MAX = 5000;
 const BOOKSHELF_COOLDOWN_MS_MIN = 12000;
 const BOOKSHELF_COOLDOWN_MS_MAX = 18000;
 const BOOKSHELF_NEAR_TILES = 2.0;
+/** War Room whiteboard vote: toast + sticker burst, 8s cooldown, ≤2.5 tile. */
+const WBVOTE_COOLDOWN_MS = 8000;
+const WBVOTE_NEAR_TILES = 2.5;
 const BOOKSHELF_TIPS = [
   "Hermes 스킬은 SKILL.md 한 장이면 충분함",
   "cron no_agent면 LLM 토큰 안 씀",
@@ -818,6 +823,18 @@ function nearBookshelf(scene, bookshelfTiles) {
   return false;
 }
 
+function nearWhiteboard(scene) {
+  const b = scene.boss?.sprite;
+  if (!b || !scene.map) return false;
+  const anchor =
+    scene.whiteboardVote?.anchor ||
+    scene.whiteboardScribble?.anchor ||
+    findWhiteboardAnchor(scene);
+  if (!anchor || !Number.isFinite(anchor.x)) return false;
+  const reach = scene.map.tileWidth * WBVOTE_NEAR_TILES;
+  return Math.hypot(b.x - anchor.x, b.y - anchor.y) <= reach;
+}
+
 function nearestBookshelf(scene, bookshelfTiles) {
   const b = scene.boss?.sprite;
   if (!b || !bookshelfTiles?.length) return null;
@@ -1196,6 +1213,9 @@ export class RoomInteract {
     this.lastBookshelfAt = 0;
     this._lastBookshelfTip = null;
     this._lastBookshelfTile = null;
+    this.wbvoteEnabled = wbvoteEnabledFromQuery();
+    this.wbvoteCooldownUntil = 0;
+    this.lastWbvoteAt = 0;
 
     if (this.printerEnabled && printerForceFromQuery()) {
       this.scene.time.delayedCall(900, () => {
@@ -1327,6 +1347,13 @@ export class RoomInteract {
     ) {
       return "bookshelf";
     }
+    if (
+      this.wbvoteEnabled &&
+      nearWhiteboard(this.scene) &&
+      !this.wbvoteCoolingDown()
+    ) {
+      return "wbvote";
+    }
     const near = this.scene.boss?._nearAgent;
     if (near && isWorking(near)) return "work";
     return null;
@@ -1414,6 +1441,12 @@ export class RoomInteract {
       }
       return "E Hermes 팁";
     }
+    if (k === "wbvote") {
+      if (this.wbvoteCoolingDown()) {
+        return `투표 쿨다운 ${this.wbvoteCooldownLeftSec()}s`;
+      }
+      return "E 투표";
+    }
     if (k === "work") return "E 작업내용";
     return null;
   }
@@ -1475,6 +1508,9 @@ export class RoomInteract {
       nearBookshelf(this.scene, this.bookshelfTiles)
     ) {
       return this.startBookshelfTip();
+    }
+    if (this.wbvoteEnabled && nearWhiteboard(this.scene)) {
+      return this.startWhiteboardVote();
     }
 
     const near = this.scene.boss?._nearAgent;
@@ -2280,6 +2316,44 @@ export class RoomInteract {
     return true;
   }
 
+  wbvoteCoolingDown() {
+    return this.scene.time.now < this.wbvoteCooldownUntil;
+  }
+
+  wbvoteCooldownLeftSec() {
+    return Math.max(
+      1,
+      Math.ceil((this.wbvoteCooldownUntil - this.scene.time.now) / 1000),
+    );
+  }
+
+  /** E near War Room whiteboard — toast + 1 sticker burst. */
+  startWhiteboardVote() {
+    if (!this.wbvoteEnabled) return false;
+    if (this.wbvoteCoolingDown()) {
+      this.showToast(`투표 쿨다운 ${this.wbvoteCooldownLeftSec()}초`);
+      this.lastAction = {
+        kind: "wbvote_cooldown",
+        cooldownSec: this.wbvoteCooldownLeftSec(),
+      };
+      this.publish();
+      return true;
+    }
+    const now = this.scene.time.now;
+    this.lastWbvoteAt = now;
+    this.wbvoteCooldownUntil = now + WBVOTE_COOLDOWN_MS;
+    this.scene.whiteboardVote?.burst?.("interact");
+    this.scene.officeAudio?.playVoteTap?.();
+    this.showToast("투표!");
+    this.lastAction = {
+      kind: "wbvote",
+      startedAt: now,
+      cooldownMs: WBVOTE_COOLDOWN_MS,
+    };
+    this.publish();
+    return true;
+  }
+
   openNap() {
     if (this.nap?.isOn?.()) return;
     this.lastAction = { kind: "nap_start" };
@@ -2768,6 +2842,9 @@ export class RoomInteract {
         gid: s.gid,
       })),
       posterTiles: this.posterTiles.map((p) => ({ tx: p.tx, ty: p.ty })),
+      wbvoteEnabled: !!this.wbvoteEnabled,
+      wbvoteCooldown: this.wbvoteCoolingDown(),
+      lastWbvoteAt: this.lastWbvoteAt || null,
       aquafeedEnabled: this.aquariumFeedEnabled,
       aquafeedActive: this.aquaFeedActive(),
       aquafeedCooldown: this.aquaFeedCoolingDown(),
