@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -46,6 +46,7 @@ const RANDOM_KINDS = [
   "oncall_page",
   "rate_limit",
   "gateway_blip",
+  "latency_spike",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -66,6 +67,24 @@ const GATEWAY_BLIP_ALPHA = 0.16;
 const GATEWAY_BLIP_PULSE_MS = 220;
 /** weight=1 always (no TOD boost — avoid spam) */
 const GATEWAY_BLIP_WEIGHT = 1;
+/** latency_spike: soft violet/indigo overlay + screen stutter + idle lag bubbles (ms) */
+const LATENCY_SPIKE_MIN_MS = 1500;
+const LATENCY_SPIKE_MAX_MS = 3500;
+const LATENCY_SPIKE_TOASTS = ["랙?", "핑 스파이크", "RTT…"];
+const LATENCY_SPIKE_LINES = ["버퍼링…", "끊겼나?"];
+/** cool violet / indigo — lag/frame stutter vibe (not wifi gray / not gateway amber) */
+const LATENCY_SPIKE_VIOLET = 0x7a4fd0;
+const LATENCY_SPIKE_INDIGO = 0x4a58c8;
+const LATENCY_SPIKE_ALPHA = 0.13;
+/** overlay pulse toggle (ms) */
+const LATENCY_SPIKE_PULSE_MS = 240;
+/** timescale stutter ticks: 0.4 → 1, 2–4 times */
+const LATENCY_STUTTER_MIN = 2;
+const LATENCY_STUTTER_MAX = 4;
+const LATENCY_STUTTER_LOW = 0.4;
+const LATENCY_STUTTER_TICK_MS = 90;
+/** weight=1 always (no TOD boost — avoid spam) */
+const LATENCY_SPIKE_WEIGHT = 1;
 /** code_freeze: cool-blue overlay + idle bubbles (ms) — no gather/move */
 const FREEZE_MIN_MS = 4000;
 const FREEZE_MAX_MS = 7000;
@@ -1100,6 +1119,7 @@ export class OfficeEvents {
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.gatewayBlipAffected = 0;
+    this.latencySpikeAffected = 0;
     this.codeFreezeAffected = 0;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
@@ -1135,6 +1155,16 @@ export class OfficeEvents {
   /** standup / lunch / printer gather in progress. */
   isGathering() {
     return this.scene.time.now < (this._gatherUntil || 0);
+  }
+
+  /** Soft overlay events that shouldn't stack (wifi / gateway / freeze / latency). */
+  isOverlayEventActive() {
+    return (
+      (this.wifiOutageAffected || 0) > 0 ||
+      (this.gatewayBlipAffected || 0) > 0 ||
+      (this.latencySpikeAffected || 0) > 0 ||
+      (this.codeFreezeAffected || 0) > 0
+    );
   }
 
   /** Extend gather window so ambient chatter stays paused. */
@@ -1311,6 +1341,7 @@ export class OfficeEvents {
       else if (k === "oncall_page" && eveningNight) weight = ONCALL_WEIGHT;
       else if (k === "rate_limit" && rateLimitWindow) weight = RATE_LIMIT_WEIGHT;
       else if (k === "gateway_blip") weight = GATEWAY_BLIP_WEIGHT;
+      else if (k === "latency_spike") weight = LATENCY_SPIKE_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -1377,6 +1408,7 @@ export class OfficeEvents {
     else if (kind === "oncall_page") this.runOncallPage();
     else if (kind === "rate_limit") this.runRateLimit();
     else if (kind === "gateway_blip") this.runGatewayBlip();
+    else if (kind === "latency_spike") this.runLatencySpike();
 
     this.publish();
   }
@@ -2047,6 +2079,34 @@ export class OfficeEvents {
         osc.start(start);
         osc.stop(start + 0.08);
       }
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Soft lag glitch blip (latency spike) — skip if muted/locked / ?sfx=0. */
+  playLatencyGlitch() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked || audio.sfxEnabled === false) {
+      return;
+    }
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      // short descending glitch — packet lag vibe
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "square";
+      osc.frequency.setValueAtTime(380, t0);
+      osc.frequency.exponentialRampToValueAtTime(140, t0 + 0.07);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.022, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.1);
     } catch {
       /* autoplay / headless */
     }
@@ -3531,6 +3591,7 @@ export class OfficeEvents {
    */
   runWifiOutage() {
     if (this.isGathering()) return;
+    if (this.isOverlayEventActive()) return;
 
     this.showToast("와이파이 끊김…", 2800);
 
@@ -3614,6 +3675,7 @@ export class OfficeEvents {
    */
   runGatewayBlip() {
     if (this.isGathering()) return;
+    if (this.isOverlayEventActive()) return;
 
     const toast =
       GATEWAY_BLIP_TOASTS[
@@ -3716,12 +3778,171 @@ export class OfficeEvents {
   }
 
   /**
+   * Latency spike: toast + soft violet/indigo overlay 1.5–3.5s + short
+   * timescale stutter (0.4→1, 2–4 ticks) + idle bubbles "버퍼링…"/"끊겼나?".
+   * Network lag vibe — not wifi gray / not gateway amber reconnect.
+   * Skip if gather or another overlay event active. Optional soft glitch SFX.
+   */
+  runLatencySpike() {
+    if (this.isGathering()) return;
+    if (this.isOverlayEventActive()) return;
+
+    const toast =
+      LATENCY_SPIKE_TOASTS[
+        Math.floor(Math.random() * LATENCY_SPIKE_TOASTS.length)
+      ];
+    this.showToast(toast, 2400);
+    this.playLatencyGlitch();
+
+    const duration =
+      LATENCY_SPIKE_MIN_MS +
+      Math.floor(
+        Math.random() * (LATENCY_SPIKE_MAX_MS - LATENCY_SPIKE_MIN_MS + 1),
+      );
+
+    const overlay = this.scene.lightingOverlay;
+    const preset = this.scene.lightingPreset;
+    const restoreOverlay = () => {
+      const p = this.scene.lightingPreset;
+      if (overlay && p) overlay.setFillStyle(p.color, p.alpha);
+    };
+
+    let violet = true;
+    if (overlay && preset) {
+      overlay.setFillStyle(LATENCY_SPIKE_VIOLET, LATENCY_SPIKE_ALPHA);
+    }
+
+    const pulse =
+      overlay && preset
+        ? this.scene.time.addEvent({
+            delay: LATENCY_SPIKE_PULSE_MS,
+            loop: true,
+            callback: () => {
+              violet = !violet;
+              overlay.setFillStyle(
+                violet ? LATENCY_SPIKE_VIOLET : LATENCY_SPIKE_INDIGO,
+                LATENCY_SPIKE_ALPHA,
+              );
+            },
+          })
+        : null;
+
+    // short frame stutter — wall-clock dips so Phaser timers don't stall
+    const clock = this.scene.time;
+    const prevScale = clock.timeScale ?? 1;
+    const stutterTicks =
+      LATENCY_STUTTER_MIN +
+      Math.floor(
+        Math.random() * (LATENCY_STUTTER_MAX - LATENCY_STUTTER_MIN + 1),
+      );
+    const stutterTimers = [];
+    const restoreScale = () => {
+      clock.timeScale = prevScale;
+    };
+    for (let i = 0; i < stutterTicks; i++) {
+      const lowAt = i * LATENCY_STUTTER_TICK_MS * 2;
+      const highAt = lowAt + LATENCY_STUTTER_TICK_MS;
+      stutterTimers.push(
+        setTimeout(() => {
+          clock.timeScale = LATENCY_STUTTER_LOW;
+        }, lowAt),
+      );
+      stutterTimers.push(
+        setTimeout(() => {
+          clock.timeScale = prevScale;
+        }, highAt),
+      );
+    }
+    const clearStutter = () => {
+      for (const t of stutterTimers) clearTimeout(t);
+      restoreScale();
+    };
+
+    // subtle camera wobble — soft lag hitch
+    const cam = this.scene.cameras?.main;
+    if (cam?.shake) {
+      try {
+        cam.shake(Math.min(duration, 420), 0.0028);
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const pool = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isWifiEligible(a)),
+    );
+    const want = Math.min(
+      pool.length,
+      1 + Math.floor(Math.random() * 2), // 1–2
+    );
+    const picked = pool.slice(0, want);
+    this.latencySpikeAffected = picked.length;
+    this.publish();
+
+    const restores = [];
+    for (const agent of picked) {
+      agent._latencyBackup = agent.statusText;
+      agent.setStatus(
+        LATENCY_SPIKE_LINES[
+          Math.floor(Math.random() * LATENCY_SPIKE_LINES.length)
+        ],
+      );
+      restores.push(agent);
+    }
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      if (pulse) pulse.remove(false);
+      clearStutter();
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._latencyBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._gatewayBackup == null &&
+            agent._freezeBackup == null &&
+            agent._flakyBackup == null &&
+            agent._oncallBackup == null
+          ) {
+            agent.setStatus(agent._latencyBackup);
+          }
+          agent._latencyBackup = null;
+        }
+      }
+      this.latencySpikeAffected = 0;
+      this.publish();
+    });
+
+    this.track(() => {
+      if (pulse) pulse.remove(false);
+      clearStutter();
+      restore.remove(false);
+      restoreOverlay();
+      for (const agent of restores) {
+        if (agent._latencyBackup != null) {
+          agent.setStatus(agent._latencyBackup);
+          agent._latencyBackup = null;
+        }
+      }
+      this.latencySpikeAffected = 0;
+    });
+  }
+
+  /**
    * Code freeze: toast + cool-blue overlay 4–7s + idle bubbles on 1–2 agents.
    * No gather / no move of running·blocked. Skip if gather active.
    * Optional freeze chime respects mute/lock.
    */
   runCodeFreeze() {
     if (this.isGathering()) return;
+    if (this.isOverlayEventActive()) return;
 
     const toast =
       FREEZE_TOASTS[Math.floor(Math.random() * FREEZE_TOASTS.length)];
@@ -6055,6 +6276,7 @@ export class OfficeEvents {
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       gatewayBlipAffected: this.gatewayBlipAffected,
+      latencySpikeAffected: this.latencySpikeAffected,
       codeFreezeAffected: this.codeFreezeAffected,
       flakyTestAffected: this.flakyTestAffected,
       greenCiAffected: this.greenCiAffected,
