@@ -39,6 +39,7 @@ import { PlantSway } from "../effects/plantSway.js";
 import { PlantPollinators } from "../effects/plantPollinators.js";
 import { WallPosterAmbient } from "../effects/wallPosterAmbient.js";
 import { SunBeams } from "../effects/sunBeams.js";
+import { WindowCondensation } from "../effects/windowCondensation.js";
 import { AchievementShelf } from "../effects/achievementShelf.js";
 import { WeatherFx } from "../effects/weatherFx.js";
 import { NightFlashlight } from "../effects/nightFlashlight.js";
@@ -577,6 +578,7 @@ export class OfficeScene extends Phaser.Scene {
     this.plantPollinators = new PlantPollinators(this);
     this.wallPosterAmbient = new WallPosterAmbient(this);
     this.sunBeams = new SunBeams(this);
+    this.windowCondensation = new WindowCondensation(this);
     this.trophyShelf = new AchievementShelf(this);
     this.robotVacuum = new RobotVacuum(this);
     this.exitNeon = new ExitNeon(this);
@@ -651,6 +653,7 @@ export class OfficeScene extends Phaser.Scene {
     this.plantPollinators?.sync();
     this.wallPosterAmbient?.sync();
     this.sunBeams?.sync();
+    this.windowCondensation?.sync();
     this.robotVacuum?.sync();
     this.exitNeon?.sync();
     this.wallCalendar?.sync();
@@ -758,6 +761,7 @@ export class OfficeScene extends Phaser.Scene {
     this.plantSway?.update(this.time.now);
     this.plantPollinators?.update(this.time.now);
     this.wallPosterAmbient?.update(this.time.now, delta);
+    this.windowCondensation?.update(this.time.now, delta);
     this.robotVacuum?.update(this.time.now, delta);
     this.exitNeon?.update(this.time.now);
     this.wallCalendar?.update(this.time.now, delta);
@@ -1316,6 +1320,7 @@ export class OfficeScene extends Phaser.Scene {
       pollinator: this.plantPollinators?.snapshot?.() ?? null,
       wallPoster: this.wallPosterAmbient?.snapshot?.() ?? null,
       sunbeam: this.sunBeams?.snapshot?.() ?? null,
+      condensation: this.windowCondensation?.snapshot?.() ?? null,
       trophyShelf: this.trophyShelf?.snapshot?.() ?? null,
       vacuum: this.robotVacuum?.snapshot?.() ?? null,
       exitNeon: this.exitNeon?.snapshot?.() ?? null,

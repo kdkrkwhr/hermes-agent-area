@@ -204,6 +204,7 @@ export class WeatherFx {
     this.scene.windowBirds?.sync();
     this.scene.shootingStars?.sync();
     this.scene.plantPollinators?.sync();
+    this.scene.windowCondensation?.sync();
 
     this._applyCloudOverlay(cls);
     this._maybeToast(cls);
@@ -274,6 +275,7 @@ export class WeatherFx {
     this.scene.windowBirds?.sync();
     this.scene.shootingStars?.sync();
     this.scene.plantPollinators?.sync();
+    this.scene.windowCondensation?.sync();
   }
 
   snapshot() {
