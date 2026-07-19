@@ -156,7 +156,7 @@ export class WhiteboardVote {
 
   /**
    * High density when review agents ≥1, kanban review ≥1,
-   * or review_huddle / sprint_retro is the latest event. Force = always busy.
+   * or review_huddle / sprint_retro / bug_bash is the latest event. Force = always busy.
    */
   isBusy() {
     if (this.forced) return true;
@@ -167,7 +167,8 @@ export class WhiteboardVote {
       }
     }
     const ev = this.scene.officeEvents?.lastEvent;
-    if (ev === "review_huddle" || ev === "sprint_retro") return true;
+    if (ev === "review_huddle" || ev === "sprint_retro" || ev === "bug_bash")
+      return true;
     try {
       const stats = parseKanbanStats(this.scene.lastSnapshot?.stats?.raw);
       if ((stats?.review ?? 0) >= 1) return true;

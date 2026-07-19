@@ -68,6 +68,7 @@
     "smoke:coffeespill": "node scripts/smoke-coffeespill.mjs",
     "smoke:reviewhuddle": "node scripts/smoke-reviewhuddle.mjs",
     "smoke:sprintretro": "node scripts/smoke-sprintretro.mjs",
+    "smoke:bugbash": "node scripts/smoke-bugbash.mjs",
     "smoke:donutfriday": "node scripts/smoke-donutfriday.mjs",
     "smoke:midnightsnack": "node scripts/smoke-midnightsnack.mjs",
     "smoke:fooddelivery": "node scripts/smoke-fooddelivery.mjs",

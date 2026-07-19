@@ -448,12 +448,13 @@ export class Agent {
     const prevStatus = this.serverStatus;
     this.serverData = { ...agentMsg, displayName: this.def.displayName };
     this.serverStatus = agentMsg.status;
-    // don't clobber event-owned bubbles (stretch / water cooler / phone)
+    // don't clobber event-owned bubbles (stretch / water cooler / phone / bug bash)
     if (
       agentMsg.bubble &&
       this._stretchBackup == null &&
       this._waterBackup == null &&
-      this._phoneBackup == null
+      this._phoneBackup == null &&
+      this._bugBashBackup == null
     ) {
       this.setStatus(agentMsg.bubble);
     }

@@ -178,7 +178,8 @@ function meetingGatherActive(scene) {
     oe.lastEvent === "standup" ||
     oe.lastEvent === "all_hands" ||
     oe.lastEvent === "review_huddle" ||
-    oe.lastEvent === "sprint_retro"
+    oe.lastEvent === "sprint_retro" ||
+    oe.lastEvent === "bug_bash"
   );
 }
 
@@ -288,7 +289,9 @@ export class MeetingDoorSign {
             ? "review_huddle"
             : oe?.lastEvent === "sprint_retro"
               ? "sprint_retro"
-              : "all_hands";
+              : oe?.lastEvent === "bug_bash"
+                ? "bug_bash"
+                : "all_hands";
       return { wantBusy: true, reason: kind };
     }
     this.meetingCount = countAgentsInMeeting(this.scene);
