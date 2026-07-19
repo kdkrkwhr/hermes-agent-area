@@ -92,7 +92,18 @@ export function classifyWeather(weather) {
   else if (cloudy) label = "cloudy";
   else if (clear) label = "clear";
 
-  return { raining, snowing, cloudy, clear, sky, precip, label };
+  // cold for winter heater alpha — snow or low temp / cold keywords
+  const temp =
+    Number(period?.temp) ||
+    Number(weather.temp) ||
+    Number(weather.highlights?.tempMin) ||
+    NaN;
+  const cold =
+    snowing ||
+    (!Number.isNaN(temp) && temp <= 5) ||
+    /한파|추위|cold|freeze|frost/i.test(blob);
+
+  return { raining, snowing, cloudy, clear, cold, sky, precip, label, temp: Number.isNaN(temp) ? null : temp };
 }
 
 /**
@@ -205,6 +216,7 @@ export class WeatherFx {
     this.scene.shootingStars?.sync();
     this.scene.plantPollinators?.sync();
     this.scene.windowCondensation?.sync();
+    this.scene.winterHeater?.sync();
 
     this._applyCloudOverlay(cls);
     this._maybeToast(cls);
@@ -276,6 +288,7 @@ export class WeatherFx {
     this.scene.shootingStars?.sync();
     this.scene.plantPollinators?.sync();
     this.scene.windowCondensation?.sync();
+    this.scene.winterHeater?.sync();
   }
 
   snapshot() {
@@ -285,6 +298,7 @@ export class WeatherFx {
       raining: !!this.classification?.raining,
       snowing: !!this.classification?.snowing,
       cloudy: !!this.classification?.cloudy,
+      cold: !!this.classification?.cold,
       sky: this.classification?.sky ?? null,
       precip: this.classification?.precip ?? null,
     };

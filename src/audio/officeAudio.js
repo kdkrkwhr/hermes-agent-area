@@ -30,8 +30,10 @@ const BLOOP_MS = 450;
 const MEOW_MS = 700;
 const DRIP_MS = 500;
 const VEND_MS = 400;
+const VOTE_MS = 350;
 const PRINT_MS = 400;
 const FRIDGE_MS = 500;
+const HEATER_MS = 600;
 const MICROWAVE_MS = 450;
 const COOLER_MS = 450;
 const COAT_RUSTLE_MS = 450;
@@ -514,6 +516,33 @@ export class OfficeAudio {
     }
   }
 
+  /** Soft sticky-vote tap — respects mute / ?sfx=0. */
+  playVoteTap() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastVoteAt && now - this._lastVoteAt < VOTE_MS) return;
+    this._lastVoteAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(680, t0);
+      osc.frequency.exponentialRampToValueAtTime(420, t0 + 0.08);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.07, t0 + 0.008);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.14);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
   /** Mechanical vending click + soft dispense thunk — respects mute / ?sfx=0. */
   playVendingClick() {
     if (!this.sfxOk()) return;
@@ -613,6 +642,42 @@ export class OfficeAudio {
       gain.connect(ctx.destination);
       noise.start(t0);
       noise.stop(t0 + 0.22);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /** Soft warm heater hiss — shorter/quieter than fridge; mute / ?sfx=0 skip. */
+  playHeaterHiss() {
+    if (!this.sfxOk()) return;
+    const now = this.scene.time.now;
+    if (this._lastHeaterAt && now - this._lastHeaterAt < HEATER_MS) return;
+    this._lastHeaterAt = now;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const n = Math.floor(ctx.sampleRate * 0.16);
+      const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < n; i++) {
+        data[i] = (Math.random() * 2 - 1) * (1 - i / n);
+      }
+      const noise = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(900, t0);
+      filter.Q.setValueAtTime(0.5, t0);
+      noise.buffer = buf;
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.028, t0 + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start(t0);
+      noise.stop(t0 + 0.16);
     } catch {
       /* autoplay / headless */
     }

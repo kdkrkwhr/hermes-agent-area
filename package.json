@@ -83,6 +83,7 @@
     "smoke:stars": "node scripts/smoke-stars.mjs",
     "smoke:pollinator": "node scripts/smoke-pollinator.mjs",
     "smoke:thunder": "node scripts/smoke-thunder.mjs",
+    "smoke:heater": "node scripts/smoke-heater.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

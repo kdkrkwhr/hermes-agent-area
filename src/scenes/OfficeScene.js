@@ -76,6 +76,7 @@ import { AfkDeskSign } from "../effects/afkDeskSign.js";
 import { DeskSticky } from "../effects/deskSticky.js";
 import { RubberDuck } from "../effects/rubberDuck.js";
 import { WhiteboardScribble } from "../effects/whiteboardScribble.js";
+import { WhiteboardVote } from "../effects/whiteboardVote.js";
 import { RobotVacuum } from "../effects/robotVacuum.js";
 import { ExitNeon } from "../effects/exitNeon.js";
 import { SofaCushion } from "../effects/sofaCushion.js";
@@ -94,6 +95,7 @@ import { SeasonalDrift } from "../effects/seasonalDrift.js";
 import { LobbyUmbrellaStand } from "../effects/lobbyUmbrellaStand.js";
 import { LampGlow } from "../effects/lampGlow.js";
 import { LampMoths } from "../effects/lampMoths.js";
+import { WinterHeater } from "../effects/winterHeater.js";
 import { OvertimeDesk } from "../effects/overtimeDesk.js";
 import {
   burstTaskCelebrate,
@@ -559,6 +561,7 @@ export class OfficeScene extends Phaser.Scene {
     this.overtimeDesk = new OvertimeDesk(this);
     this.rubberDuck = new RubberDuck(this);
     this.whiteboardScribble = new WhiteboardScribble(this);
+    this.whiteboardVote = new WhiteboardVote(this);
     this.bookshelfPages = new BookshelfPages(this);
     this.vendingIdle = new VendingIdle(this);
     this.kitchenIdle = new KitchenIdle(this);
@@ -602,6 +605,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lobbyUmbrellaStand = new LobbyUmbrellaStand(this);
     this.lampGlow = new LampGlow(this);
     this.lampMoths = new LampMoths(this);
+    this.winterHeater = new WinterHeater(this);
     this.weatherFx = new WeatherFx(this, { mapW, mapH });
     this.celebrateEnabled = celebrateEnabledFromQuery();
     this.pingEnabled = pingEnabledFromQuery();
@@ -675,6 +679,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lobbyUmbrellaStand?.sync();
     this.lampGlow?.sync();
     this.lampMoths?.sync();
+    this.winterHeater?.sync();
     this.overtimeDesk?.sync();
     this.weatherFx?.onLightingChanged();
   }
@@ -747,6 +752,7 @@ export class OfficeScene extends Phaser.Scene {
     this.overtimeDesk?.update(this.time.now);
     this.rubberDuck?.sync(this.time.now);
     this.whiteboardScribble?.update(this.time.now, delta);
+    this.whiteboardVote?.update(this.time.now, delta);
     this.printerScan?.update(this.time.now, delta);
     this.bookshelfPages?.update(this.time.now, delta);
     this.vendingIdle?.update(this.time.now);
@@ -783,6 +789,7 @@ export class OfficeScene extends Phaser.Scene {
     this.lobbyUmbrellaStand?.update();
     this.lampGlow?.update(this.time.now);
     this.lampMoths?.update(this.time.now);
+    this.winterHeater?.update(this.time.now);
     this.lobbyPoster?.update(this.time.now, delta);
     this.agentHighFive?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
@@ -1344,6 +1351,7 @@ export class OfficeScene extends Phaser.Scene {
       umbrella: this.lobbyUmbrellaStand?.snapshot?.() ?? null,
       lampGlow: this.lampGlow?.snapshot?.() ?? null,
       moths: this.lampMoths?.snapshot?.() ?? null,
+      heater: this.winterHeater?.snapshot?.() ?? null,
       weatherFx: this.weatherFx?.snapshot?.() ?? null,
       chatPing: chatPingSnapshot(this),
       spriteShadow: shadowSnapshot([
@@ -1372,6 +1380,7 @@ export class OfficeScene extends Phaser.Scene {
       overtime: this.overtimeDesk?.snapshot?.() ?? null,
       rubberDuck: this.rubberDuck?.snapshot?.() ?? null,
       whiteboardScribble: this.whiteboardScribble?.snapshot?.() ?? null,
+      whiteboardVote: this.whiteboardVote?.snapshot?.() ?? null,
       printerScan: this.printerScan?.snapshot?.() ?? null,
       vendingIdle: this.vendingIdle?.snapshot?.() ?? null,
       kitchenIdle: this.kitchenIdle?.snapshot?.() ?? null,
