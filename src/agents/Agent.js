@@ -28,6 +28,12 @@ import {
   updateThinkingDots,
   destroyThinkingDots,
 } from "../effects/thinkingDots.js";
+import {
+  urgencyModeFromQuery,
+  resolveUrgencyProgress,
+  maybeSpawnUrgencySweat,
+  URGENCY_PULSE,
+} from "../effects/runtimeUrgency.js";
 
 const DIR_ROW = { down: 0, left: 1, right: 2, up: 3 };
 const SPEED = 200; // match BE 200px/s @ 32px tiles
@@ -224,7 +230,8 @@ export class Agent {
     this.bubbleText.setPosition(this.sprite.x, y + h - padY);
   }
 
-  /** Under-nameplate bar: fill if task_progress set, else indeterminate pulse. */
+  /** Under-nameplate bar: fill if task_progress set, else indeterminate pulse.
+   *  progress≥0.8 (or ?urgency=force) → rose/red soft pulse; sweat droplets occasional. */
   drawProgressBar() {
     const gfx = this.progressGfx;
     if (!gfx) return;
@@ -234,6 +241,7 @@ export class Agent {
     if (!show) {
       gfx.clear();
       gfx.setVisible(false);
+      this._urgency = { progress: null, urgent: false, color: null };
       this.drawElapsedLabel(false);
       return;
     }
@@ -248,13 +256,30 @@ export class Agent {
     gfx.fillStyle(0x0b1016, 0.88);
     gfx.fillRect(x, y, BAR_W, BAR_H);
 
-    const progress = this.serverData?.task_progress;
-    if (typeof progress === "number" && Number.isFinite(progress)) {
-      const fill = Math.max(0, Math.min(1, progress));
-      gfx.fillStyle(0x5be0c8, 1);
-      gfx.fillRect(x, y, Math.max(1, Math.round(BAR_W * fill)), BAR_H);
+    const mode = urgencyModeFromQuery();
+    const resolved = resolveUrgencyProgress(this, mode);
+    this._urgency = resolved;
+
+    if (typeof resolved.progress === "number" && Number.isFinite(resolved.progress)) {
+      const fill = Math.max(0, Math.min(1, resolved.progress));
+      const fw = Math.max(1, Math.round(BAR_W * fill));
+      if (resolved.urgent) {
+        // soft pulse — rose/red, distinct from overtime amber / deskGlow teal
+        const t = this.scene.time.now / 1000;
+        const phase = (Math.sin(t * 4.2) + 1) / 2;
+        const a = 0.72 + phase * 0.28;
+        gfx.fillStyle(resolved.color, a);
+        gfx.fillRect(x, y, fw, BAR_H);
+        gfx.fillStyle(URGENCY_PULSE, 0.12 + phase * 0.28);
+        gfx.fillRect(x, y, fw, BAR_H);
+      } else {
+        gfx.fillStyle(resolved.color, 1);
+        gfx.fillRect(x, y, fw, BAR_H);
+      }
+      maybeSpawnUrgencySweat(this, resolved.urgent, mode, this.scene.time.now);
     } else {
       // indeterminate: slide a chunk; clock-driven so it pulses between WS polls
+      // (no task_progress / max → no urgency)
       const t = this.scene.time.now / 1000;
       const phase = (Math.sin(t * 2.6) + 1) / 2;
       const seg = Math.max(6, Math.round(BAR_W * 0.35));

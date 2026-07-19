@@ -25,6 +25,7 @@ import {
 import { deskFxEnabledFromQuery, focusFxEnabledFromQuery, resolveDeskGlowKind } from "../effects/deskGlow.js";
 import { shadowSnapshot } from "../effects/spriteShadow.js";
 import { statusFootRingSnapshot } from "../effects/statusFootRing.js";
+import { urgencySnapshot } from "../effects/runtimeUrgency.js";
 import { OfficeAudio } from "../audio/officeAudio.js";
 import { OfficeEvents } from "../effects/officeEvents.js";
 import { IdleChatter } from "../effects/idleChatter.js";
@@ -1362,6 +1363,7 @@ export class OfficeScene extends Phaser.Scene {
         this.mascot,
       ].filter(Boolean)),
       statusFootRing: statusFootRingSnapshot(this.agents || []),
+      urgency: urgencySnapshot(this.agents || []),
       poster: this.lobbyPoster?.snapshot?.() ?? null,
       flashlight: this.nightFlashlight?.snapshot?.() ?? null,
       blinds: this.windowBlinds?.snapshot?.() ?? null,
