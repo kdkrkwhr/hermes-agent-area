@@ -47,6 +47,7 @@ import { NightFlashlight } from "../effects/nightFlashlight.js";
 import { WindowBlinds } from "../effects/windowBlinds.js";
 import { LobbyPoster } from "../effects/lobbyPoster.js";
 import { AgentHighFive } from "../effects/agentHighFive.js";
+import { AgentBumpSorry } from "../effects/agentBumpSorry.js";
 import { CoffeeSteam } from "../effects/coffeeSteam.js";
 import { PrinterScan } from "../effects/printerScan.js";
 import { AquariumBubbles } from "../effects/aquariumBubbles.js";
@@ -546,6 +547,7 @@ export class OfficeScene extends Phaser.Scene {
     this.nightFlashlight = new NightFlashlight(this);
     this.windowBlinds = new WindowBlinds(this);
     this.agentHighFive = new AgentHighFive(this);
+    this.agentBumpSorry = new AgentBumpSorry(this);
     this.coffeeSteam = new CoffeeSteam(this);
     this.printerScan = new PrinterScan(this);
     this.aquariumBubbles = new AquariumBubbles(this);
@@ -794,6 +796,7 @@ export class OfficeScene extends Phaser.Scene {
     this.winterHeater?.update(this.time.now);
     this.lobbyPoster?.update(this.time.now, delta);
     this.agentHighFive?.update(this.time.now, delta);
+    this.agentBumpSorry?.update(this.time.now, delta);
     if (this.devTimeIndex == null) {
       const minute = Math.floor(this.time.now / 60000);
       if (this._lightMinute !== minute) {
@@ -1368,6 +1371,7 @@ export class OfficeScene extends Phaser.Scene {
       flashlight: this.nightFlashlight?.snapshot?.() ?? null,
       blinds: this.windowBlinds?.snapshot?.() ?? null,
       highFive: this.agentHighFive?.snapshot?.() ?? null,
+      bump: this.agentBumpSorry?.snapshot?.() ?? null,
       steam: this.coffeeSteam?.snapshot?.() ?? null,
       aquarium: this.aquariumBubbles?.snapshot?.() ?? null,
       aquariumFish: this.aquariumFish?.snapshot?.() ?? null,

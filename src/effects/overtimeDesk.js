@@ -93,7 +93,8 @@ function hasForeignBubble(agent) {
     agent._waterBackup != null ||
     agent._phoneBackup != null ||
     agent._chatterBackup != null ||
-    agent._overtimeBackup != null
+    agent._overtimeBackup != null ||
+    agent._bumpBackup != null
   );
 }
 

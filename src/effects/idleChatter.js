@@ -73,6 +73,7 @@ export function isChatterEligible(agent) {
   if (agent._phoneBackup != null) return false;
   if (agent._chatterBackup != null) return false;
   if (agent._overtimeBackup != null) return false;
+  if (agent._bumpBackup != null) return false;
 
   const s = agent.serverStatus;
   if (
