@@ -174,6 +174,33 @@ export class BookshelfPages {
     return true;
   }
 
+  /**
+   * Soft page-flutter boost for docs_day (and similar). Immediate strong burst
+   * plus 2–3 follow-ups over `ms`. No-op if shelves disabled/empty.
+   * @param {number} [ms=3500]
+   * @returns {boolean}
+   */
+  boost(ms = 3500) {
+    if (!this.shouldRun() || !this.tiles.length) return false;
+    const scene = this.scene;
+    const now = scene.time.now;
+    const life = Math.max(800, ms | 0);
+    const fire = () => {
+      if (!this.shouldRun() || !this.tiles.length) return;
+      const tile = this.tiles[Math.floor(Math.random() * this.tiles.length)];
+      this.burstAt(tile.x, tile.y - 4, scene.time.now, { strong: true });
+    };
+    fire();
+    const follow = 2 + Math.floor(Math.random() * 2);
+    for (let i = 1; i <= follow; i++) {
+      const delay = Math.floor((life / (follow + 1)) * i);
+      scene.time.delayedCall(delay, fire);
+    }
+    this.nextAt = now + life + pickInterval(this.forced);
+    this.publish();
+    return true;
+  }
+
   burstAt(x, y, now, { strong = false } = {}) {
     const scene = this.scene;
     if (!scene.textures.exists("fx-page")) registerPageTexture(scene);

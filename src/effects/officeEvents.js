@@ -1,9 +1,10 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` / `?events=vending_jam` / `?events=monday_blues` / `?events=sunday_chill` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` / `?events=vending_jam` / `?events=monday_blues` / `?events=sunday_chill` / `?events=docs_day` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
 import { findDualDeskTiles } from "./dualDeskIdle.js";
 import { findOpenDeskTiles } from "./openDeskIdle.js";
+import { findBookshelfTiles } from "./bookshelfPages.js";
 
 const RANDOM_KINDS = [
   "standup",
@@ -52,7 +53,22 @@ const RANDOM_KINDS = [
   "vending_jam",
   "monday_blues",
   "sunday_chill",
+  "docs_day",
 ];
+/**
+ * docs_day: CEO bookshelf (GID34) gather + page-flutter boost (ms).
+ * Idle-only 2–4; no running/blocked. Weekday 10–12 · 14–17 weight↑.
+ */
+const DOCS_DAY_HOLD_MIN_MS = 6000;
+const DOCS_DAY_HOLD_MAX_MS = 10000;
+const DOCS_DAY_TOASTS = ["문서 데이!", "스펙 각", "README…"];
+const DOCS_DAY_AM_START = 10;
+const DOCS_DAY_AM_END = 12;
+const DOCS_DAY_PM_START = 14;
+const DOCS_DAY_PM_END = 17;
+const DOCS_DAY_WEIGHT = 3;
+/** soft cream glow at bookshelf */
+const DOCS_DAY_GLOW = 0xf0e0c0;
 /** monday_blues: soft slate overlay + idle bubbles (ms); Mon only — no gather */
 const MONDAY_BLUES_MIN_MS = 5000;
 const MONDAY_BLUES_MAX_MS = 8000;
@@ -588,6 +604,32 @@ function findVendingJamTile(scene) {
   }
   const br = scene.waypoints?.break || { x: 31, y: 4 };
   return { x: br.x, y: br.y };
+}
+
+/**
+ * docs_day anchor: ceoDesk (walkable) → bookshelf east stand → ceoOffice center.
+ * Furniture tile itself is often blocked; prefer known walkable CEO spots.
+ * @returns {{x:number,y:number}} tile coords
+ */
+function findDocsDayTile(scene) {
+  const desk = scene.waypoints?.ceoDesk;
+  if (desk && Number.isFinite(desk.x) && Number.isFinite(desk.y)) {
+    return { x: desk.x, y: desk.y };
+  }
+  const shelves = findBookshelfTiles(scene);
+  if (shelves.length) {
+    const s = shelves[Math.floor(Math.random() * shelves.length)];
+    // stand just east of west-wall shelves when possible
+    return { x: s.tx + 1, y: s.ty };
+  }
+  const ceo = scene.waypoints?.ceoOffice;
+  if (ceo && Number.isFinite(ceo.xMin)) {
+    return {
+      x: Math.floor((ceo.xMin + ceo.xMax) / 2),
+      y: Math.floor((ceo.yMin + ceo.yMax) / 2),
+    };
+  }
+  return { x: 30, y: 7 };
 }
 
 /** Soft coffee puddle oval — ADD + alpha fade. */
@@ -1264,6 +1306,7 @@ export class OfficeEvents {
     this.codeFreezeAffected = 0;
     this.mondayBluesAffected = 0;
     this.sundayChillActive = false;
+    this.docsDayGathered = 0;
     this.happyHourGathered = 0;
     this.deployCelebrateGathered = 0;
     this.birthdayBalloonsGathered = 0;
@@ -1444,6 +1487,10 @@ export class OfficeEvents {
       weekday &&
       ((hour >= GREEN_CI_AM_START && hour < GREEN_CI_AM_END) ||
         (hour >= GREEN_CI_PM_START && hour < GREEN_CI_PM_END));
+    const docsDayWindow =
+      weekday &&
+      ((hour >= DOCS_DAY_AM_START && hour < DOCS_DAY_AM_END) ||
+        (hour >= DOCS_DAY_PM_START && hour < DOCS_DAY_PM_END));
     const friday = now.getDay() === 5;
     const monday = now.getDay() === 1;
     const sunday = now.getDay() === 0;
@@ -1508,6 +1555,7 @@ export class OfficeEvents {
         weight = monday ? MONDAY_BLUES_WEIGHT : 0;
       else if (k === "sunday_chill")
         weight = sunday ? SUNDAY_CHILL_WEIGHT : 0;
+      else if (k === "docs_day" && docsDayWindow) weight = DOCS_DAY_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
     }
     if (!pool.length) return;
@@ -1580,6 +1628,7 @@ export class OfficeEvents {
     else if (kind === "latency_spike") this.runLatencySpike();
     else if (kind === "monday_blues") this.runMondayBlues();
     else if (kind === "sunday_chill") this.runSundayChill();
+    else if (kind === "docs_day") this.runDocsDay();
 
     this.publish();
   }
@@ -4750,6 +4799,160 @@ export class OfficeEvents {
   }
 
   /**
+   * Docs day: toast + soft cream glow at CEO bookshelf + page-flutter boost +
+   * idle 2–4 → bookshelf ±1 ring 6–10s. Skip if gathering. No running/blocked.
+   * Weekday 10–12 · 14–17 weight↑. Paper rustle respects mute/?sfx=0.
+   */
+  runDocsDay() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      DOCS_DAY_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (DOCS_DAY_HOLD_MAX_MS - DOCS_DAY_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      DOCS_DAY_TOASTS[Math.floor(Math.random() * DOCS_DAY_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playDocsPaperRustle();
+
+    const pt = findDocsDayTile(this.scene);
+    const { x, y } = tileCenter(this.scene, pt.x, pt.y);
+    const shelves = findBookshelfTiles(this.scene);
+    const glowX = shelves.length ? shelves[0].x : x;
+    const glowY = shelves.length ? shelves[0].y : y;
+
+    this.scene.bookshelfPages?.boost?.(Math.min(4500, holdMs));
+
+    const glow = this.scene.add.circle(glowX, glowY + 4, 44, DOCS_DAY_GLOW, 0.3);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.35,
+      duration: Math.min(3200, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToDocsDay(holdMs, pt);
+  }
+
+  /** Idle-only 2–4 → CEO bookshelf ±1; hold 6–10s → restore. */
+  async gatherIdleToDocsDay(holdMs, anchorTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const pt = anchorTile || findDocsDayTile(this.scene);
+    const shelves = findBookshelfTiles(this.scene);
+    const shelfSpot = shelves.length
+      ? { x: shelves[0].tx, y: shelves[0].ty }
+      : pt;
+    const spots = [
+      ...meetingOffsets(pt),
+      ...meetingOffsets(shelfSpot),
+    ];
+    const hold =
+      holdMs ??
+      DOCS_DAY_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (DOCS_DAY_HOLD_MAX_MS - DOCS_DAY_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.docsDayGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft paper rustle for docs_day — skip if muted/locked/?sfx=0. */
+  playDocsPaperRustle() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked || audio.sfxEnabled === false) {
+      return;
+    }
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const bufferSize = Math.floor(ctx.sampleRate * 0.09);
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        const env = 1 - i / bufferSize;
+        data[i] = (Math.random() * 2 - 1) * 0.32 * env * env;
+      }
+      const src = ctx.createBufferSource();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      src.buffer = buffer;
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(2100, t0);
+      filter.Q.setValueAtTime(0.65, t0);
+      gain.gain.setValueAtTime(0.026, t0);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+      src.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(t0);
+      src.stop(t0 + 0.11);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
    * Flaky test: toast + soft amber/yellow flicker overlay 3–6s +
    * idle bubbles on 1–2 agents. No gather / no move of running·blocked.
    * Skip if gather active. Optional soft click respects mute/lock.
@@ -7194,6 +7397,7 @@ export class OfficeEvents {
       codeFreezeAffected: this.codeFreezeAffected,
       mondayBluesAffected: this.mondayBluesAffected,
       sundayChillActive: !!this.sundayChillActive,
+      docsDayGathered: this.docsDayGathered,
       flakyTestAffected: this.flakyTestAffected,
       greenCiAffected: this.greenCiAffected,
       happyHourGathered: this.happyHourGathered,
