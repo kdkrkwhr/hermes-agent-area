@@ -1,14 +1,26 @@
-/** Lobby wall TV — kanban counts from lastSnapshot. `?signage=0` disables. */
+/** Lobby wall TV — kanban counts + news headline crawl. `?signage=0` disables. */
 
 import { parseKanbanStats } from "../kanbanPanel.js";
 import { TILE_SIZE } from "../constants.js";
+import { newsHeadlines, loadDeskBrief } from "./deskBriefPanel.js";
 
 const TEX_KEY = "lobby-signage-tv";
 /** Above furniture (0); below agent sprites (10). */
 const DEPTH = 8;
 const REFRESH_MS = 3000;
+/** Mode flip between kanban / news (3–5s band). */
+const MODE_MS = 4000;
+const NEWS_POLL_MS = 60000;
+const CRAWL_PX_PER_S = 18;
 const TV_W = 72;
 const TV_H = 48;
+const SCREEN_W = TV_W - 12;
+
+const COLOR_KANBAN_TITLE = "#6ec8f0";
+const COLOR_KANBAN_L1 = "#e8f4ff";
+const COLOR_KANBAN_L2 = "#b0c4d8";
+const COLOR_NEWS_TITLE = "#f0c878";
+const COLOR_NEWS_BODY = "#fff8e8";
 
 function parseSignageEnabled() {
   if (typeof location === "undefined") return true;
@@ -81,6 +93,13 @@ function ensureTvTexture(scene) {
   g.destroy();
 }
 
+/** Build mode list: always kanban; news only when headlines exist. */
+function buildModes(headlines) {
+  const modes = ["kanban"];
+  if (Array.isArray(headlines) && headlines.length > 0) modes.push("news");
+  return modes;
+}
+
 export class LobbySignage {
   /**
    * @param {Phaser.Scene} scene
@@ -95,7 +114,15 @@ export class LobbySignage {
     this.line2 = null;
     this.lastKey = "";
     this.counts = { running: 0, blocked: 0, idle: 0, done: 0 };
+    this.headlines = [];
+    this.headlineIdx = 0;
+    this.mode = "kanban";
+    this.modes = ["kanban"];
+    this._kanbanFmt = null;
     this._timer = null;
+    this._modeTimer = null;
+    this._newsPoll = null;
+    this._crawlTween = null;
     if (!this.enabled) return;
 
     ensureTvTexture(scene);
@@ -112,7 +139,7 @@ export class LobbySignage {
       .text(x, y - 12, "KANBAN", {
         fontFamily: "Consolas, Segoe UI, monospace",
         fontSize: "9px",
-        color: "#6ec8f0",
+        color: COLOR_KANBAN_TITLE,
         align: "center",
       })
       .setOrigin(0.5, 0.5)
@@ -123,7 +150,7 @@ export class LobbySignage {
       .text(x, y - 1, "R 0  B 0", {
         fontFamily: "Consolas, Segoe UI, monospace",
         fontSize: "10px",
-        color: "#e8f4ff",
+        color: COLOR_KANBAN_L1,
         align: "center",
       })
       .setOrigin(0.5, 0.5)
@@ -134,7 +161,7 @@ export class LobbySignage {
       .text(x, y + 10, "Q 0  Rev 0", {
         fontFamily: "Consolas, Segoe UI, monospace",
         fontSize: "10px",
-        color: "#b0c4d8",
+        color: COLOR_KANBAN_L2,
         align: "center",
       })
       .setOrigin(0.5, 0.5)
@@ -147,19 +174,111 @@ export class LobbySignage {
       callback: () => this.refreshFromScene(),
     });
 
+    this._modeTimer = scene.time.addEvent({
+      delay: MODE_MS,
+      loop: true,
+      callback: () => this.advanceMode(),
+    });
+
+    this._newsPoll = scene.time.addEvent({
+      delay: NEWS_POLL_MS,
+      loop: true,
+      callback: () => void this.pollNews(),
+    });
+    void this.pollNews();
+
     if (scene.lastSnapshot) this.updateFromSnapshot(scene.lastSnapshot);
+    this.applyMode(true);
   }
 
   refreshFromScene() {
     const snap = this.scene?.lastSnapshot;
     if (snap) this.updateFromSnapshot(snap);
+    // also pick up brief cache if panel/WS already filled it
+    const cached =
+      typeof window !== "undefined"
+        ? window.__HERMES_AREA__?.deskBrief?.news ??
+          window.__HERMES_AREA__?.brief?.news ??
+          null
+        : null;
+    if (cached) this.updateNews({ news: cached });
+    else if (this.scene?.deskBriefPanel?.lastPayload?.news) {
+      this.updateNews(this.scene.deskBriefPanel.lastPayload);
+    }
+  }
+
+  async pollNews() {
+    if (!this.enabled) return;
+    try {
+      const pack = await loadDeskBrief();
+      if (pack?.news) this.updateNews(pack);
+    } catch {
+      /* offline / Pages — keep last headlines */
+    }
+  }
+
+  /**
+   * Desk-brief / WS news pack → headlines for crawl mode.
+   * Accepts full brief `{ news }` or a bare news object.
+   * @param {object|null|undefined} pack
+   */
+  updateNews(pack) {
+    if (!this.enabled) return;
+    const news = pack?.news ?? (pack?.markets || pack?.items ? pack : null);
+    const next = newsHeadlines(news, 12).map((h) =>
+      String(h?.title || "")
+        .replace(/\s+/g, " ")
+        .trim(),
+    ).filter(Boolean);
+    const key = next.join("\n");
+    const prevKey = this.headlines.join("\n");
+    this.headlines = next;
+    if (this.headlineIdx >= next.length) this.headlineIdx = 0;
+    this.modes = buildModes(next);
+    if (!next.length && this.mode === "news") {
+      this.mode = "kanban";
+      this.applyMode(true);
+    } else if (key !== prevKey && this.mode === "news") {
+      this.applyMode(true);
+    }
+    this.publishBriefCache(news);
+  }
+
+  publishBriefCache(news) {
+    if (typeof window === "undefined") return;
+    window.__HERMES_AREA__ = {
+      ...(window.__HERMES_AREA__ || {}),
+      brief: {
+        ...((window.__HERMES_AREA__ || {}).brief || {}),
+        news: news ?? null,
+        headlines: this.headlines.slice(),
+      },
+    };
+  }
+
+  advanceMode() {
+    if (!this.enabled) return;
+    this.modes = buildModes(this.headlines);
+    if (this.modes.length < 2) {
+      if (this.mode !== "kanban") {
+        this.mode = "kanban";
+        this.applyMode(true);
+      }
+      return;
+    }
+    const i = this.modes.indexOf(this.mode);
+    this.mode = this.modes[(i + 1) % this.modes.length];
+    if (this.mode === "news") {
+      this.headlineIdx = (this.headlineIdx + 1) % this.headlines.length;
+    }
+    this.applyMode(true);
   }
 
   /** Same source as the DOM kanban panel (`lastSnapshot`). */
   updateFromSnapshot(snapshot) {
     if (!this.enabled || !this.line1 || !snapshot) return;
     const fmt = formatSignageLines(snapshot);
-    const key = `${fmt.line1}|${fmt.line2}`;
+    this._kanbanFmt = fmt;
     this.counts = {
       running: fmt.running,
       blocked: fmt.blocked,
@@ -168,16 +287,110 @@ export class LobbySignage {
       idle: fmt.idle,
       done: fmt.done,
     };
-    if (key === this.lastKey) return;
+    const key = `${fmt.line1}|${fmt.line2}`;
+    if (key === this.lastKey && this.mode === "kanban") return;
     this.lastKey = key;
-    this.line1.setText(fmt.line1);
-    this.line2.setText(fmt.line2);
+    if (this.mode === "kanban") this.applyMode(false);
+  }
+
+  stopCrawl() {
+    this._crawlTween?.stop?.();
+    this._crawlTween = null;
+    if (this.line1) {
+      this.line1.setOrigin(0.5, 0.5);
+      if (this.anchor) this.line1.setX(this.anchor.x);
+    }
+  }
+
+  startCrawl(fullText) {
+    this.stopCrawl();
+    if (!this.line1 || !this.anchor) return;
+    const x = this.anchor.x;
+    const y = this.anchor.y;
+    this.line1.setText(fullText);
+    this.line1.setColor(COLOR_NEWS_BODY);
+    this.line1.setOrigin(0, 0.5);
+    const tw = this.line1.width || 0;
+    if (tw <= SCREEN_W) {
+      this.line1.setOrigin(0.5, 0.5);
+      this.line1.setPosition(x, y - 1);
+      this.line2?.setText("");
+      return;
+    }
+    // soft left→right crawl; reset loop while in news mode
+    const startX = x - SCREEN_W / 2 + 2;
+    const endX = x - SCREEN_W / 2 - tw - 8;
+    const dur = Math.max(4000, Math.round(((startX - endX) / CRAWL_PX_PER_S) * 1000));
+    this.line1.setPosition(startX, y - 1);
+    this.line2?.setText("");
+    this._crawlTween = this.scene.tweens.add({
+      targets: this.line1,
+      x: endX,
+      duration: dur,
+      ease: "Linear",
+      repeat: -1,
+    });
+  }
+
+  /**
+   * @param {boolean} forceFlip — fade titles when switching modes
+   */
+  applyMode(forceFlip) {
+    if (!this.enabled || !this.title || !this.line1 || !this.line2) return;
+    const x = this.anchor?.x ?? 0;
+    const y = this.anchor?.y ?? 0;
+
+    if (this.mode === "news" && this.headlines.length) {
+      this.stopCrawl();
+      const headline = this.headlines[this.headlineIdx] || this.headlines[0];
+      this.title.setText("NEWS");
+      this.title.setColor(COLOR_NEWS_TITLE);
+      this.line2.setColor(COLOR_NEWS_BODY);
+      // 2-line flip: title NEWS + crawl on line1; line2 shows short trunc hint
+      const short =
+        headline.length > 22 ? `${headline.slice(0, 20)}…` : headline;
+      this.line2.setText(short);
+      this.line2.setPosition(x, y + 10);
+      this.startCrawl(`◆ ${headline}   `);
+      if (forceFlip) {
+        this.title.setAlpha(0.35);
+        this.scene.tweens.add({ targets: this.title, alpha: 1, duration: 220 });
+      }
+      return;
+    }
+
+    // kanban
+    this.stopCrawl();
+    const fmt = this._kanbanFmt || formatSignageLines(this.scene?.lastSnapshot);
+    this.title.setText("KANBAN");
+    this.title.setColor(COLOR_KANBAN_TITLE);
+    this.line1.setColor(COLOR_KANBAN_L1);
+    this.line2.setColor(COLOR_KANBAN_L2);
+    this.line1.setOrigin(0.5, 0.5);
+    this.line1.setPosition(x, y - 1);
+    this.line1.setText(fmt?.line1 ?? "R 0  B 0");
+    this.line2.setPosition(x, y + 10);
+    this.line2.setText(fmt?.line2 ?? "Q 0  Rev 0");
+    if (forceFlip) {
+      this.title.setAlpha(0.35);
+      this.scene.tweens.add({ targets: this.title, alpha: 1, duration: 220 });
+    }
   }
 
   snapshot() {
+    const display =
+      this.mode === "news" && this.headlines.length
+        ? `NEWS · ${this.headlines[this.headlineIdx] || this.headlines[0]}`
+        : this.lastKey
+          ? this.lastKey.replace("|", " · ")
+          : null;
     return {
       enabled: this.enabled,
-      text: this.lastKey ? this.lastKey.replace("|", " · ") : null,
+      text: display,
+      mode: this.mode,
+      modes: this.modes.slice(),
+      headlines: this.headlines.slice(),
+      headlineIdx: this.headlineIdx,
       counts: { ...this.counts },
       x: this.tv?.x ?? this.anchor?.x ?? null,
       y: this.tv?.y ?? this.anchor?.y ?? null,
@@ -185,12 +398,18 @@ export class LobbySignage {
       tileY: this.anchor?.tileY ?? null,
       depth: DEPTH,
       refreshMs: REFRESH_MS,
+      modeMs: MODE_MS,
     };
   }
 
   destroy() {
+    this.stopCrawl();
     this._timer?.remove?.(false);
+    this._modeTimer?.remove?.(false);
+    this._newsPoll?.remove?.(false);
     this._timer = null;
+    this._modeTimer = null;
+    this._newsPoll = null;
     this.tv?.destroy();
     this.title?.destroy();
     this.line1?.destroy();
@@ -206,7 +425,9 @@ export {
   parseSignageEnabled,
   lobbySignageAnchor,
   formatSignageLines,
+  buildModes,
   TEX_KEY,
   DEPTH,
   REFRESH_MS,
+  MODE_MS,
 };

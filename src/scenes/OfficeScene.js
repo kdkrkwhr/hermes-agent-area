@@ -323,7 +323,10 @@ export class OfficeScene extends Phaser.Scene {
     // office default: tuck kanban — board page owns the full panels
     document.querySelector(".kanban-panel")?.classList.add("is-collapsed");
     this.deskBriefPanel = createDeskBriefPanel({
-      onPayload: (payload) => this.weatherFx?.onDeskBriefPayload(payload),
+      onPayload: (payload) => {
+        this.weatherFx?.onDeskBriefPayload(payload);
+        this.lobbySignage?.updateNews?.(payload);
+      },
     });
     this.activityTimeline = createActivityTimeline();
     this.refreshMockKanban();
