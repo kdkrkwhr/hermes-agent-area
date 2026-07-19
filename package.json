@@ -80,6 +80,7 @@
     "smoke:ratelimit": "node scripts/smoke-ratelimit.mjs",
     "smoke:gatewayblip": "node scripts/smoke-gatewayblip.mjs",
     "smoke:latencyspike": "node scripts/smoke-latencyspike.mjs",
+    "smoke:contextoverflow": "node scripts/smoke-contextoverflow.mjs",
     "smoke:think": "node scripts/smoke-think.mjs",
     "smoke:bump": "node scripts/smoke-bump.mjs",
     "smoke:buildfail": "node scripts/smoke-buildfail.mjs",

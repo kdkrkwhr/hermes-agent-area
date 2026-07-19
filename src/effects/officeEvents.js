@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=flaky_test` / `?events=green_ci` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` / `?events=rollback` / `?events=oncall_page` / `?events=rate_limit` / `?events=gateway_blip` / `?events=latency_spike` / `?events=context_overflow` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -38,6 +38,7 @@ const RANDOM_KINDS = [
   "green_ci",
   "code_freeze",
   "sprint_retro",
+  "bug_bash",
   "donut_friday",
   "midnight_snack",
   "food_delivery",
@@ -47,6 +48,7 @@ const RANDOM_KINDS = [
   "rate_limit",
   "gateway_blip",
   "latency_spike",
+  "context_overflow",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -156,6 +158,22 @@ const RETRO_TINTS = [0xfff3a0, 0xffb8d0, 0xa8f0d0, 0xffe8b0, 0xd8f5e8];
 const RETRO_HOUR_START = 16;
 const RETRO_HOUR_END = 18;
 const RETRO_WEIGHT = 3;
+/**
+ * bug_bash: War Room whiteboard gather + amber/lime bug stickies (ms).
+ * Distinct from review_huddle (amber chalk) / sprint_retro (pastel sticky) /
+ * hotfix_scramble (red Open Desk pulse).
+ */
+const BUG_BASH_HOLD_MIN_MS = 4000;
+const BUG_BASH_HOLD_MAX_MS = 7000;
+const BUG_BASH_TOASTS = ["버그배시!", "재현 ㄱㄱ"];
+const BUG_BASH_LINES = ["재현됨?", "로그 어디"];
+const BUG_BASH_STICKY_TEX = "fx-bug-sticky";
+/** soft amber / lime — bug sticker vibe */
+const BUG_BASH_TINTS = [0xe8b040, 0xc8e050, 0xf0c878, 0xa8e868, 0xffe090];
+/** weekday 14–17: higher pick weight */
+const BUG_BASH_HOUR_START = 14;
+const BUG_BASH_HOUR_END = 17;
+const BUG_BASH_WEIGHT = 3;
 /** phone_ring: bubble + ring SFX + green pulse (ms) */
 const PHONE_MIN_MS = 3000;
 const PHONE_MAX_MS = 5000;
@@ -183,6 +201,23 @@ const RATE_LIMIT_MAGENTA = 0xd060c0;
 const RATE_LIMIT_HOUR_START = 10;
 const RATE_LIMIT_HOUR_END = 18;
 const RATE_LIMIT_WEIGHT = 2;
+/**
+ * context_overflow: toast + running/chatting bubble + soft violet/indigo
+ * scroll-paper / token-chip particles (ms). No gather/move.
+ * Distinct from rate_limit (magenta foot pulse) / latency_spike (overlay+stutter).
+ */
+const CONTEXT_OVERFLOW_MIN_MS = 2000;
+const CONTEXT_OVERFLOW_MAX_MS = 4000;
+const CONTEXT_OVERFLOW_TOASTS = ["컨텍스트 풀!", "토큰 넘침"];
+const CONTEXT_OVERFLOW_LINES = ["요약부터…", "윈도우 잘림"];
+const CONTEXT_OVERFLOW_VIOLET = 0x8a5fe0;
+const CONTEXT_OVERFLOW_INDIGO = 0x5560d8;
+const CONTEXT_OVERFLOW_PAPER_TEX = "fx-overflow-paper";
+const CONTEXT_OVERFLOW_CHIP_TEX = "fx-overflow-chip";
+/** business hours 10–18: higher pick weight; else weight=1 */
+const CONTEXT_OVERFLOW_HOUR_START = 10;
+const CONTEXT_OVERFLOW_HOUR_END = 18;
+const CONTEXT_OVERFLOW_WEIGHT = 2;
 /** power_flicker: dark overlay flash duration range (ms) */
 const FLICKER_MIN_MS = 600;
 const FLICKER_MAX_MS = 1200;
@@ -619,6 +654,23 @@ function ensureRetroStickyTexture(scene) {
   g.destroy();
 }
 
+/** Soft bug sticker for bug_bash (amber/lime tint at emit) — not retro sticky. */
+function ensureBugBashStickyTexture(scene) {
+  if (scene.textures.exists(BUG_BASH_STICKY_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillRoundedRect(1, 1, 10, 10, 2);
+  // tiny "bug" body + legs
+  g.fillStyle(0xffffff, 0.55);
+  g.fillEllipse(6, 6, 5, 4);
+  g.fillRect(3, 5, 1.2, 1);
+  g.fillRect(8, 5, 1.2, 1);
+  g.fillRect(4, 8, 1, 1.5);
+  g.fillRect(7, 8, 1, 1.5);
+  g.generateTexture(BUG_BASH_STICKY_TEX, 12, 12);
+  g.destroy();
+}
+
 /** Soft donut ring for donut_friday (pink/glaze tint at emit). */
 function ensureDonutTexture(scene) {
   if (scene.textures.exists(DONUT_TEX)) return;
@@ -834,6 +886,32 @@ function ensurePaperTexture(scene) {
   g.lineBetween(1, 7, 15, 12);
   g.lineBetween(5, 7, 15, 7);
   g.generateTexture(PAPER_TEX, 16, 14);
+  g.destroy();
+}
+
+/** Soft scroll-paper scrap for context_overflow (tinted violet at emit). */
+function ensureOverflowPaperTexture(scene) {
+  if (scene.textures.exists(CONTEXT_OVERFLOW_PAPER_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(0, 0, 8, 10);
+  g.fillStyle(0xd0d0e8, 0.7);
+  g.fillRect(1.5, 2.5, 5, 1);
+  g.fillRect(1.5, 4.5, 4, 1);
+  g.fillRect(1.5, 6.5, 5, 1);
+  g.generateTexture(CONTEXT_OVERFLOW_PAPER_TEX, 8, 10);
+  g.destroy();
+}
+
+/** Soft token-chip square for context_overflow (tinted indigo at emit). */
+function ensureOverflowChipTexture(scene) {
+  if (scene.textures.exists(CONTEXT_OVERFLOW_CHIP_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillRect(0.5, 0.5, 7, 7);
+  g.fillStyle(0xffffff, 0.45);
+  g.fillCircle(4, 4, 1.6);
+  g.generateTexture(CONTEXT_OVERFLOW_CHIP_TEX, 8, 8);
   g.destroy();
 }
 
@@ -1065,6 +1143,11 @@ function isRateLimitEligible(agent) {
   return agent.getEffectKind?.() === "running";
 }
 
+/** running/chatting only — context_overflow stays at desk (same as rate_limit). */
+function isContextOverflowEligible(agent) {
+  return isRateLimitEligible(agent);
+}
+
 /** idle/break only — wifi outage bubbles (mock break → idle kind). */
 function isWifiEligible(agent) {
   if (!agent?.sprite) return false;
@@ -1126,6 +1209,7 @@ export class OfficeEvents {
     this.birthdayBalloonsGathered = 0;
     this.reviewHuddleGathered = 0;
     this.sprintRetroGathered = 0;
+    this.bugBashGathered = 0;
     this.pairProgrammingGathered = 0;
     this.mergeConflictGathered = 0;
     this.hotfixScrambleGathered = 0;
@@ -1143,6 +1227,7 @@ export class OfficeEvents {
     this.phoneRingTarget = null;
     this.oncallPageTarget = null;
     this.rateLimitTarget = null;
+    this.contextOverflowTarget = null;
     this.wetFloorActive = false;
     this.coffeeSpillGathered = 0;
     this.coffeeSpillActive = false;
@@ -1257,6 +1342,8 @@ export class OfficeEvents {
         (hour >= REVIEW_PM_START && hour < REVIEW_PM_END));
     const retroWindow =
       weekday && hour >= RETRO_HOUR_START && hour < RETRO_HOUR_END;
+    const bugBashWindow =
+      weekday && hour >= BUG_BASH_HOUR_START && hour < BUG_BASH_HOUR_END;
     const coffeeSpillWindow =
       hour >= COFFEE_SPILL_HOUR_START && hour < COFFEE_SPILL_HOUR_END;
     const pairWindow =
@@ -1271,6 +1358,8 @@ export class OfficeEvents {
       weekday && hour >= FREEZE_HOUR_START && hour < FREEZE_HOUR_END;
     const rateLimitWindow =
       hour >= RATE_LIMIT_HOUR_START && hour < RATE_LIMIT_HOUR_END;
+    const contextOverflowWindow =
+      hour >= CONTEXT_OVERFLOW_HOUR_START && hour < CONTEXT_OVERFLOW_HOUR_END;
     const snackWindow =
       hour >= SNACK_HOUR_START && hour < SNACK_HOUR_END;
     const foodWindow =
@@ -1328,6 +1417,7 @@ export class OfficeEvents {
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
       else if (k === "review_huddle" && reviewWindow) weight = REVIEW_WEIGHT;
       else if (k === "sprint_retro" && retroWindow) weight = RETRO_WEIGHT;
+      else if (k === "bug_bash" && bugBashWindow) weight = BUG_BASH_WEIGHT;
       else if (k === "wet_floor" && raining) weight = WET_FLOOR_RAIN_WEIGHT;
       else if (k === "coffee_spill" && coffeeSpillWindow)
         weight = COFFEE_SPILL_WEIGHT;
@@ -1340,6 +1430,8 @@ export class OfficeEvents {
       else if (k === "code_freeze" && freezeWindow) weight = FREEZE_WEIGHT;
       else if (k === "oncall_page" && eveningNight) weight = ONCALL_WEIGHT;
       else if (k === "rate_limit" && rateLimitWindow) weight = RATE_LIMIT_WEIGHT;
+      else if (k === "context_overflow" && contextOverflowWindow)
+        weight = CONTEXT_OVERFLOW_WEIGHT;
       else if (k === "gateway_blip") weight = GATEWAY_BLIP_WEIGHT;
       else if (k === "latency_spike") weight = LATENCY_SPIKE_WEIGHT;
       for (let i = 0; i < weight; i++) pool.push(k);
@@ -1397,6 +1489,7 @@ export class OfficeEvents {
     else if (kind === "birthday_balloons") this.runBirthdayBalloons();
     else if (kind === "review_huddle") this.runReviewHuddle();
     else if (kind === "sprint_retro") this.runSprintRetro();
+    else if (kind === "bug_bash") this.runBugBash();
     else if (kind === "coffee_spill") this.runCoffeeSpill();
     else if (kind === "pair_programming") this.runPairProgramming();
     else if (kind === "merge_conflict") this.runMergeConflict();
@@ -1407,6 +1500,7 @@ export class OfficeEvents {
     else if (kind === "code_freeze") this.runCodeFreeze();
     else if (kind === "oncall_page") this.runOncallPage();
     else if (kind === "rate_limit") this.runRateLimit();
+    else if (kind === "context_overflow") this.runContextOverflow();
     else if (kind === "gateway_blip") this.runGatewayBlip();
     else if (kind === "latency_spike") this.runLatencySpike();
 
@@ -1964,7 +2058,8 @@ export class OfficeEvents {
           agent._waterBackup == null &&
           agent._wifiBackup == null &&
           agent._phoneBackup == null &&
-          agent._oncallBackup == null
+          agent._oncallBackup == null &&
+          agent._overflowBackup == null
         ) {
           agent.setStatus(agent._rateLimitBackup);
         }
@@ -1989,6 +2084,176 @@ export class OfficeEvents {
       }
       this.rateLimitTarget = null;
     });
+  }
+
+  /**
+   * Context overflow: one running/chatting agent bubble + soft violet/indigo
+   * scroll-paper / token-chip particles + soft blip SFX. No gather/move.
+   * Skip if gather active or no target. Not rate_limit magenta pulse /
+   * latency_spike overlay+stutter.
+   */
+  runContextOverflow() {
+    if (this.isGathering()) return;
+
+    const agents = shuffleInPlace(
+      (this.scene.agents || []).filter((a) => isContextOverflowEligible(a)),
+    );
+    const agent = agents[0];
+    if (!agent?.sprite) return;
+
+    const toast =
+      CONTEXT_OVERFLOW_TOASTS[
+        Math.floor(Math.random() * CONTEXT_OVERFLOW_TOASTS.length)
+      ];
+    this.showToast(toast, 2600);
+    this.playContextOverflowBlip();
+
+    const duration =
+      CONTEXT_OVERFLOW_MIN_MS +
+      Math.floor(
+        Math.random() *
+          (CONTEXT_OVERFLOW_MAX_MS - CONTEXT_OVERFLOW_MIN_MS + 1),
+      );
+    const spr = agent.sprite;
+    const x = spr.x;
+    const y = spr.y - 4;
+
+    this.contextOverflowTarget = agent.def?.id ?? agent.def?.name ?? "agent";
+    this.publish();
+
+    const line =
+      CONTEXT_OVERFLOW_LINES[
+        Math.floor(Math.random() * CONTEXT_OVERFLOW_LINES.length)
+      ];
+    agent._overflowBackup = agent.statusText;
+    agent.setStatus(line);
+
+    const particleCleanup = this.spawnContextOverflowParticles(x, y, duration);
+
+    const restore = this.scene.time.delayedCall(duration, () => {
+      if (agent._overflowBackup != null) {
+        if (
+          !agent._expandTimer &&
+          agent._bossGreetBackup == null &&
+          agent._coffeeBackup == null &&
+          agent._workBackup == null &&
+          agent._specBackup == null &&
+          agent._stretchBackup == null &&
+          agent._waterBackup == null &&
+          agent._wifiBackup == null &&
+          agent._phoneBackup == null &&
+          agent._oncallBackup == null &&
+          agent._rateLimitBackup == null
+        ) {
+          agent.setStatus(agent._overflowBackup);
+        }
+        agent._overflowBackup = null;
+      }
+      this.contextOverflowTarget = null;
+      this.publish();
+    });
+
+    this.track(() => {
+      restore.remove(false);
+      try {
+        particleCleanup?.();
+      } catch {
+        /* ignore */
+      }
+      if (agent._overflowBackup != null) {
+        agent.setStatus(agent._overflowBackup);
+        agent._overflowBackup = null;
+      }
+      this.contextOverflowTarget = null;
+    });
+  }
+
+  /** Soft violet/indigo paper scraps + token chips floating up around agent. */
+  spawnContextOverflowParticles(x, y, lifeMs) {
+    ensureOverflowPaperTexture(this.scene);
+    ensureOverflowChipTexture(this.scene);
+    const paper = this.scene.add.particles(x, y, CONTEXT_OVERFLOW_PAPER_TEX, {
+      speedX: { min: -28, max: 28 },
+      speedY: { min: -55, max: -18 },
+      gravityY: 12,
+      scale: { start: 0.95, end: 0.25 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 700, max: 1400 },
+      frequency: 90,
+      quantity: 1,
+      rotate: { min: -35, max: 35 },
+      tint: [CONTEXT_OVERFLOW_VIOLET, 0xc8b8ff, 0xffffff],
+      blendMode: "NORMAL",
+    });
+    paper.setDepth(12);
+    const chips = this.scene.add.particles(x, y + 2, CONTEXT_OVERFLOW_CHIP_TEX, {
+      speedX: { min: -40, max: 40 },
+      speedY: { min: -48, max: -10 },
+      gravityY: 18,
+      scale: { start: 0.85, end: 0.2 },
+      alpha: { start: 0.85, end: 0 },
+      lifespan: { min: 600, max: 1200 },
+      frequency: 110,
+      quantity: 1,
+      rotate: { min: -60, max: 60 },
+      tint: [CONTEXT_OVERFLOW_INDIGO, CONTEXT_OVERFLOW_VIOLET, 0xa8b0ff],
+      blendMode: "ADD",
+    });
+    chips.setDepth(12);
+    const stop = this.scene.time.delayedCall(lifeMs, () => {
+      paper.stop();
+      chips.stop();
+      this.scene.time.delayedCall(1400, () => {
+        try {
+          paper.destroy();
+        } catch {
+          /* ignore */
+        }
+        try {
+          chips.destroy();
+        } catch {
+          /* ignore */
+        }
+      });
+    });
+    return () => {
+      stop.remove(false);
+      try {
+        paper.destroy();
+      } catch {
+        /* ignore */
+      }
+      try {
+        chips.destroy();
+      } catch {
+        /* ignore */
+      }
+    };
+  }
+
+  /** Soft overflow blip — skip if muted/locked. */
+  playContextOverflowBlip() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.setValueAtTime(620, t0);
+      osc.frequency.exponentialRampToValueAtTime(340, t0 + 0.12);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.024, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.15);
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /** Soft magenta ADD stroke under feet — quieter than phone/oncall head pulse. */
@@ -5283,6 +5548,219 @@ export class OfficeEvents {
     }
   }
 
+  /**
+   * Bug bash: toast + amber/lime bug stickies at War Room whiteboard +
+   * idle 2–4 → meeting ring 4–7s + 1–2 debug bubbles. Skip if gathering.
+   * Distinct from review_huddle / sprint_retro / hotfix_scramble.
+   */
+  runBugBash() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      BUG_BASH_HOLD_MIN_MS +
+      Math.floor(
+        Math.random() * (BUG_BASH_HOLD_MAX_MS - BUG_BASH_HOLD_MIN_MS + 1),
+      );
+    this.markGathering(holdMs + 12000);
+    const toast =
+      BUG_BASH_TOASTS[Math.floor(Math.random() * BUG_BASH_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playBugBashPop();
+
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const anchor = findWhiteboardAnchor(this.scene);
+    const px = Number.isFinite(anchor?.x)
+      ? anchor.x
+      : tileCenter(this.scene, meet.x, meet.y).x;
+    const py = Number.isFinite(anchor?.y)
+      ? anchor.y
+      : tileCenter(this.scene, meet.x, meet.y).y;
+    this.spawnBugBashStickies(px, py, Math.min(4500, holdMs));
+
+    const glow = this.scene.add.circle(px, py + 8, 48, 0xc8e050, 0.3);
+    glow.setDepth(7);
+    glow.setBlendMode(Phaser.BlendModes.ADD);
+    const tween = this.scene.tweens.add({
+      targets: glow,
+      alpha: 0,
+      scale: 1.35,
+      duration: Math.min(2800, holdMs),
+      ease: "Sine.easeOut",
+      onComplete: () => glow.destroy(),
+    });
+    this.track(() => {
+      tween.stop();
+      glow.destroy();
+    });
+
+    void this.gatherIdleToBugBash(holdMs);
+  }
+
+  /** Soft amber/lime bug-sticker flecks at whiteboard. */
+  spawnBugBashStickies(x, y, ms = 3500) {
+    ensureBugBashStickyTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, BUG_BASH_STICKY_TEX, {
+      speedX: { min: -28, max: 28 },
+      speedY: { min: -30, max: 8 },
+      gravityY: 24,
+      scale: { start: 0.95, end: 0.3 },
+      alpha: { start: 0.92, end: 0 },
+      lifespan: { min: 750, max: 1350 },
+      frequency: 65,
+      quantity: 1,
+      tint: BUG_BASH_TINTS,
+      rotate: { min: -35, max: 35 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle 2–4 → War Room meeting ±1; hold 4–7s; 1–2 get debug bubbles. */
+  async gatherIdleToBugBash(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const meet = this.scene.waypoints?.meeting || { x: 17, y: 10 };
+    const spots = meetingOffsets(meet);
+    const hold =
+      holdMs ??
+      BUG_BASH_HOLD_MIN_MS +
+        Math.floor(
+          Math.random() * (BUG_BASH_HOLD_MAX_MS - BUG_BASH_HOLD_MIN_MS + 1),
+        );
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    // 1–2 idle bubbles among gathered
+    const bubblePool = shuffleInPlace(moved.slice());
+    const bubbleN = Math.min(
+      bubblePool.length,
+      1 + Math.floor(Math.random() * 2),
+    );
+    for (let i = 0; i < bubbleN; i++) {
+      const agent = bubblePool[i];
+      agent._bugBashBackup = agent.statusText;
+      agent.setStatus(
+        BUG_BASH_LINES[Math.floor(Math.random() * BUG_BASH_LINES.length)],
+      );
+    }
+
+    this.bugBashGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (agent._bugBashBackup != null) {
+          if (
+            !agent._expandTimer &&
+            agent._bossGreetBackup == null &&
+            agent._coffeeBackup == null &&
+            agent._workBackup == null &&
+            agent._specBackup == null &&
+            agent._stretchBackup == null &&
+            agent._phoneBackup == null &&
+            agent._waterBackup == null &&
+            agent._wifiBackup == null &&
+            agent._freezeBackup == null &&
+            agent._flakyBackup == null &&
+            agent._buildFailBackup == null
+          ) {
+            agent.setStatus(agent._bugBashBackup);
+          }
+          agent._bugBashBackup = null;
+        }
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      this.bugBashGathered = 0;
+      this.publish();
+    });
+    this.track(() => {
+      restore.remove(false);
+      for (const agent of moved) {
+        if (agent._bugBashBackup != null) {
+          agent.setStatus(agent._bugBashBackup);
+          agent._bugBashBackup = null;
+        }
+      }
+      this.bugBashGathered = 0;
+    });
+  }
+
+  /** Soft sticker pop — skip if muted/locked. */
+  playBugBashPop() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(620, t0);
+      osc.frequency.exponentialRampToValueAtTime(980, t0 + 0.05);
+      osc.frequency.exponentialRampToValueAtTime(440, t0 + 0.12);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.032, t0 + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.14);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.15);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
 
   /**
    * Pair programming: toast + cyan/teal monitor sparkle at dualDesk +
@@ -6285,6 +6763,7 @@ export class OfficeEvents {
       birthdayBalloonsGathered: this.birthdayBalloonsGathered,
       reviewHuddleGathered: this.reviewHuddleGathered,
       sprintRetroGathered: this.sprintRetroGathered,
+      bugBashGathered: this.bugBashGathered,
       pairProgrammingGathered: this.pairProgrammingGathered,
       mergeConflictGathered: this.mergeConflictGathered,
       hotfixScrambleGathered: this.hotfixScrambleGathered,
@@ -6297,6 +6776,7 @@ export class OfficeEvents {
       phoneRingTarget: this.phoneRingTarget,
       oncallPageTarget: this.oncallPageTarget,
       rateLimitTarget: this.rateLimitTarget,
+      contextOverflowTarget: this.contextOverflowTarget,
       wetFloorActive: this.wetFloorActive,
       coffeeSpillGathered: this.coffeeSpillGathered,
       coffeeSpillActive: this.coffeeSpillActive,
