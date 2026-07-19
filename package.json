@@ -69,6 +69,7 @@
     "smoke:donutfriday": "node scripts/smoke-donutfriday.mjs",
     "smoke:midnightsnack": "node scripts/smoke-midnightsnack.mjs",
     "smoke:fooddelivery": "node scripts/smoke-fooddelivery.mjs",
+    "smoke:teatime": "node scripts/smoke-teatime.mjs",
     "smoke:pairprogramming": "node scripts/smoke-pairprogramming.mjs",
     "smoke:mergeconflict": "node scripts/smoke-mergeconflict.mjs",
     "smoke:hotfixscramble": "node scripts/smoke-hotfixscramble.mjs",

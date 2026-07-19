@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` / `?events=food_delivery` / `?events=tea_time` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -39,6 +39,7 @@ const RANDOM_KINDS = [
   "donut_friday",
   "midnight_snack",
   "food_delivery",
+  "tea_time",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -272,6 +273,17 @@ const FOOD_LUNCH_END = 13;
 const FOOD_DINNER_START = 17;
 const FOOD_DINNER_END = 20;
 const FOOD_WEIGHT = 3;
+/** tea_time: lounge gather + soft steam/mug (ms); weekday 14–16 weight↑ */
+const TEA_HOLD_MIN_MS = 5000;
+const TEA_HOLD_MAX_MS = 8000;
+const TEA_TOASTS = ["티타임!", "홍차 각?"];
+const TEA_MUG_TEX = "fx-tea-mug";
+/** soft cream / amber tea tint */
+const TEA_MUG_TINTS = [0xffe8c8, 0xe8c090, 0xd4a060, 0xfff0d8];
+/** weekday 14–16: higher pick weight */
+const TEA_HOUR_START = 14;
+const TEA_HOUR_END = 16;
+const TEA_WEIGHT = 3;
 /** Tiny confetti bit for deploy_celebrate (taskCelebrate-style). */
 const DEPLOY_CONFETTI_TEX = "fx-confetti";
 /** while raining: higher pick weight for wet_floor */
@@ -552,6 +564,25 @@ function ensureFoodBagTexture(scene) {
   g.fillStyle(0xffffff, 0.4);
   g.fillRect(4, 8, 3, 5);
   g.generateTexture(FOOD_BAG_TEX, 16, 16);
+  g.destroy();
+}
+
+/** Soft tea mug silhouette for tea_time (cream/amber tint at emit). */
+function ensureTeaMugTexture(scene) {
+  if (scene.textures.exists(TEA_MUG_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  // cup body
+  g.fillStyle(0xffffff, 1);
+  g.fillRoundedRect(3, 4, 9, 10, 1.5);
+  // handle
+  g.fillStyle(0xffffff, 0.95);
+  g.fillRect(11, 7, 3, 1.5);
+  g.fillRect(13, 7, 1.5, 4);
+  g.fillRect(11, 10, 3, 1.5);
+  // rim highlight
+  g.fillStyle(0xffffff, 0.45);
+  g.fillRect(4, 5, 7, 1.5);
+  g.generateTexture(TEA_MUG_TEX, 16, 16);
   g.destroy();
 }
 
@@ -945,6 +976,7 @@ export class OfficeEvents {
     this.donutFridayGathered = 0;
     this.midnightSnackGathered = 0;
     this.foodDeliveryGathered = 0;
+    this.teaTimeGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.codeFreezeAffected = 0;
@@ -1085,6 +1117,8 @@ export class OfficeEvents {
       weekday &&
       ((hour >= FOOD_LUNCH_START && hour < FOOD_LUNCH_END) ||
         (hour >= FOOD_DINNER_START && hour < FOOD_DINNER_END));
+    const teaWindow =
+      weekday && hour >= TEA_HOUR_START && hour < TEA_HOUR_END;
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
@@ -1101,6 +1135,7 @@ export class OfficeEvents {
         weight = friday ? DONUT_FRIDAY_WEIGHT : DONUT_WEEKDAY_WEIGHT;
       else if (k === "midnight_snack" && snackWindow) weight = SNACK_WEIGHT;
       else if (k === "food_delivery" && foodWindow) weight = FOOD_WEIGHT;
+      else if (k === "tea_time" && teaWindow) weight = TEA_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
@@ -1155,6 +1190,7 @@ export class OfficeEvents {
     else if (kind === "donut_friday") this.runDonutFriday();
     else if (kind === "midnight_snack") this.runMidnightSnack();
     else if (kind === "food_delivery") this.runFoodDelivery();
+    else if (kind === "tea_time") this.runTeaTime();
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
@@ -2643,6 +2679,160 @@ export class OfficeEvents {
       gain.connect(ctx.destination);
       osc.start(t0);
       osc.stop(t0 + 0.2);
+    } catch {
+      /* autoplay / headless */
+    }
+  }
+
+  /**
+   * Tea time: toast + soft steam/mug at lounge (coffee/cooler) + idle gather 5–8s.
+   * Skip if another gather is active. Cup clink respects mute/lock.
+   * Weekday 14–16 weight↑ in fireRandom.
+   */
+  runTeaTime() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      TEA_HOLD_MIN_MS +
+      Math.floor(Math.random() * (TEA_HOLD_MAX_MS - TEA_HOLD_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    const toast =
+      TEA_TOASTS[Math.floor(Math.random() * TEA_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playTeaClink();
+
+    const coffee = findCoffeeTile(this.scene);
+    this.spawnSteamBurst(coffee.x, coffee.y - 8, Math.min(4000, holdMs));
+    this.spawnTeaMugParticles(coffee.x, coffee.y - 10, Math.min(4000, holdMs));
+    void this.gatherIdleToTeaTime(holdMs);
+  }
+
+  /** Soft cream/amber mug flecks at lounge coffee. */
+  spawnTeaMugParticles(x, y, ms = 4000) {
+    ensureTeaMugTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, TEA_MUG_TEX, {
+      speed: { min: 12, max: 42 },
+      angle: { min: 200, max: 340 },
+      gravityY: 22,
+      scale: { start: 0.85, end: 0.25 },
+      alpha: { start: 0.9, end: 0 },
+      lifespan: { min: 700, max: 1200 },
+      frequency: 110,
+      quantity: 1,
+      tint: TEA_MUG_TINTS,
+      rotate: { min: -25, max: 25 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/break 2–4 → lounge spots; hold 5–8s → wander restore. */
+  async gatherIdleToTeaTime(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const hold =
+      holdMs ??
+      TEA_HOLD_MIN_MS +
+        Math.floor(Math.random() * (TEA_HOLD_MAX_MS - TEA_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.teaTimeGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft cup clink for tea_time — skip if muted/locked. */
+  playTeaClink() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const notes = [880, 1175]; // A5 → D6 — softer than happy clink
+      for (let i = 0; i < notes.length; i++) {
+        const start = t0 + i * 0.06;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(notes[i], start);
+        gain.gain.setValueAtTime(0.0001, start);
+        gain.gain.exponentialRampToValueAtTime(0.03, start + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.0001, start + 0.18);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(start);
+        osc.stop(start + 0.2);
+      }
     } catch {
       /* autoplay / headless */
     }
@@ -4805,6 +4995,7 @@ export class OfficeEvents {
       donutFridayGathered: this.donutFridayGathered,
       midnightSnackGathered: this.midnightSnackGathered,
       foodDeliveryGathered: this.foodDeliveryGathered,
+      teaTimeGathered: this.teaTimeGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       codeFreezeAffected: this.codeFreezeAffected,
