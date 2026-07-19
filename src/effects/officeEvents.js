@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -36,6 +36,7 @@ const RANDOM_KINDS = [
   "build_fail",
   "code_freeze",
   "sprint_retro",
+  "donut_friday",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -232,6 +233,16 @@ const WATER_WEIGHT = 3;
 const PIZZA_HOUR_START = 16;
 const PIZZA_HOUR_END = 18;
 const PIZZA_WEIGHT = 3;
+/** donut_friday: lounge gather + soft glaze donuts (ms); Fri weight↑ */
+const DONUT_HOLD_MIN_MS = 6000;
+const DONUT_HOLD_MAX_MS = 10000;
+const DONUT_TOASTS = ["도넛이다!", "불금 도넛?", "Friday glaze"];
+const DONUT_TEX = "fx-donut";
+/** soft pink / glaze / cream */
+const DONUT_TINTS = [0xffb0c8, 0xffd4a8, 0xffe8f0];
+/** weekday weight=1, Friday=4 */
+const DONUT_WEEKDAY_WEIGHT = 1;
+const DONUT_FRIDAY_WEIGHT = 4;
 /** Tiny confetti bit for deploy_celebrate (taskCelebrate-style). */
 const DEPLOY_CONFETTI_TEX = "fx-confetti";
 /** while raining: higher pick weight for wet_floor */
@@ -428,6 +439,24 @@ function ensureRetroStickyTexture(scene) {
   g.fillRect(3, 7, 4.5, 1.2);
   g.generateTexture(RETRO_STICKY_TEX, 12, 12);
   g.destroy();
+}
+
+/** Soft donut ring for donut_friday (pink/glaze tint at emit). */
+function ensureDonutTexture(scene) {
+  if (scene.textures.exists(DONUT_TEX)) return;
+  const canvas = scene.textures.createCanvas(DONUT_TEX, 16, 16);
+  const ctx = canvas.getContext();
+  ctx.clearRect(0, 0, 16, 16);
+  ctx.beginPath();
+  ctx.arc(8, 8, 7, 0, Math.PI * 2);
+  ctx.arc(8, 8, 2.8, 0, Math.PI * 2, true);
+  ctx.fillStyle = "#ffffff";
+  ctx.fill("evenodd");
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.beginPath();
+  ctx.ellipse(5.5, 5, 4, 2.5, 0, 0, Math.PI * 2);
+  ctx.fill();
+  canvas.refresh();
 }
 
 /**
@@ -817,6 +846,7 @@ export class OfficeEvents {
     this.stretchAffected = 0;
     this.waterCoolerGathered = 0;
     this.pizzaPartyGathered = 0;
+    this.donutFridayGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.codeFreezeAffected = 0;
@@ -960,6 +990,8 @@ export class OfficeEvents {
         weight = MICROWAVE_WEIGHT;
       else if (k === "water_cooler" && waterWindow) weight = WATER_WEIGHT;
       else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
+      else if (k === "donut_friday")
+        weight = friday ? DONUT_FRIDAY_WEIGHT : DONUT_WEEKDAY_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
@@ -1011,6 +1043,7 @@ export class OfficeEvents {
     else if (kind === "stretch_break") this.runStretchBreak();
     else if (kind === "water_cooler") this.runWaterCooler();
     else if (kind === "pizza_party") this.runPizzaParty();
+    else if (kind === "donut_friday") this.runDonutFriday();
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
@@ -2086,6 +2119,157 @@ export class OfficeEvents {
       }
     });
     this.track(() => restore.remove(false));
+  }
+
+  /**
+   * Donut Friday: toast + soft pink/glaze donuts at lounge + idle 2–4 gather 6–10s.
+   * Skip if another gather is active. Optional bite SFX (mute-safe).
+   * No running/blocked (isStandupGatherable). Fri weight↑ in fireRandom.
+   */
+  runDonutFriday() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      DONUT_HOLD_MIN_MS +
+      Math.floor(Math.random() * (DONUT_HOLD_MAX_MS - DONUT_HOLD_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    const toast =
+      DONUT_TOASTS[Math.floor(Math.random() * DONUT_TOASTS.length)];
+    this.showToast(toast, 3200);
+    this.playDonutBite();
+
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const { x, y } = tileCenter(this.scene, br.x, br.y);
+    this.spawnDonutParticles(x, y - 10, Math.min(4500, holdMs));
+    void this.gatherIdleToDonutFriday(holdMs);
+  }
+
+  /** Soft pink/glaze donut flecks at lounge. */
+  spawnDonutParticles(x, y, ms = 4000) {
+    ensureDonutTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, DONUT_TEX, {
+      speed: { min: 18, max: 62 },
+      angle: { min: 0, max: 360 },
+      gravityY: 28,
+      scale: { start: 0.9, end: 0.3 },
+      alpha: { start: 0.92, end: 0 },
+      lifespan: { min: 700, max: 1300 },
+      frequency: 70,
+      quantity: 1,
+      tint: DONUT_TINTS,
+      rotate: { min: -40, max: 40 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/break 2–4 → lounge spots; hold 6–10s → wander restore. */
+  async gatherIdleToDonutFriday(holdMs) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const br = this.scene.waypoints?.break || { x: 31, y: 4 };
+    const lou = this.scene.waypoints?.lounge;
+    const spots =
+      Array.isArray(lou) && lou.length
+        ? shuffleInPlace([...lou])
+        : [
+            br,
+            { x: br.x - 1, y: br.y + 1 },
+            { x: br.x + 1, y: br.y },
+            { x: br.x + 2, y: br.y - 1 },
+            { x: br.x - 2, y: br.y },
+          ];
+    const hold =
+      holdMs ??
+      DONUT_HOLD_MIN_MS +
+        Math.floor(Math.random() * (DONUT_HOLD_MAX_MS - DONUT_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.donutFridayGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
+  }
+
+  /** Soft donut-bite blip — skip if muted/locked. */
+  playDonutBite() {
+    const audio = this.scene.officeAudio;
+    if (!audio || audio.muted || !audio.unlocked) return;
+    try {
+      const ctx = this.scene.sound?.context;
+      if (!ctx) return;
+      const t0 = ctx.currentTime;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.setValueAtTime(280, t0);
+      osc.frequency.exponentialRampToValueAtTime(140, t0 + 0.08);
+      gain.gain.setValueAtTime(0.0001, t0);
+      gain.gain.exponentialRampToValueAtTime(0.035, t0 + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.1);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start(t0);
+      osc.stop(t0 + 0.12);
+    } catch {
+      /* autoplay / headless */
+    }
   }
 
   /**
@@ -4242,6 +4426,7 @@ export class OfficeEvents {
       stretchAffected: this.stretchAffected,
       waterCoolerGathered: this.waterCoolerGathered,
       pizzaPartyGathered: this.pizzaPartyGathered,
+      donutFridayGathered: this.donutFridayGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       codeFreezeAffected: this.codeFreezeAffected,
