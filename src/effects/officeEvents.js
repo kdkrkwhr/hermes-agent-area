@@ -1,4 +1,4 @@
-/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` force. */
+/** Random FE-only office events: toast + particles. `?events=0` off, `?events=1` fast, `?events=code_freeze` / `?events=build_fail` / `?events=sprint_retro` / `?events=donut_friday` / `?events=midnight_snack` force. */
 
 import Phaser from "phaser";
 import { findWhiteboardAnchor } from "../ui/whiteboardTicker.js";
@@ -37,6 +37,7 @@ const RANDOM_KINDS = [
   "code_freeze",
   "sprint_retro",
   "donut_friday",
+  "midnight_snack",
 ];
 /** wifi_outage: soft gray overlay + idle bubbles (ms) — not full blackout */
 const WIFI_MIN_MS = 2000;
@@ -142,6 +143,7 @@ const PIZZA_HOLD_MAX_MS = 12000;
 const ALL_HANDS_HOLD_MIN_MS = 8000;
 const ALL_HANDS_HOLD_MAX_MS = 12000;
 const COFFEE_GID = 16;
+const VENDING_GID = 38;
 const FRIDGE_GID = 39;
 const MICROWAVE_GID = 40;
 const WATER_COOLER_GID = 41;
@@ -243,6 +245,17 @@ const DONUT_TINTS = [0xffb0c8, 0xffd4a8, 0xffe8f0];
 /** weekday weight=1, Friday=4 */
 const DONUT_WEEKDAY_WEIGHT = 1;
 const DONUT_FRIDAY_WEIGHT = 4;
+/** midnight_snack: fridge/vending gather + steam/crumb (ms); evening/night only */
+const SNACK_HOLD_MIN_MS = 6000;
+const SNACK_HOLD_MAX_MS = 10000;
+const SNACK_TOASTS = ["야식?", "컵라면 각", "냉장고 털자"];
+const SNACK_CRUMB_TEX = "fx-snack-crumb";
+/** soft noodle cream / brown crumb */
+const SNACK_CRUMB_TINTS = [0xffe8c0, 0xd4a574, 0xfff0d8, 0xc09060];
+/** hour 20–24: higher pick weight; else weight=1 (evening/night only) */
+const SNACK_HOUR_START = 20;
+const SNACK_HOUR_END = 24;
+const SNACK_WEIGHT = 3;
 /** Tiny confetti bit for deploy_celebrate (taskCelebrate-style). */
 const DEPLOY_CONFETTI_TEX = "fx-confetti";
 /** while raining: higher pick weight for wet_floor */
@@ -311,6 +324,36 @@ function findCoffeeSpillTile(scene) {
     }
     if (fridge) return fridge;
     if (microwave) return microwave;
+  }
+  const lou = scene.waypoints?.lounge;
+  if (Array.isArray(lou) && lou.length) {
+    const spot = lou[Math.floor(Math.random() * lou.length)];
+    return { x: spot.x, y: spot.y };
+  }
+  const br = scene.waypoints?.break || { x: 31, y: 4 };
+  return { x: br.x, y: br.y };
+}
+
+/**
+ * midnight_snack anchor: fridge(GID39) / vending(GID38) → lounge/break.
+ * @returns {{x:number,y:number}} tile coords
+ */
+function findMidnightSnackTile(scene) {
+  const layer = scene.furniture;
+  const anchors = [];
+  if (layer?.getTileAt) {
+    for (let ty = 0; ty < scene.map.height; ty++) {
+      for (let tx = 0; tx < scene.map.width; tx++) {
+        const tile = layer.getTileAt(tx, ty);
+        if (!tile) continue;
+        if (tile.index === FRIDGE_GID || tile.index === VENDING_GID) {
+          anchors.push({ x: tx, y: ty });
+        }
+      }
+    }
+  }
+  if (anchors.length) {
+    return anchors[Math.floor(Math.random() * anchors.length)];
   }
   const lou = scene.waypoints?.lounge;
   if (Array.isArray(lou) && lou.length) {
@@ -457,6 +500,18 @@ function ensureDonutTexture(scene) {
   ctx.ellipse(5.5, 5, 4, 2.5, 0, 0, Math.PI * 2);
   ctx.fill();
   canvas.refresh();
+}
+
+/** Soft snack crumb fleck for midnight_snack. */
+function ensureSnackCrumbTexture(scene) {
+  if (scene.textures.exists(SNACK_CRUMB_TEX)) return;
+  const g = scene.make.graphics({ add: false });
+  g.fillStyle(0xffffff, 1);
+  g.fillCircle(4, 4, 3.5);
+  g.fillStyle(0xffffff, 0.55);
+  g.fillCircle(3, 3, 1.5);
+  g.generateTexture(SNACK_CRUMB_TEX, 8, 8);
+  g.destroy();
 }
 
 /**
@@ -847,6 +902,7 @@ export class OfficeEvents {
     this.waterCoolerGathered = 0;
     this.pizzaPartyGathered = 0;
     this.donutFridayGathered = 0;
+    this.midnightSnackGathered = 0;
     this.allHandsGathered = 0;
     this.wifiOutageAffected = 0;
     this.codeFreezeAffected = 0;
@@ -941,7 +997,9 @@ export class OfficeEvents {
 
   fireRandom() {
     if (!this.enabled) return;
-    const night = this.scene.lightingPreset?.name === "night";
+    const presetName = this.scene.lightingPreset?.name;
+    const night = presetName === "night";
+    const eveningNight = presetName === "evening" || night;
     const now = new Date();
     const hour = now.getHours();
     const weekday = now.getDay() >= 1 && now.getDay() <= 5;
@@ -979,11 +1037,14 @@ export class OfficeEvents {
         (hour >= HOTFIX_PM_START && hour < HOTFIX_PM_END));
     const freezeWindow =
       weekday && hour >= FREEZE_HOUR_START && hour < FREEZE_HOUR_END;
+    const snackWindow =
+      hour >= SNACK_HOUR_START && hour < SNACK_HOUR_END;
     const friday = now.getDay() === 5;
     const raining = isRainingNow(this.scene);
     const pool = [];
     for (const k of RANDOM_KINDS) {
       if (k === "quiet_hours" && !night) continue;
+      if (k === "midnight_snack" && !eveningNight) continue;
       let weight = 1;
       if (k === "lunch_rush" && lunchWindow) weight = LUNCH_WEIGHT;
       else if (k === "microwave_ding" && microwaveWindow)
@@ -992,6 +1053,7 @@ export class OfficeEvents {
       else if (k === "pizza_party" && pizzaWindow) weight = PIZZA_WEIGHT;
       else if (k === "donut_friday")
         weight = friday ? DONUT_FRIDAY_WEIGHT : DONUT_WEEKDAY_WEIGHT;
+      else if (k === "midnight_snack" && snackWindow) weight = SNACK_WEIGHT;
       else if (k === "happy_hour" && happyWindow)
         weight = friday ? HAPPY_FRIDAY_WEIGHT : HAPPY_WEIGHT;
       else if (k === "deploy_celebrate" && deployWindow) weight = DEPLOY_WEIGHT;
@@ -1044,6 +1106,7 @@ export class OfficeEvents {
     else if (kind === "water_cooler") this.runWaterCooler();
     else if (kind === "pizza_party") this.runPizzaParty();
     else if (kind === "donut_friday") this.runDonutFriday();
+    else if (kind === "midnight_snack") this.runMidnightSnack();
     else if (kind === "paper_airplane") this.runPaperAirplane();
     else if (kind === "phone_ring") this.runPhoneRing();
     else if (kind === "wet_floor") this.runWetFloor();
@@ -2270,6 +2333,122 @@ export class OfficeEvents {
     } catch {
       /* autoplay / headless */
     }
+  }
+
+  /**
+   * Midnight snack: toast + steam/crumb at fridge/vending + idle 2–4 gather 6–10s.
+   * Skip if another gather is active. evening/night only in fireRandom (force OK).
+   * Anchor: fridge(GID39)/vending(GID38) → lounge/break. Depth 11–12 (idle FX untouched).
+   */
+  runMidnightSnack() {
+    if (this.isGathering()) return;
+
+    const holdMs =
+      SNACK_HOLD_MIN_MS +
+      Math.floor(Math.random() * (SNACK_HOLD_MAX_MS - SNACK_HOLD_MIN_MS + 1));
+    this.markGathering(holdMs + 12000);
+    const toast =
+      SNACK_TOASTS[Math.floor(Math.random() * SNACK_TOASTS.length)];
+    this.showToast(toast, 3200);
+
+    const pt = findMidnightSnackTile(this.scene);
+    const { x, y } = tileCenter(this.scene, pt.x, pt.y);
+    this.spawnSteamBurst(x, y - 8, Math.min(4500, holdMs));
+    this.spawnSnackCrumbParticles(x, y - 6, Math.min(4500, holdMs));
+    void this.gatherIdleToMidnightSnack(holdMs, pt);
+  }
+
+  /** Soft cream/brown crumb flecks at snack anchor. */
+  spawnSnackCrumbParticles(x, y, ms = 4000) {
+    ensureSnackCrumbTexture(this.scene);
+    const emitter = this.scene.add.particles(x, y, SNACK_CRUMB_TEX, {
+      speed: { min: 14, max: 48 },
+      angle: { min: 0, max: 360 },
+      gravityY: 36,
+      scale: { start: 0.95, end: 0.25 },
+      alpha: { start: 0.88, end: 0 },
+      lifespan: { min: 600, max: 1100 },
+      frequency: 80,
+      quantity: 1,
+      tint: SNACK_CRUMB_TINTS,
+      rotate: { min: -50, max: 50 },
+    });
+    emitter.setDepth(12);
+    const stop = this.scene.time.delayedCall(ms, () => {
+      emitter.stop();
+      this.scene.time.delayedCall(800, () => emitter.destroy());
+    });
+    this.track(() => {
+      stop.remove(false);
+      try {
+        emitter.destroy();
+      } catch {
+        /* ignore */
+      }
+    });
+  }
+
+  /** Idle/break 2–4 → fridge/vending ±1 ring; hold 6–10s → wander restore. */
+  async gatherIdleToMidnightSnack(holdMs, anchorTile) {
+    const agents = this.scene.agents || [];
+    const pool = shuffleInPlace(
+      agents.filter((a) => isStandupGatherable(a)),
+    );
+    const want = Math.min(pool.length, 2 + Math.floor(Math.random() * 3));
+    const candidates = pool.slice(0, want);
+    const pt = anchorTile || findMidnightSnackTile(this.scene);
+    const spots = meetingOffsets(pt);
+    const hold =
+      holdMs ??
+      SNACK_HOLD_MIN_MS +
+        Math.floor(Math.random() * (SNACK_HOLD_MAX_MS - SNACK_HOLD_MIN_MS + 1));
+    this.markGathering(hold + 10000);
+    const moved = [];
+    let gathered = 0;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const agent = candidates[i];
+      const spot = spots[i % spots.length];
+      let ok = false;
+      try {
+        ok = await agent.moveToTile(spot.x, spot.y);
+        if (!ok) {
+          for (const alt of spots) {
+            if (alt.x === spot.x && alt.y === spot.y) continue;
+            ok = await agent.moveToTile(alt.x, alt.y);
+            if (ok) break;
+          }
+        }
+      } catch {
+        ok = false;
+      }
+      if (!ok) continue;
+      gathered += 1;
+      moved.push(agent);
+      agent.idleUntil = this.scene.time.now + hold + 400;
+    }
+
+    this.midnightSnackGathered = gathered;
+    this.publish();
+
+    if (!moved.length) return;
+
+    const restore = this.scene.time.delayedCall(hold, () => {
+      for (const agent of moved) {
+        if (!isStandupGatherable(agent)) continue;
+        agent.idleUntil = this.scene.time.now + 200;
+        try {
+          if (agent.live && agent.serverStatus === "idle") {
+            void agent.wanderLounge();
+          } else if (!agent.live) {
+            void agent.goRandom();
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+    });
+    this.track(() => restore.remove(false));
   }
 
   /**
@@ -4427,6 +4606,7 @@ export class OfficeEvents {
       waterCoolerGathered: this.waterCoolerGathered,
       pizzaPartyGathered: this.pizzaPartyGathered,
       donutFridayGathered: this.donutFridayGathered,
+      midnightSnackGathered: this.midnightSnackGathered,
       allHandsGathered: this.allHandsGathered,
       wifiOutageAffected: this.wifiOutageAffected,
       codeFreezeAffected: this.codeFreezeAffected,
