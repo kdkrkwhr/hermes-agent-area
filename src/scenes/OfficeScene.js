@@ -333,6 +333,7 @@ export class OfficeScene extends Phaser.Scene {
       onPayload: (payload) => {
         this.weatherFx?.onDeskBriefPayload(payload);
         this.lobbySignage?.updateNews?.(payload);
+        if (payload?.stock) this.lobbySignage?.updateStock?.(payload.stock);
       },
     });
     this.activityTimeline = createActivityTimeline();

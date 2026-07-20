@@ -1,4 +1,4 @@
-/** Lobby wall TV — kanban counts + news headline crawl. `?signage=0` disables. */
+/** Lobby wall TV — kanban / stock / news rotation. `?signage=0` disables. */
 
 import { parseKanbanStats } from "../kanbanPanel.js";
 import { TILE_SIZE } from "../constants.js";
@@ -8,7 +8,7 @@ const TEX_KEY = "lobby-signage-tv";
 /** Above furniture (0); below agent sprites (10). */
 const DEPTH = 8;
 const REFRESH_MS = 3000;
-/** Mode flip between kanban / news (3–5s band). */
+/** Mode flip between kanban / stock / news (3–5s band). */
 const MODE_MS = 4000;
 const NEWS_POLL_MS = 60000;
 const CRAWL_PX_PER_S = 18;
@@ -21,6 +21,8 @@ const COLOR_KANBAN_L1 = "#e8f4ff";
 const COLOR_KANBAN_L2 = "#b0c4d8";
 const COLOR_NEWS_TITLE = "#f0c878";
 const COLOR_NEWS_BODY = "#fff8e8";
+const COLOR_STOCK_TITLE = "#7ee0c8";
+const COLOR_STOCK_BODY = "#d8fff4";
 
 function parseSignageEnabled() {
   if (typeof location === "undefined") return true;
@@ -93,9 +95,54 @@ function ensureTvTexture(scene) {
   g.destroy();
 }
 
-/** Build mode list: always kanban; news only when headlines exist. */
-function buildModes(headlines) {
+/**
+ * Desk-brief / WS stock pack → one crawl line (KOSPI/KOSDAQ + optional tickers).
+ * @param {object|null|undefined} stock
+ * @returns {string}
+ */
+export function formatStockCrawl(stock) {
+  if (!stock || typeof stock !== "object") return "";
+  const parts = [];
+  const pushIdx = (label, row) => {
+    if (!row || (row.index == null && row.price == null)) return;
+    const up =
+      row.status === "up" ||
+      String(row.change || "").trim().startsWith("+") ||
+      Number(row.change_pct ?? row.changePct) > 0;
+    const arrow = up ? "↑" : "↓";
+    const idx = row.index ?? row.price ?? "—";
+    const ch = row.change != null ? String(row.change) : "";
+    parts.push(`${label} ${idx} ${arrow}${ch ? ` ${ch}` : ""}`.trim());
+  };
+  pushIdx("KOSPI", stock.kospi);
+  pushIdx("KOSDAQ", stock.kosdaq);
+  const items = Array.isArray(stock.items)
+    ? stock.items
+    : Array.isArray(stock.markets)
+      ? stock.markets
+      : Array.isArray(stock.stock)
+        ? stock.stock
+        : [];
+  for (const item of items.slice(0, 4)) {
+    if (!item) continue;
+    const name = item.name || item.code || item.symbol;
+    if (!name) continue;
+    const up =
+      item.status === "up" ||
+      String(item.change || "").trim().startsWith("+") ||
+      Number(item.change_pct ?? item.changePct) > 0;
+    const arrow = up ? "↑" : "↓";
+    const price = item.price ?? item.index ?? "";
+    const ch = item.change != null ? String(item.change) : "";
+    parts.push(`${name} ${price} ${arrow}${ch ? ` ${ch}` : ""}`.trim());
+  }
+  return parts.filter(Boolean).join("   ·   ");
+}
+
+/** Build mode list: always kanban; stock/news when data exists. */
+function buildModes(headlines, stockLine) {
   const modes = ["kanban"];
+  if (stockLine) modes.push("stock");
   if (Array.isArray(headlines) && headlines.length > 0) modes.push("news");
   return modes;
 }
@@ -116,6 +163,8 @@ export class LobbySignage {
     this.counts = { running: 0, blocked: 0, idle: 0, done: 0 };
     this.headlines = [];
     this.headlineIdx = 0;
+    this.stockLine = "";
+    this.stockHint = "";
     this.mode = "kanban";
     this.modes = ["kanban"];
     this._kanbanFmt = null;
@@ -195,15 +244,25 @@ export class LobbySignage {
     const snap = this.scene?.lastSnapshot;
     if (snap) this.updateFromSnapshot(snap);
     // also pick up brief cache if panel/WS already filled it
-    const cached =
+    const cachedNews =
       typeof window !== "undefined"
         ? window.__HERMES_AREA__?.deskBrief?.news ??
           window.__HERMES_AREA__?.brief?.news ??
           null
         : null;
-    if (cached) this.updateNews({ news: cached });
+    const cachedStock =
+      typeof window !== "undefined"
+        ? window.__HERMES_AREA__?.deskBrief?.stock ??
+          window.__HERMES_AREA__?.brief?.stock ??
+          null
+        : null;
+    if (cachedNews) this.updateNews({ news: cachedNews });
     else if (this.scene?.deskBriefPanel?.lastPayload?.news) {
       this.updateNews(this.scene.deskBriefPanel.lastPayload);
+    }
+    if (cachedStock) this.updateStock(cachedStock);
+    else if (this.scene?.deskBriefPanel?.lastPayload?.stock) {
+      this.updateStock(this.scene.deskBriefPanel.lastPayload.stock);
     }
   }
 
@@ -212,6 +271,7 @@ export class LobbySignage {
     try {
       const pack = await loadDeskBrief();
       if (pack?.news) this.updateNews(pack);
+      if (pack?.stock) this.updateStock(pack.stock);
     } catch {
       /* offline / Pages — keep last headlines */
     }
@@ -234,31 +294,62 @@ export class LobbySignage {
     const prevKey = this.headlines.join("\n");
     this.headlines = next;
     if (this.headlineIdx >= next.length) this.headlineIdx = 0;
-    this.modes = buildModes(next);
+    this.modes = buildModes(next, this.stockLine);
     if (!next.length && this.mode === "news") {
       this.mode = "kanban";
       this.applyMode(true);
     } else if (key !== prevKey && this.mode === "news") {
       this.applyMode(true);
     }
-    this.publishBriefCache(news);
+    this.publishBriefCache(news, undefined);
   }
 
-  publishBriefCache(news) {
+  /**
+   * Desk-brief / WS stock → soft cyan crawl line. No stock → kanban-only modes.
+   * @param {object|null|undefined} stockOrPack
+   */
+  updateStock(stockOrPack) {
+    if (!this.enabled) return;
+    const stock =
+      stockOrPack?.stock && typeof stockOrPack.stock === "object"
+        ? stockOrPack.stock
+        : stockOrPack;
+    const line = formatStockCrawl(stock);
+    const prev = this.stockLine;
+    this.stockLine = line;
+    this.stockHint = line
+      ? line.length > 22
+        ? `${line.slice(0, 20)}…`
+        : line
+      : "";
+    this.modes = buildModes(this.headlines, this.stockLine);
+    if (!line && this.mode === "stock") {
+      this.mode = "kanban";
+      this.applyMode(true);
+    } else if (line && line !== prev && this.mode === "stock") {
+      this.applyMode(true);
+    }
+    this.publishBriefCache(undefined, stock);
+  }
+
+  publishBriefCache(news, stock) {
     if (typeof window === "undefined") return;
+    const prev = (window.__HERMES_AREA__ || {}).brief || {};
     window.__HERMES_AREA__ = {
       ...(window.__HERMES_AREA__ || {}),
       brief: {
-        ...((window.__HERMES_AREA__ || {}).brief || {}),
-        news: news ?? null,
+        ...prev,
+        news: news !== undefined ? news ?? null : prev.news ?? null,
+        stock: stock !== undefined ? stock ?? null : prev.stock ?? null,
         headlines: this.headlines.slice(),
+        stockLine: this.stockLine || null,
       },
     };
   }
 
   advanceMode() {
     if (!this.enabled) return;
-    this.modes = buildModes(this.headlines);
+    this.modes = buildModes(this.headlines, this.stockLine);
     if (this.modes.length < 2) {
       if (this.mode !== "kanban") {
         this.mode = "kanban";
@@ -269,7 +360,7 @@ export class LobbySignage {
     const i = this.modes.indexOf(this.mode);
     this.mode = this.modes[(i + 1) % this.modes.length];
     if (this.mode === "news") {
-      this.headlineIdx = (this.headlineIdx + 1) % this.headlines.length;
+      this.headlineIdx = (this.headlineIdx + 1) % Math.max(1, this.headlines.length);
     }
     this.applyMode(true);
   }
@@ -340,6 +431,22 @@ export class LobbySignage {
     const x = this.anchor?.x ?? 0;
     const y = this.anchor?.y ?? 0;
 
+    if (this.mode === "stock" && this.stockLine) {
+      this.stopCrawl();
+      this.title.setText("STOCK");
+      this.title.setColor(COLOR_STOCK_TITLE);
+      this.line2.setColor(COLOR_STOCK_BODY);
+      this.line2.setText(this.stockHint || "KOSPI");
+      this.line2.setPosition(x, y + 10);
+      this.startCrawl(`◆ ${this.stockLine}   `);
+      if (this.line1) this.line1.setColor(COLOR_STOCK_BODY);
+      if (forceFlip) {
+        this.title.setAlpha(0.35);
+        this.scene.tweens.add({ targets: this.title, alpha: 1, duration: 220 });
+      }
+      return;
+    }
+
     if (this.mode === "news" && this.headlines.length) {
       this.stopCrawl();
       const headline = this.headlines[this.headlineIdx] || this.headlines[0];
@@ -379,11 +486,13 @@ export class LobbySignage {
 
   snapshot() {
     const display =
-      this.mode === "news" && this.headlines.length
-        ? `NEWS · ${this.headlines[this.headlineIdx] || this.headlines[0]}`
-        : this.lastKey
-          ? this.lastKey.replace("|", " · ")
-          : null;
+      this.mode === "stock" && this.stockLine
+        ? `STOCK · ${this.stockLine}`
+        : this.mode === "news" && this.headlines.length
+          ? `NEWS · ${this.headlines[this.headlineIdx] || this.headlines[0]}`
+          : this.lastKey
+            ? this.lastKey.replace("|", " · ")
+            : null;
     return {
       enabled: this.enabled,
       text: display,
@@ -391,6 +500,7 @@ export class LobbySignage {
       modes: this.modes.slice(),
       headlines: this.headlines.slice(),
       headlineIdx: this.headlineIdx,
+      stockLine: this.stockLine || null,
       counts: { ...this.counts },
       x: this.tv?.x ?? this.anchor?.x ?? null,
       y: this.tv?.y ?? this.anchor?.y ?? null,
