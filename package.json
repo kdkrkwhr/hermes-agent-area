@@ -100,6 +100,7 @@
     "smoke:thunder": "node scripts/smoke-thunder.mjs",
     "smoke:heater": "node scripts/smoke-heater.mjs",
     "smoke:haze": "node scripts/smoke-haze.mjs",
+    "smoke:rankxp": "node scripts/smoke-rankxp.mjs",
     "capture:readme": "node scripts/capture-readme.mjs"
   },
   "devDependencies": {

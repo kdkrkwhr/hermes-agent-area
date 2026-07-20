@@ -24,6 +24,12 @@ import {
   destroySkillChips,
 } from "../effects/skillChips.js";
 import {
+  createRankBadge,
+  updateRankBadge,
+  destroyRankBadge,
+  computeRank,
+} from "../effects/agentRankXP.js";
+import {
   createThinkingDots,
   updateThinkingDots,
   destroyThinkingDots,
@@ -55,6 +61,15 @@ export function formatTaskElapsed(seconds) {
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   return `${h}h${m}m`;
+}
+
+/** Derive initial rank from agent def's rank_xp field. */
+function computeRankFromDef(def) {
+  const r = def?.rank_xp || def?.rankData || {};
+  return computeRank({
+    completed: r.completed ?? 0,
+    avg_speed_sec: r.avg_speed_sec ?? 0,
+  });
 }
 
 export class Agent {
@@ -135,6 +150,9 @@ export class Agent {
     this.skillChips = createSkillChips(scene);
     // chatting "..." above nameplate — see ?think=0 / ?think=force
     this.thinkingDots = createThinkingDots(scene);
+    // XP rank badge — see ?rank=0 / ?rank=force
+    this.rankBadge = createRankBadge(scene);
+    this._rankData = computeRankFromDef(def);
 
     this.setStatus(pickStatus(def, "desk"));
     this.ensureAnims();
@@ -440,6 +458,9 @@ export class Agent {
     this.skillChips = null;
     destroyThinkingDots(this.thinkingDots);
     this.thinkingDots = null;
+    destroyRankBadge(this.rankBadge);
+    this.rankBadge = null;
+    this._rankData = null;
   }
 
   async applyServer(agentMsg) {
@@ -447,6 +468,13 @@ export class Agent {
     if (agentMsg.displayName) this.setDisplayName(agentMsg.displayName);
     const prevStatus = this.serverStatus;
     this.serverData = { ...agentMsg, displayName: this.def.displayName };
+    // Live rank update from server payload
+    if (agentMsg.rank_xp) {
+      this._rankData = computeRank({
+        completed: agentMsg.rank_xp.completed ?? 0,
+        avg_speed_sec: agentMsg.rank_xp.avg_speed_sec ?? 0,
+      });
+    }
     this.serverStatus = agentMsg.status;
     // don't clobber event-owned bubbles (stretch / water cooler / phone / bug bash / vending jam)
     if (
@@ -624,5 +652,6 @@ export class Agent {
     });
     updateSkillChips(this.skillChips, this);
     updateThinkingDots(this.thinkingDots, this);
+    updateRankBadge(this.rankBadge, this);
   }
 }

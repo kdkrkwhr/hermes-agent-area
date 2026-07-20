@@ -1,6 +1,7 @@
 /** Fallback roster for offline/mock only — live names come from local Hermes profiles via BE. */
 
 import { TILE_SIZE } from "./constants.js";
+import { computeRank } from "./effects/agentRankXP.js";
 
 export const SHEETS = ["char-mushroom", "char-onion", "char-claude"];
 
@@ -233,6 +234,10 @@ export function buildMockAgents() {
     };
     const x = atFocus ? focusPx.x : status === "ready" ? queuePx.x : desk.x;
     const y = atFocus ? focusPx.y : status === "ready" ? queuePx.y : (14 * TILE_SIZE + TILE_SIZE / 2);
+    // XP/rank from mock completion data (index maps to by_assignee in snapshot)
+    const mockDoneCounts = [2, 2, 1];
+    const mockAvgSpeeds = [1740, 6800, 6400];
+    const rank = computeRank({ completed: mockDoneCounts[i], avg_speed_sec: mockAvgSpeeds[i] });
     return {
       id: def.id,
       displayName: def.displayName,
@@ -245,10 +250,11 @@ export function buildMockAgents() {
       task_title: titles[i],
       task_started_at: taskStarted,
       task_elapsed_s: taskElapsed,
-            task_progress: taskProgress,
-            gateway: "running",
-            skills: def.skills || [],
-            x,
+      task_progress: taskProgress,
+      gateway: "running",
+      skills: def.skills || [],
+      rank_xp: { completed: mockDoneCounts[i], avg_speed_sec: mockAvgSpeeds[i], ...rank },
+      x,
       y,
       dest_x: atFocus ? focusPx.x : status === "ready" ? queuePx.x : x,
       dest_y: atFocus ? focusPx.y : status === "ready" ? queuePx.y : y,
@@ -263,6 +269,7 @@ export function buildDisconnectedAgents() {
     y: 21 * TILE_SIZE + TILE_SIZE / 2,
   };
   return AGENTS.map((def) => {
+    const rank = computeRank({ completed: 0, avg_speed_sec: 0 });
     return {
       id: def.id,
       displayName: def.displayName,
@@ -278,6 +285,7 @@ export function buildDisconnectedAgents() {
             task_progress: null,
             gateway: "stopped",
             skills: def.skills || [],
+            rank_xp: { completed: 0, avg_speed_sec: 0, ...rank },
             x: sleepPx.x,
       y: sleepPx.y,
       dest_x: sleepPx.x,

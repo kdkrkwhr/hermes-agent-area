@@ -1,6 +1,8 @@
 /** KPI Dashboard: real-time agent productivity metrics panel.
  *  Renders inside the CEO desk brief panel as a tab. */
 
+import { computeRank, computeAgentRanking } from "../effects/agentRankXP.js";
+
 function escapeHtml(s) {
   return String(s ?? "")
     .replace(/&/g, "&amp;")
@@ -126,7 +128,7 @@ function renderAgentRanking(container, kpi) {
     return;
   }
 
-  const sorted = [...ranking].sort((a, b) => (b.completed ?? 0) - (a.completed ?? 0));
+  const sorted = [...ranking].sort((a, b) => (b.xp ?? 0) - (a.xp ?? 0));
 
   let html = '<div class="kpi-ranking">';
   html += '<div class="dbp__card-head">🏆 에이전트 생산성 랭킹</div>';
@@ -135,21 +137,32 @@ function renderAgentRanking(container, kpi) {
     const agent = sorted[i];
     const rank = i + 1;
     let medal = '';
-    if (rank === 1) medal = '🥇';
-    else if (rank === 2) medal = '🥈';
-    else if (rank === 3) medal = '🥉';
+    if (rank === 1) medal = '';
+    else if (rank === 2) medal = '';
+    else if (rank === 3) medal = '';
     else medal = `#${rank}`;
 
     const completed = agent.completed ?? 0;
     const avgSpeed = agent.avg_speed_sec ?? 0;
     const speedDisplay = avgSpeed < 60
       ? `${Math.round(avgSpeed)}s`
-      : `${Math.round(avgSpeed / 60)}m`;
+      : avgSpeed < 3600
+        ? `${Math.round(avgSpeed / 60)}m`
+        : `${(avgSpeed / 3600).toFixed(1)}h`;
     const recentTitles = (agent.recent_tasks ?? []).slice(0, 2).map(t => t.title || t.id || '').filter(Boolean).join(', ');
 
+    // XP/rank badge
+    const tierEmoji = agent.tierEmoji || '';
+    const tierName = agent.tierName || '';
+    const level = agent.level ?? 1;
+    const xp = agent.xp ?? 0;
+
     html += `<div class="kpi-rank-row">
-      <span class="kpi-rank__pos">${medal}</span>
-      <span class="kpi-rank__name">${escapeHtml(agent.display_name || agent.profile || '—')}</span>
+      <span class="kpi-rank__pos">${medal}${rank}</span>
+      <span class="kpi-rank__name">
+        <span class="kpi-rank__tier" style="color:${escapeHtml(agent.tierColor || '#888')}" title="${escapeHtml(tierName)} Lv${level} · ${xp}XP">${tierEmoji}${tierName} Lv${level}</span>
+        ${escapeHtml(agent.display_name || agent.profile || '—')}
+      </span>
       <span class="kpi-rank__stat">✅ ${completed}</span>
       <span class="kpi-rank__speed">⚡ ${speedDisplay}</span>
       ${recentTitles ? `<span class="kpi-rank__recent" title="${escapeHtml(recentTitles)}">${escapeHtml(recentTitles)}</span>` : ''}
@@ -232,49 +245,65 @@ export function renderKpi(container, kpi, prevKpi) {
   if (gaugeEl) renderSpeedGauge(gaugeEl, kpi);
 }
 
-/** Build mock KPI data for GitHub Pages demo. */
+/** Build mock KPI data for GitHub Pages demo — uses ranking engine. */
 export function buildMockKpi() {
   const now = Date.now() / 1000;
-  return {
-    total_completed: 127,
-    completion_rate: 78.4,
-    avg_response_sec: 42,
-    active_agents: 3,
-    total_agents: 3,
-    agent_ranking: [
+
+  // 3 mock agents with completion data
+  const mockAgents = [
+    { profile: "default", displayName: "양파쿵야" },
+    { profile: "profile-2", displayName: "버섯쿵야" },
+    { profile: "profile-3", displayName: "클로드" },
+  ];
+
+  const mockKanban = {
+    by_assignee: [
       {
-        profile: "nous-work",
-        display_name: "버섯쿵야",
-        completed: 58,
-        avg_speed_sec: 35,
-        recent_tasks: [
-          { title: "가상사무실: 회장실 성과 진열장" },
-          { title: "TOD ambient BGM filter/rate morph" },
-        ],
-      },
-      {
-        profile: "default",
+        assignee: "default",
         display_name: "양파쿵야",
-        completed: 45,
-        avg_speed_sec: 48,
-        recent_tasks: [
-          { title: "PWA 출퇴근 자동화 개선" },
-          { title: "데스크 브리프 패널 2컬럼 레이아웃" },
+        active: [],
+        done: [
+          { title: "가상사무실: 대장님 사무실 KPI 대시보드", completed_at: now - 45, created_at: now - 2400 },
+          { title: "TOD ambient BGM filter/rate morph", completed_at: now - 3400, created_at: now - 7200 },
+          { title: "데스크 브리프 패널 2컬럼 레이아웃", completed_at: now - 9400, created_at: now - 18000 },
         ],
       },
       {
-        profile: "profile-3",
-        display_name: "양송이쿵야",
-        completed: 24,
-        avg_speed_sec: 62,
-        recent_tasks: [
-          { title: "리뷰 코멘트 triage" },
+        assignee: "profile-2",
+        display_name: "버섯쿵야",
+        active: [],
+        done: [
+          { title: "가상사무실: 실적 진열장 & 칸반 패널", completed_at: now - 5400, created_at: now - 9900 },
+          { title: "PWA 출퇴근 자동화 개선", completed_at: now - 12000, created_at: now - 22000 },
+        ],
+      },
+      {
+        assignee: "profile-3",
+        display_name: "클로드",
+        active: [],
+        done: [
+          { title: "리뷰 코멘트 triage", completed_at: now - 12400, created_at: now - 18800 },
         ],
       },
     ],
+  };
+
+  const ranking = computeAgentRanking(mockAgents, mockKanban);
+
+  const totalCompleted = ranking.reduce((sum, a) => sum + (a.completed ?? 0), 0);
+  const avgSpeed = ranking.filter(a => a.avg_speed_sec > 0).reduce((sum, a, _, arr) => sum + (a.avg_speed_sec / arr.length), 0);
+  const weeklyCompleted = 3; // demo: pretend this week
+
+  return {
+    total_completed: totalCompleted,
+    completion_rate: totalCompleted > 0 ? 78.4 : 0,
+    avg_response_sec: Math.round(avgSpeed || 42),
+    active_agents: ranking.filter(a => a.completed > 0).length,
+    total_agents: ranking.length,
+    agent_ranking: ranking,
     weekly: {
-      completed: 14,
-      avg_speed_sec: 38,
+      completed: weeklyCompleted,
+      avg_speed_sec: Math.round(avgSpeed || 38),
     },
     generated_at: now,
     source: "demo",
